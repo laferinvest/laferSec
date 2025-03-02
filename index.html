@@ -274,6 +274,8 @@
 
 
 
+<!-- Replace your current Fale Conosco section with this streamlined version -->
+
 <section id="fale-conosco" class="mb-5">
     <div class="container-fluid">
       <div class="row">
@@ -281,53 +283,53 @@
           <h1 class="font-dark-gold detail-title">FALE CONOSCO</h1>
         </div>
         <div class="col-md-8 order-2 order-md-1">
-          <div class="about-content-shadow font-blue" style="width: 100%; max-width: 95%; margin: 0 auto;">
-            <div class="row" style="width: 100%;">
-                <div class="col-md-6 contact-info" style="width: 100%;">
-                    <h4 class="mb-4 text-dark">Entre em contato</h4>
-                    <div class="text-dark">
-                      <a href="mailto:info@lafersec.com.br" target="_blank">
-                        <i class="fa fa-envelope" style="font-size: 1.2em; color: #000; margin-right: 5px;"></i>
-                        info@lafersec.com.br
-                      </a>
-                    </div>
-                    <div class="text-dark mt-2">
-                      <a href="https://wa.me/5535998252372" target="_blank">
-                        <i class="fa fa-whatsapp" style="font-size: 1.5em; color: #25D366; margin-right: 5px;"></i>
-                        +55 35 99825-2372
-                      </a>
-                    </div>
-                    <div class="text-dark mt-2 mb-4">
-                      <a href="https://www.instagram.com/laferinvest/" target="_blank" style="display: inline-flex; align-items: center;">
-                        <i class="fa fa-instagram" style="font-size: 1.5em; color: #E4405F; margin-right: 5px;"></i>
-                        @laferinvest
-                      </a>
-                    </div>
+          <div class="about-content-shadow font-blue" style="width: 95%; margin: 0 auto;">
+            <div class="row">
+              <div class="col-md-6 contact-info">
+                <h4 class="mb-4 text-dark">Entre em contato</h4>
+                <div class="text-dark">
+                  <a href="mailto:info@lafersec.com.br" target="_blank">
+                    <i class="fa fa-envelope" style="font-size: 1.2em; color: #000; margin-right: 5px;"></i>
+                    info@lafersec.com.br
+                  </a>
+                </div>
+                <div class="text-dark mt-2">
+                  <a href="https://wa.me/5535998252372" target="_blank">
+                    <i class="fa fa-whatsapp" style="font-size: 1.5em; color: #25D366; margin-right: 5px;"></i>
+                    +55 35 99825-2372
+                  </a>
+                </div>
+                <div class="text-dark mt-2 mb-4">
+                  <a href="https://www.instagram.com/laferinvest/" target="_blank" style="display: inline-flex; align-items: center;">
+                    <i class="fa fa-instagram" style="font-size: 1.5em; color: #E4405F; margin-right: 5px;"></i>
+                    @laferinvest
+                  </a>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <form id="contact-form">
+                  <div class="form-group">
+                    <label for="name">Nome</label>
+                    <input type="text" name="user_name" id="name" class="form-control" placeholder="Seu nome" required>
                   </div>
-                  
-                  <div class="col-md-6" style="width: 100%;">
-                    <form id="contact-form">
-                      <div class="form-group">
-                        <label for="name">Nome</label>
-                        <input type="text" name="user_name" id="name" class="form-control" placeholder="Seu nome" required>
-                      </div>
-                      <div class="form-group">
-                        <label for="email">E-mail</label>
-                        <input type="email" name="user_email" id="email" class="form-control" placeholder="Seu e-mail" required>
-                      </div>
-                      <div class="form-group">
-                        <label for="message">Mensagem</label>
-                        <textarea name="message" id="message" class="form-control" rows="4" placeholder="Escreva sua mensagem" required></textarea>
-                      </div>
-                      <button type="submit" class="btn btn-dark w-100">Enviar</button>
-                    </form>
+                  <div class="form-group">
+                    <label for="email">E-mail</label>
+                    <input type="email" name="user_email" id="email" class="form-control" placeholder="Seu e-mail" required>
                   </div>
+                  <div class="form-group">
+                    <label for="message">Mensagem</label>
+                    <textarea name="message" id="message" class="form-control" rows="4" placeholder="Escreva sua mensagem" required></textarea>
+                  </div>
+                  <button type="submit" class="btn btn-dark w-100">Enviar</button>
+                </form>
+              </div>
             </div>
           </div>
         </div>
       </div>
     </div>
   </section>
+  
   
   
 
@@ -426,5 +428,18 @@ src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js">
 });
 
 </script>
+<script>
+  $(document).click(function(event) {
+    var clickover = $(event.target);
+    var navbar = $(".navbar-collapse"); 
+    var toggler = $(".navbar-toggler");
+    var opened = navbar.hasClass("show");
+
+    if (opened && !clickover.closest(".navbar").length) {
+      toggler.click();  // Triggers the bootstrap toggle event
+    }
+  });
+</script>
+
 </body>
 </html>
