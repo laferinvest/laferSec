@@ -1,0 +1,949 @@
+body, html {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 14px;
+    height: 100%;
+    font-weight: 300;
+}
+
+a, a:hover {
+    text-decoration: none;
+    color: inherit;
+}
+
+h1, .h1 {
+    font-size: 4em;
+}
+
+h2, .h2 {
+    font-size: 3em;
+}
+
+h3, .h3 {
+    font-size: 2em;
+}
+
+h4, .h4 {
+    font-size: 1.8em;
+}
+
+h5, .h5 {
+    font-size: 1.6em;
+}
+
+h6, .h6 {
+    font-size: 1.4em;
+}
+
+.h7 {
+    font-size: 1.1em;
+}
+
+img.logo {
+    max-width: 70px;
+} /* TAMANHO DO LOGO     */
+
+/*** FONT STYLES ***/
+
+.font-thin {
+    font-weight: 200;
+}
+
+.font-normal {
+    font-weight: 300;
+}
+
+.font-medium {
+    font-weight: 400;
+}
+
+.font-bold {
+    font-weight: 600;
+}
+
+.font-white {
+    color: #FFFFFF;
+}
+
+.font-blue {
+    color: #0c183b;
+}
+
+.font-gold {
+    color: #ffe0a9 !important;
+}
+
+.font-dark-gold {
+    color: #c89d5d !important;
+}
+
+/*** BACKGROUND COLORS ***/
+
+.bg-white {
+    background: #FFFFFF;
+}
+
+.bg-gold {
+    background: #ffe0a9;
+}
+
+.bg-blue {
+    background: #001843;
+}
+
+div.divider {
+    border-bottom: 1px solid #a47044;
+    margin-bottom: 15px;
+    margin-top: 15px;
+    width: 130%;
+    z-index: 9999;
+    position: relative;
+}
+
+div.divider-slider {
+    width: 150px;
+    border-bottom: 2px solid #ffe0a9;
+    margin-bottom: 30px;
+    margin-top: 30px;
+}
+
+.divider-integer {
+    border-bottom: 2px solid #bc9d64;
+    margin-bottom: 50px;
+    width: 170%;
+}
+.divider-right{
+    border-bottom: 1px solid #bc9d64;
+    margin-left: -100px;
+    margin-bottom: 30px;
+}
+
+.btn-style1 {
+    background: rgba(255, 255, 255);
+    border: none;
+    padding: 12px 40px;
+    border-radius: 0px;
+    color: #0c183b !important;
+    border: 2px solid #0c183b;
+    border-bottom: none !important;
+    font-weight: 600; /* Makes text bold */
+    font-size: 1.2em; /* Increases text size */
+}
+
+.btn-style1:hover {
+    background: #0c183b;
+    border: none;
+    padding: 12px 40px;
+    border-radius: 0px;
+    color: #ffe0a9 !important;
+    text-decoration: none;
+}
+
+/***  SLIDER  ***/
+
+.nivo-caption {
+    background: transparent;
+    position: absolute;
+    top: 40%;
+    left: 10%;
+    width: 80%;
+}
+
+/***  CONTEUDOS  ***/
+
+section#chave {
+    background: url(../img/chave/background.jpg);
+}
+
+section#chave .chave-bloco {
+    padding: 0px 0px 0px 150px;
+}
+
+section#credito {
+    background: url(../img/credito/left.jpg);
+    background-color: #001843;
+    background-size: 60%;
+    background-repeat: no-repeat;
+    background-position: left center;
+}
+
+section#credito .credito-block {
+    background: rgba(0, 7, 34, 0.80);
+    padding: 150px 160px;
+    margin: 100px 0px;
+}
+
+section#credito .credito-block .credito-center {
+    width: 80%;
+}
+
+section#faturamento {
+    background: url(../img/faturamento/left.jpg);
+    background-color: #001843;
+    background-size: 60%;
+    background-repeat: no-repeat;
+    background-position: left center;
+}
+
+section#faturamento .faturamento-block {
+    position: relative;
+}
+
+section#faturamento .faturamento-block .faturamento-center {
+    position: absolute;
+    z-index: 9;
+    top: 30%;
+    width: 70%;
+}
+
+section#negocio {
+    background: url(../img/negocio/right.jpg);
+    background-color: #001843;
+    background-size: 60%;
+    background-repeat: no-repeat;
+    background-position: right center;
+}
+
+section#negocio .negocio-colbg {
+    background: url(../img/negocio/left.jpg);
+}
+
+section#negocio .negocio-block {
+    width: 100%;
+    padding: 300px 200px;
+    background: rgba(0, 7, 34, 0.75);
+}
+
+section#solucao_financeira {
+    background: url(../img/solucao_financeira/background.jpg) center center;
+    padding: 150px 0px;
+    background-repeat: no-repeat;
+    background-size: cover;
+}
+
+section#solucao_financeira .bloco {
+    color: #ffe0a9;
+    text-align: center;
+    background: rgba(6, 15, 45, 0.80);
+    padding: 60px 0px;
+    margin-top: 150px;
+    margin-bottom: 150px;
+    transition: all 300ms;
+    border-radius: 40px;
+}
+
+section#solucao_financeira .bloco:hover {
+    margin-top: 110px;
+}
+
+section#solucao_financeira .bloco p {
+    margin-top: 50px;
+    font-size: 1.6em;
+    font-weight: 200;
+}
+
+/***  Titulos  ***/
+
+.title-bottom {
+    bottom: 50px;
+    position: absolute;
+}
+
+.detail-title {
+    color: #a47044;
+}
+
+.detail-title:before {
+    content: "";
+    border: 4px solid #0c183b;
+    width: 100px;
+    height: 3px;
+    position: absolute;
+    top: -10px;
+}
+
+.detail-title-invert {
+    color: #0c183b;
+}
+
+.detail-title-invert:before {
+    content: "";
+    border: 4px solid #a47044;
+    width: 100px;
+    height: 3px;
+    position: absolute;
+    top: -10px;
+}
+
+.detail-title2 {
+    color: #0c183b;
+}
+
+.detail-title2:before {
+    content: "";
+    border: 4px solid #0c183b;
+    width: 100px;
+    height: 3px;
+    position: absolute;
+    top: -10px;
+}
+
+.detail-title3 {
+    color: #0c183b;
+    position: relative;
+}
+
+.detail-title3:before {
+    content: "";
+    border: 3px solid #cba265;
+    width: 100px;
+    bottom: -10px;
+    position: absolute;
+    background: #c89d5d;
+}
+
+/***  PÃ¡ginas Internas  ***/
+
+section#title.about {
+    background: url('../img/bg_about.jpg');
+    background-position: top center;
+    min-height: 750px;
+}
+
+section#about-content {
+    margin-top: -250px;
+}
+
+section#about-content .about-content-shadow {
+    -webkit-box-shadow: 0px 2px 5px 3px rgba(0, 0, 0, 0.10);
+    -moz-box-shadow: 0px 2px 5px 3px rgba(0, 0, 0, 0.10);
+    box-shadow: 0px 2px 5px 3px rgba(0, 0, 0, 0.10);
+    padding: 100px 100px;
+    background: #FFFFFF;
+}
+
+section#title.services {
+    background: url('../img/bg_services.jpg');
+    background-position: top center;
+    min-height: 750px;
+}
+
+section#title .services>.row {
+    min-height: 750px;
+}
+
+section#services-content {}
+
+section#services-content .services-content-shadow {
+    -webkit-box-shadow: 0px 2px 5px 3px rgba(0, 0, 0, 0.10);
+    -moz-box-shadow: 0px 2px 5px 3px rgba(0, 0, 0, 0.10);
+    box-shadow: 0px 2px 5px 3px rgba(0, 0, 0, 0.10);
+    padding: 50px 60px;
+    background: #FFFFFF;
+    margin-top: -150px;
+}
+
+section#services-content .boxblue {
+    background: #0c183b;
+    color: #bc9d64;
+    padding: 30px;
+    line-height: 1.4em;
+}
+
+section#title.faq {
+    background: url('../img/bg_faq.jpg');
+    background-position: top center;
+    min-height: 750px;
+}
+
+section#title.faq .row {
+    min-height: 750px;
+}
+
+section#faq-content {}
+
+section#title.contact {
+    background: url('../img/bg_contact.jpg');
+    background-position: top center;
+    min-height: 750px;
+}
+
+section#title .contact>.row {
+    min-height: 750px;
+}
+
+section#contact-content {}
+
+section#contact-content .contact-content-shadow {
+    -webkit-box-shadow: 0px 2px 5px 3px rgba(0, 0, 0, 0.10);
+    -moz-box-shadow: 0px 2px 5px 3px rgba(0, 0, 0, 0.10);
+    box-shadow: 0px 2px 5px 3px rgba(0, 0, 0, 0.10);
+    padding: 100px 100px;
+    background: #FFFFFF;
+    margin-top: -250px;
+}
+
+form#contact .form-control {
+    padding: 20px 15px;
+    border: 1px solid #0c183b;
+    border-radius: 0;
+    font-size: 1.1em;
+    font-weight: 200;
+}
+
+form#contact input.btn.btn-md.btn-info {
+    background: #0c183b;
+    border: none;
+    padding: 12px 40px;
+    border-radius: 0px;
+    color: #ffe0a9;
+    font-size: 1.4em;
+}
+.navbar-toggler-icon {
+    filter: invert(100%); /* Example: Turns black into white */
+}
+
+/***  NAVBAR  ***/
+
+nav.navbar.navbar-expand-lg.navbar-light.fixed-top {
+    box-shadow: 0 10px 5px rgba(0, 0, 0, 0.2);
+    background: #ffffff;
+    padding: 10px 0px;
+}
+
+ul.navbar-nav .nav-item .nav-link {
+    font-weight: 700;
+    color: #000000 !important;
+    border-left: 2px solid #0c183b;
+    padding: 0px 50px;
+    font-size: 1.05em !important;    
+}
+
+ul.navbar-nav .nav-item:first-child .nav-link {
+    border-left: none;
+}
+
+ul.navbar-nav .nav-item .nav-link:hover, ul.navbar-nav .nav-item.active .nav-link {
+    color: #0c183b !important;
+    text-decoration: underline;
+    background: #e8cb9c;
+}
+
+.dropdown-menu.show {
+    background: rgb(34, 61, 103);
+    top: 50px;
+}
+
+.dropdown-item {
+    display: block;
+    width: 100%;
+    padding: 10px 20px;
+    clear: both;
+    font-weight: 400;
+    color: #FFFFFF;
+    text-align: inherit;
+    white-space: nowrap;
+    background-color: transparent;
+    border: 0;
+    font-weight: 300
+}
+
+.accordion .card-header {
+    background: #0c183b;
+    padding: 15px 50px;
+    cursor: pointer;
+}
+
+.accordion .card-header:after {
+    color: #bc9d64;
+    font-family: 'FontAwesome';
+    content: "\f068";
+    float: right;
+}
+
+.accordion .card-header.collapsed:after {
+    color: #bc9d64;
+    content: "\f067";
+}
+
+.accordion .card-body {
+    font-size: 1.3em;
+    -webkit-box-shadow: 0px 2px 5px 3px rgba(0, 0, 0, 0.5);
+    -moz-box-shadow: 0px 2px 5px 3px rgba(0, 0, 0, 0.5);
+    box-shadow: 0px 2px 5px 3px rgba(0, 0, 0, 0.5);
+    margin-top: 5px;
+    margin-bottom: 5px;
+}
+
+/***** FOOTER *******/
+
+footer {
+    background: #0c183b;
+    padding: 60px 0px 25px 0px;
+}
+
+ul.info-bottom {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+ul.info-bottom li {
+    display: flex;
+    vertical-align: middle;
+    color: #FFFFFF;
+    margin-bottom: 15px;
+    padding: 0px;
+}
+
+ul.info-bottom li img {
+    width: 35px;
+    margin-right: 10px;
+    margin-top: -5px;
+}
+
+ul.info-bottom li .h6 {
+    font-weight: 200;
+}
+
+.copyright {
+    background: #c89d5d;
+    color: #FFFFFF;
+    padding: 10px 0px;
+    font-size: 1.2em;
+}
+
+.custom-toggler .navbar-toggler-icon {
+    background-image: url("data:image/svg+xml;charset=utf8,%3Csvg viewBox='0 0 32 32' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath stroke='%230c183b' stroke-width='3' stroke-linecap='round' stroke-miterlimit='10' d='M4 8h24M4 16h24M4 24h24'/%3E%3C/svg%3E");
+}
+
+
+.custom-toggler.navbar-toggler {
+    border-color: rgb(200, 157, 93);
+    margin-right: 15px;
+}
+
+.dropdown-menu {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    z-index: 1000;
+    display: none;
+    float: left;
+    min-width: 10rem;
+    font-size: 1rem;
+    color: #212529;
+    text-align: left;
+    list-style: none;
+    background-color: #0c183b;
+    background-clip: padding-box;
+    border: 1px solid rgba(0, 0, 0, .15);
+    border-radius: 0px;
+}
+
+.dropdown>.dropdown-menu {
+    top: 200%;
+    transition: 0.3s all ease-in-out;
+}
+
+.dropdown:hover>.dropdown-menu {
+    display: block;
+    top: 100%;
+}
+
+.dropdown>.dropdown-toggle:active {
+    pointer-events: none;
+}
+
+.dropdown-item:focus, .dropdown-item:hover {
+    color: #16181b;
+    text-decoration: none;
+    background-color: #e8cb9c;
+}
+
+section#about-content,
+section#como-funciona,
+section#faq-content {
+  margin-top: 50px; /* adjust as needed */
+  position: relative;
+  z-index: 1;
+}
+
+.about-content-shadow {
+  -webkit-box-shadow: 0 2px 5px 3px rgba(0,0,0,0.1);
+  -moz-box-shadow: 0 2px 5px 3px rgba(0,0,0,0.1);
+  box-shadow: 0 2px 5px 3px rgba(0,0,0,0.1);
+  background: #fff;
+  padding: 100px;
+}
+.accordion-item { border-bottom: 1px solid #ccc; }
+.accordion-item button {
+  width: 100%; 
+  text-align: left; 
+  background: none; 
+  border: none; 
+  outline: none; 
+  padding: 1em; 
+  font-size: 1em; 
+  cursor: pointer;
+}
+.accordion-item .content {
+  font-size: 1.3em; /* Adjust this value as needed */
+  display: none; 
+  padding: 0 1em 1em;
+}
+.accordion-item.active .content {
+  display: block;
+}
+
+#faq-content .accordion-item button {
+  font-size: 1.35em;
+  color: #0c183b;
+  font-weight: 600;
+}
+section#como-funciona .about-content-shadow {
+    padding-left: 50px !important;
+    padding-right: 50px !important;
+}
+@media (max-width: 1200px) {
+    section#about-content {
+      margin-top: 50px !important; 
+    }
+  }
+  @media (min-width: 1200px) and (max-width: 1600px) {
+    section#about-content {
+      margin-top: 50px !important;
+    }
+  }
+  @media (min-width: 768px) and (max-width: 991px) {
+    #como-funciona .col-md-4 {
+      order: 2 !important;
+    }
+    #como-funciona .col-md-8 {
+      order: 1 !important;
+    }
+  }
+
+  .nivo-caption .h2 {
+    font-size: 3em; /* Adjust if needed */
+    font-weight: 700; /* Makes text bold */
+    color: #FFD700; /* Brighter gold color */
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8); /* Adds contrast */
+}
+
+.nivo-caption .h4 {
+    font-size: 1.8em; /* Adjust if needed */
+    font-weight: 600;
+    color: #FFFFFF; /* Brighter white */
+    text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.7);
+}
+@media (max-width: 991px) {
+section#about-content {
+      margin-top: 0;
+    }
+
+    section#como-funciona .about-content-shadow {
+        margin-top: 0 !important;
+        padding-top: 40px !important;
+        margin-bottom: 0 !important;
+        padding-bottom: 0 !important;
+        padding-left: 50px !important;
+        padding-right: 50px !important;
+    }
+    
+    section#about-content .about-content-shadow {
+        padding: 30px !important;
+        width: 100% !important;
+    }
+
+
+  #about-content .col-md-4 {
+    order: 1;
+    text-align: center;
+    margin-bottom: 30px;
+  }
+
+  #about-content .col-md-8 {
+    order: 2;
+  }
+
+  #como-funciona .col-md-4 {
+    order: 1;
+    text-align: center;
+    margin-bottom: 30px;
+  }
+
+  #como-funciona .col-md-8 {
+    order: 2;
+  }
+
+
+  #faq-content .col-md-4 {
+    order: 1;
+    text-align: center;
+    margin-bottom: 30px;
+  }
+  #faq-content .col-md-8 {
+    order: 2;
+  }
+  #faq-content .col-md-8 .about-content-shadow {
+    padding: 20px !important;
+  }
+
+  /* Remove extra padding on the FAQ buttons */
+  #faq-content .accordion-item button {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    width: 100% !important;
+  }
+  /* Make the slider captions responsive */
+  .nivo-caption {
+    top: 50%; /* Adjust as needed */
+    width: 90%;
+  }
+  
+  /* Make caption text smaller on mobile */
+  .nivo-caption .h2 {
+    font-size: 1.8em; /* Smaller heading */
+  }
+  
+  .nivo-caption .h4 {
+    font-size: 1.2em; /* Smaller subheading */
+  }
+  
+  /* Adjust the divider */
+  .divider-slider {
+    margin-top: 10px;
+    margin-bottom: 10px;
+  }
+  
+  /* Make the button smaller but still visible */
+  .nivo-caption .btn-style1 {
+    padding: 8px 20px;
+    margin-top: 10px;
+    font-size: 0.9em;
+  }
+}
+
+  @media (max-width: 650px) {
+    .nivoSlider .nivo-caption,
+    .nivoSlider .nivo-html-caption {
+      top: 20% !important;
+    }
+  #banner {
+    margin-top: 80px;
+  }
+  }
+  
+  @media (max-width: 500px) {
+    .nivoSlider .btn-style1 {
+      display: none !important;
+    }
+  }
+  @media (max-width: 400px) {
+    .nivo-caption .h2 {
+      font-size: 1.25em !important;
+    }
+    .nivo-caption .h4 {
+      font-size: 0.95em !important;
+    }
+  }
+    
+  @media (max-width: 319px) {
+    #banner {
+        display: none !important;
+    }
+    
+    #about-content {
+        margin-top: 100px; /* Adjust based on your navbar height */
+        padding-top: 100px;
+    }
+}
+nav.navbar {
+    height: 100px; /* Adjust as needed */
+    line-height: 50px; /* Helps with vertical centering */
+}
+
+nav.navbar {
+    display: flex;
+    align-items: center; /* Centers items vertically */
+    justify-content: space-between;
+    height: 100px; /* Adjust as needed */
+    line-height: 50px; /* Helps with vertical centering */
+}
+
+.navbar-brand {
+    display: flex;
+    align-items: center;
+    padding-left: 20px; /* Adjust as needed */
+    margin-left: 20px;  /* Add more space if needed */
+}
+
+.navbar-toggler {
+    display: flex;
+    align-items: center;
+}
+
+@media (max-width: 992px) {
+    /* Full-width background with shadow */
+    .navbar-collapse {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      width: 100%;
+      background-color: #fff;
+      box-shadow: 0 10px 5px rgba(0, 0, 0, 0.2);
+      padding: 15px 20px; /* Adjust left/right padding as needed */
+    }
+  
+    /* Aligns the menu items under the logo */
+    .navbar-nav {
+      margin: 0;
+      padding: 0;
+    }
+  
+    /* Example: remove the left border from the first menu link if you have one */
+    .navbar-nav .nav-item:first-child .nav-link {
+      border-left: none;
+    }
+  }
+  
+  nav.navbar .container {
+  max-width: 100% !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+
+@media (min-width: 1199px) and (max-width: 1199px) {
+    /* Full-width background with shadow */
+    .navbar-collapse {
+      position: absolute;
+      top: 19%;
+      left: 0;
+      width: 100%;
+      background-color: #fff;
+      box-shadow: 0 10px 5px rgba(0, 0, 0, 0.2);
+      padding: 15px 0px; /* Adjust left/right padding as needed */
+    }
+  
+    /* Aligns the menu items under the logo */
+    .navbar-nav {
+      margin: 0;
+      padding: 0;
+    }
+  
+    /* Example: remove the left border from the first menu link if you have one */
+    .navbar-nav .nav-item:first-child .nav-link {
+      border-left: none;
+    }
+    .navbar-brand {
+        position: relative;
+        z-index: 10;
+      }
+      .navbar-collapse {
+        z-index: 1;
+      }
+      
+  }
+
+  .navbar-toggler {
+    border: 2px solid #0c183b !important; /* Adds blue border */
+    background-color: transparent; /* Keeps background transparent */
+    border-radius: 5px; /* Optional: Slightly rounded corners */
+    padding: 5px 10px; /* Adjust padding */
+}
+
+/* When clicked (active/focus state) */
+.navbar-toggler:focus, 
+.navbar-toggler:active {
+    border-color: #0c183b !important; /* Ensures the border stays blue */
+    outline: none; /* Removes default focus outline */
+    box-shadow: 0 0 5px rgba(34, 61, 103, 0.5); /* Adds a slight glow effect */
+}
+
+/* Keep the icon inside untouched */
+.navbar-toggler-icon {
+    filter: none !important; /* Ensures it retains its default color */
+}
+
+@media (min-width: 1200px) {
+    nav.navbar {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+
+    nav.navbar .container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        width: auto;
+    }
+
+    .navbar-brand {
+        margin-right: 25px; /* Ensures space between logo and menu */
+        display: flex;
+        align-items: center;
+        position: relative;
+    }
+
+    .navbar-collapse {
+        display: flex;
+        justify-content: center;
+        flex-grow: 1; /* Makes sure menu items take full space to be centered */
+    }
+
+    .navbar-nav {
+        display: flex;
+        justify-content: center;
+        width: auto;
+    }
+
+    .navbar-nav .nav-item {
+        margin: 0 10px;
+    }
+}
+#fale-conosco .about-content-shadow {
+    width: 95%;
+    margin: 0 auto;
+    text-align: left;
+    padding: 1rem;
+  }
+  
+  /* In your style.css or responsive.css */
+@media (min-width: 768px) and (max-width: 1090px){
+    #fale-conosco .contact-info {
+      padding-left: 5%;
+      padding-top: 5%;
+    }
+  }
+
+  /* In your style.css or responsive.css */
+  @media (min-width: 1090px) {
+    #fale-conosco .contact-info {
+      padding-left: 12%;
+      padding-top: 5%;
+    }
+  }
+
+  @media (max-width: 1199px) { /* Change 1200px to your desired value */
+    .navbar-expand-lg .navbar-collapse {
+        display: none !important;
+    }
+    .navbar-expand-lg .navbar-toggler {
+        display: block !important;
+    }
+}
+.navbar {
+    background-color: white !important; /* Ensures a white background */
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* Adds subtle shadow */
+    z-index: 1050; /* Ensures it stays on top */
+}
+
+.navbar-collapse {
+    background: white; /* Ensures dropdown menu is also white */
+}
+
+.navbar-toggler {
+    border-color: rgba(0, 0, 0, 0.1);
+}
