@@ -597,7 +597,7 @@ section#faq-content {
 
 #faq-content .accordion-item button {
   font-size: 1.35em;
-  color: #0c183b;
+  color: #ffffff;
   font-weight: 600;
 }
 section#como-funciona .about-content-shadow {
@@ -909,7 +909,14 @@ nav.navbar {
     text-align: left;
     padding: 1rem;
   }
-  
+  #about-content .about-content-shadow {
+    /* background: #1a2a5a !important; Slightly lighter blue */
+    background: rgba(12, 24, 59, 0.9)    !important; /* Slightly lighter blue */
+    color: #FFFFFF; /* Ensures text remains readable */
+    padding: 50px;
+    border-radius: 10px; /* Optional: adds rounded corners */
+}
+
   /* In your style.css or responsive.css */
 @media (min-width: 768px) and (max-width: 1090px){
     #fale-conosco .contact-info {
@@ -946,4 +953,45 @@ nav.navbar {
 
 .navbar-toggler {
     border-color: rgba(0, 0, 0, 0.1);
+}
+section#about-content .about-content-shadow {
+    box-shadow:
+      0 8px 20px rgba(12, 24, 59, 0.6),  /* Outer soft shadow */
+      0 0 15px rgba(12, 24, 59, 0.5) inset,  /* Inner glow */
+      0 4px 8px rgba(12, 24, 59, 0.4);  /* Additional depth */
+  }
+  
+  #about-content .about-content-shadow,
+  #como-funciona .about-content-shadow,
+  #faq-content .about-content-shadow,
+  #fale-conosco .about-content-shadow {
+    box-shadow: 0 8px 20px rgba(12, 24, 59, 0.6),
+                0 0 15px rgba(12, 24, 59, 0.5) inset,
+                0 4px 8px rgba(12, 24, 59, 0.4);
+    background: rgba(12, 24, 59, .9) !important;
+    color: #fff;
+    border-radius: 10px;
+  }
+  
+#fale-conosco .contact-info a i.fa-envelope { color: #ffffff !important; }
+
+#fale-conosco .contact-info,
+#fale-conosco .contact-info a,
+#fale-conosco .contact-info h4 {
+  color: #ffffff !important;
+}
+#fale-conosco button[type="submit"] {
+    background: #c89d5d !important; /* Gold color */
+    color: #ffffff !important; /* White text */
+    border: none;
+    padding: 12px 40px;
+    border-radius: 5px; /* Slightly rounded corners */
+    font-size: 1.2em;
+    font-weight: bold;
+    transition: background 0.3s ease-in-out;
+}
+
+#fale-conosco button[type="submit"]:hover {
+    background: #ffe0a9 !important; /* Lighter gold on hover */
+    color: #0c183b !important; /* Dark blue text for contrast */
 }
