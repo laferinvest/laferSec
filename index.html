@@ -91,7 +91,22 @@
     opacity: .8;
   }
 }
-</style></head>
+</style>
+<style>
+/* === Área do Cliente (desativada) === */
+.navbar .nav-link.disabled{
+  pointer-events: none;
+  opacity: .6;
+  cursor: not-allowed;
+  font-weight: 600;
+  letter-spacing: .02em;
+}
+/* Garante alinhamento do ícone com o texto */
+.navbar .nav-link.disabled .fa{
+  margin-right: .35rem;
+}
+</style>
+</head>
 <body>
 <nav class="navbar navbar-expand-xl navbar-light fixed-top">
 <div class="container">
@@ -124,6 +139,12 @@
 </li>
 <li class="nav-item">
 <a class="nav-link" href="#fale-conosco">FALE CONOSCO</a>
+</li>
+
+<li class="nav-item">
+  <a class="nav-link disabled" href="#" tabindex="-1" aria-disabled="true" title="Em breve">
+    <i class="fa fa-lock" aria-hidden="true"></i> ÁREA DO CLIENTE
+  </a>
 </li>
 </ul>
 </div>

@@ -566,9 +566,9 @@ ul.info-bottom li .h6 { font-weight: 200; }
    -------------------------------------------------------------------------- */
 
 /* <= 1199px : collapse menu; tune containers */
-@media (max-width: 1199px) {
-  .navbar-expand-lg .navbar-collapse { display: none !important; }
-  .navbar-expand-lg .navbar-toggler { display: block !important; }
+@media (max-width: 1329px) {
+  .navbar-expand-xl .navbar-collapse { display: none !important; }
+  .navbar-expand-xl .navbar-toggler { display: block !important; }
 }
 
 /* <= 991px : mobile layout */
@@ -777,7 +777,7 @@ ul.navbar-nav .nav-link {
 }
 
 /* === Tornar 990–1199px idêntico a < 990px para o menu === */
-@media (min-width: 990px) and (max-width: 1199.98px) {
+@media (min-width: 990px) and (max-width: 1329.98px) {
   /* barra fixa (top strip) como no mobile */
   nav.navbar {
     background: #fff !important;
@@ -807,7 +807,7 @@ ul.navbar-nav .nav-link {
 }
 
 /* === Clonar comportamento do mobile (Saiba mais visível) em 992–1199px === */
-@media (min-width: 992px) and (max-width: 1199.98px) {
+@media (min-width: 992px) and (max-width: 1329.98px) {
   /* Quando a barra estiver aberta (colapsada), mostre o submenu abaixo do item pai */
   .navbar.navbar-expand-xl .navbar-collapse.show .dropdown.has-saiba > .dropdown-menu {
     display: block !important;     /* igual ao mobile */
@@ -854,7 +854,7 @@ ul.navbar-nav .nav-link {
 }
 
 /* 2) Barra colapsada entre 992–1199px: idêntico ao mobile */
-@media (min-width: 992px) and (max-width: 1199.98px) {
+@media (min-width: 992px) and (max-width: 1329.98px) {
   .navbar-collapse.show .dropdown.has-saiba > .dropdown-menu .dropdown-item {
     color: #0c183b !important;
     font-weight: 600;
@@ -867,7 +867,7 @@ ul.navbar-nav .nav-link {
 }
 
 /* === NAVBAR (colapsada): alinhamento e recuos === */
-@media (max-width: 1199.98px) {
+@media (max-width: 1329.98px) {
   /* Painel colapsado: tudo à esquerda */
   .navbar .navbar-collapse {
     text-align: left !important;
@@ -918,7 +918,7 @@ ul.navbar-nav .nav-link {
 }
 
 /* === Desktop (>=1200px): eliminar o vão e manter centralizado === */
-@media (min-width: 1200px) {
+@media (min-width: 1330px) {
   .navbar .dropdown.has-saiba { position: relative; }
 
   /* Centraliza sob o texto e cola no item (sem gap) */
@@ -950,7 +950,7 @@ ul.navbar-nav .nav-link {
 }
 
 /* === Navbar mobile (<= 1199.98px): logo central e hambúrguer à direita === */
-@media (max-width: 1199.98px) {
+@media (max-width: 1329.98px) {
   /* dá contexto para posicionar o logo no centro e define a altura */
   .navbar .container {
     position: relative;
@@ -976,3 +976,94 @@ ul.navbar-nav .nav-link {
   }
 }
 
+/* === SAFETY OVERRIDE: Navbar colapsada até 1330px === */
+@media (max-width: 1329.98px) {
+  .navbar.navbar-expand-xl .navbar-collapse { display: none !important; }
+  .navbar.navbar-expand-xl .navbar-toggler  { display: block !important; }
+
+  .navbar .navbar-collapse {
+    position: absolute; top: 100%; left: 0; right: 0;
+    background: #fff !important; box-shadow: 0 10px 5px rgba(0,0,0,.2);
+    padding: 15px 0; z-index: 1000;
+  }
+  .navbar .navbar-collapse .nav-link {
+    border: 0 !important; padding: 10px 20px; line-height: 1.4;
+  }
+  .navbar .navbar-collapse .nav-item + .nav-item .nav-link {
+    border-top: 1px solid rgba(0,0,0,.10);
+  }
+  .navbar .navbar-collapse .dropdown.has-saiba > .dropdown-menu{
+    display:block !important; position:static !important; float:none !important;
+    padding:0 !important; margin:4px 0 8px 0 !important;
+    background:transparent !important; border:0 !important; box-shadow:none !important;
+  }
+  .navbar .navbar-collapse .dropdown.has-saiba > .dropdown-menu .dropdown-item{
+    padding:.25rem 1rem .45rem 36px !important; font-size:.95rem; font-weight:600; opacity:.95;
+  }
+  .navbar .navbar-collapse .dropdown.has-saiba > .dropdown-menu .dropdown-item::before{
+    content:"↳ "; margin-right:.15rem; opacity:.8;
+  }
+}
+
+@media (min-width: 1330px) {
+  .navbar.navbar-expand-xl .navbar-collapse { display: flex !important; }
+  .navbar.navbar-expand-xl .navbar-toggler  { display: none !important; }
+}
+
+/* Centralizar o menu colapsado entre 1200–1329px */
+@media (min-width: 1200px) and (max-width: 1329.98px) {
+  /* Centraliza o conteúdo aberto do collapse */
+  .navbar.navbar-expand-xl .navbar-collapse.show {
+    justify-content: center !important;
+  }
+
+  /* Centraliza a pilha de itens */
+  .navbar.navbar-expand-xl .navbar-collapse.show .navbar-nav {
+    flex-direction: column !important;
+    align-items: center !important;   /* <-- antes estava stretch */
+    margin: 0 !important;
+  }
+
+  /* Dropdown como lista vertical, alinhado e centralizado */
+  .navbar.navbar-expand-xl .navbar-collapse.show .dropdown-menu {
+    display: block !important;
+    position: static !important;
+    float: none !important;
+    width: auto !important;           /* mantém a largura do conteúdo */
+    padding: 0.15rem 0 !important;
+    margin: .15rem 0 .35rem 0 !important;
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    text-align: center !important;    /* centraliza o texto */
+  }
+
+  .navbar.navbar-expand-xl .navbar-collapse.show .nav-link,
+  .navbar.navbar-expand-xl .navbar-collapse.show .dropdown-item {
+    display: block !important;
+    width: auto !important;           /* evita ocupar 100% e “puxar” à esquerda */
+    padding: .25rem 1rem .45rem 1rem !important;
+    text-align: center !important;
+  }
+}
+
+/* Remover animação do Bootstrap Collapse globalmente (abre/fecha instantâneo) */
+.collapse,
+.navbar-collapse {
+  /* Anula a var do BS5 e quaisquer transitions herdadas */
+  --bs-collapse-transition: none !important;
+  transition: none !important;
+}
+
+/* Estado intermediário que o Bootstrap aplica durante o toggle */
+.collapsing {
+  transition: none !important;
+  height: auto !important;   /* evita tween de altura */
+  overflow: visible !important;
+}
+
+/* (Opcional) Garante que nada dentro do menu cause micro-delays */
+.navbar .navbar-collapse.show,
+.navbar .navbar-collapse.show * {
+  transition: none !important;
+}

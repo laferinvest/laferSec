@@ -267,6 +267,20 @@ body { padding-top: 96px; }
 }
 </style>
 <style>
+/* === Área do Cliente (desativada) === */
+.navbar .nav-link.disabled{
+  pointer-events: none;
+  opacity: .6;
+  cursor: not-allowed;
+  font-weight: 600;
+  letter-spacing: .02em;
+}
+/* Garante alinhamento do ícone com o texto */
+.navbar .nav-link.disabled .fa{
+  margin-right: .35rem;
+}
+</style>
+<style>
 /* === Readability upgrades for the Jorge story === */
 .story-jorge p {
   font-weight: 600;           /* engrossar a letra */
@@ -328,29 +342,34 @@ body { padding-top: 96px; }
 </button>
 <div class="collapse navbar-collapse" id="navbarSupportedContent">
 <ul class="navbar-nav ml-auto">
-  <!-- SOBRE NÓS com dropdown igual ao index -->
-  <li class="nav-item dropdown has-saiba">
-    <a class="nav-link main-link" href="index.html#about-content">SOBRE NÓS</a>
-    <div class="dropdown-menu">
-      <!-- Nesta página já estamos no "Saiba mais" de Sobre Nós -->
-      <a class="dropdown-item" href="laferMore.html">Saiba mais</a>
-    </div>
-  </li>
+<li class="nav-item dropdown has-saiba">
+<!-- Clique aqui leva para a seção -->
+<a class="nav-link main-link" href="index.html#about-content">SOBRE NÓS</a>
+<!-- Submenu: Saiba mais (página externa) -->
+<div class="dropdown-menu">
+<a class="dropdown-item" href="laferMore.html">Saiba mais</a>
+</div>
+</li>
+<li class="nav-item dropdown has-saiba">
+<!-- Clique aqui leva para a seção -->
+<a class="nav-link main-link" href="index.html#como-funciona">COMO FUNCIONA</a>
+<!-- Submenu: Saiba mais (página externa) -->
+<div class="dropdown-menu">
+<a class="dropdown-item" href="secMore.html">Saiba mais</a>
+</div>
+</li>
+<li class="nav-item">
+<a class="nav-link" href="index.html#faq-content">PERGUNTAS FREQUENTES</a>
+</li>
+<li class="nav-item">
+<a class="nav-link" href="index.html#fale-conosco">FALE CONOSCO</a>
+</li>
 
-  <!-- COMO FUNCIONA com dropdown igual ao index -->
-  <li class="nav-item dropdown has-saiba">
-    <a class="nav-link main-link" href="index.html#como-funciona">COMO FUNCIONA</a>
-    <div class="dropdown-menu">
-      <a class="dropdown-item" href="secMore.html">Saiba mais</a>
-    </div>
-  </li>
-
-  <li class="nav-item">
-    <a class="nav-link" href="index.html#faq-content">PERGUNTAS FREQUENTES</a>
-  </li>
-  <li class="nav-item">
-    <a class="nav-link" href="index.html#fale-conosco">FALE CONOSCO</a>
-  </li>
+<li class="nav-item">
+  <a class="nav-link disabled" href="#" tabindex="-1" aria-disabled="true" title="Em breve">
+    <i class="fa fa-lock" aria-hidden="true"></i> ÁREA DO CLIENTE
+  </a>
+</li>
 </ul>
 
 </div>

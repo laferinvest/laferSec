@@ -361,7 +361,7 @@
         font-size: 1.4em;
     }
     /***  NAVBAR  ***/
-    nav.navbar.navbar-expand-lg.navbar-light.fixed-top {
+    nav.navbar.navbar-expand-xl.navbar-light.fixed-top {
         box-shadow: 0 10px 5px rgba(0, 0, 0, 0.2);
         background: #ffffff;
         padding: 10px 0px;
@@ -814,7 +814,7 @@
         font-size: 1.em;
     }
     /***  NAVBAR  ***/
-    nav.navbar.navbar-expand-lg.navbar-light.fixed-top {
+    nav.navbar.navbar-expand-xl.navbar-light.fixed-top {
         box-shadow: 0 10px 5px rgba(0, 0, 0, 0.2);
         background: #ffffff;
         padding: 10px 0px;
@@ -979,7 +979,7 @@ section#about-content {
 }
 
 /* ===== Navbar branca entre ~990 e 1200 px (colapsada por causa do navbar-expand-xl) ===== */
-@media (min-width: 990px) and (max-width: 1199.98px) {
+@media (min-width: 990px) and (max-width: 1329.98px) {
   nav.navbar {
     background: #fff !important;        /* força fundo sólido */
     box-shadow: 0 4px 6px rgba(0,0,0,.08);
@@ -1006,7 +1006,7 @@ section#about-content {
 
 
 /* === NAVBAR: sem linhas verticais no menu colapsado (<= 1199.98px) === */
-@media (max-width: 1199.98px) {
+@media (max-width: 1329.98px) {
   /* Painel aberto do colapso: nenhum border-left */
   .navbar .navbar-collapse .nav-link {
     border: 0 !important;
@@ -1020,8 +1020,136 @@ section#about-content {
 }
 
 /* === NAVBAR: linhas verticais só no desktop largo (>= 1200px) === */
-@media (min-width: 1200px) {
+@media (min-width: 1330px) {
   .navbar ul.navbar-nav .nav-item + .nav-item .nav-link {
     border-left: 2px solid #0c183b; /* mantém o visual do desktop */
+  }
+}
+
+/* === SAFETY OVERRIDE: Navbar colapsada até 1330px === */
+@media (max-width: 1329.98px) {
+  .navbar.navbar-expand-xl .navbar-collapse { display: none !important; }
+  .navbar.navbar-expand-xl .navbar-toggler  { display: block !important; }
+
+  .navbar .navbar-collapse {
+    position: absolute; top: 100%; left: 0; right: 0;
+    background: #fff !important; box-shadow: 0 10px 5px rgba(0,0,0,.2);
+    padding: 15px 0; z-index: 1000;
+  }
+  .navbar .navbar-collapse .nav-link {
+    border: 0 !important; padding: 10px 20px; line-height: 1.4;
+  }
+  .navbar .navbar-collapse .nav-item + .nav-item .nav-link {
+    border-top: 1px solid rgba(0,0,0,.10);
+  }
+  .navbar .navbar-collapse .dropdown.has-saiba > .dropdown-menu{
+    display:block !important; position:static !important; float:none !important;
+    padding:0 !important; margin:4px 0 8px 0 !important;
+    background:transparent !important; border:0 !important; box-shadow:none !important;
+  }
+  .navbar .navbar-collapse .dropdown.has-saiba > .dropdown-menu .dropdown-item{
+    padding:.25rem 1rem .45rem 36px !important; font-size:.95rem; font-weight:600; opacity:.95;
+  }
+  .navbar .navbar-collapse .dropdown.has-saiba > .dropdown-menu .dropdown-item::before{
+    content:"↳ "; margin-right:.15rem; opacity:.8;
+  }
+}
+
+@media (min-width: 1330px) {
+  .navbar.navbar-expand-xl .navbar-collapse { display: flex !important; }
+  .navbar.navbar-expand-xl .navbar-toggler  { display: none !important; }
+}
+
+/* === FIX: permitir abrir o colapso quando .show estiver presente === */
+@media (max-width: 1329.98px) {
+  .navbar.navbar-expand-xl .navbar-collapse.show { 
+    display: block !important; 
+  }
+}
+
+/* Espaço do ícone hambúrguer em qualquer breakpoint */
+.navbar .navbar-toggler {
+  margin-right: 0.75rem; /* ajuste fino aqui (.5rem–1rem) */
+}
+
+/* Se quiser só no range 1200–1329px, use este bloco em vez do global: */
+@media (min-width: 1200px) and (max-width: 1329.98px) {
+  .navbar.navbar-expand-xl .navbar-toggler {
+    margin-right: 0.75rem;
+  }
+}
+
+
+/* === FIX: Centralização vertical do ícone hambúrguer === */
+
+/* Remove o alinhamento problemático que estava empurrando o botão para baixo */
+@media (max-width: 1329.98px) {
+  .navbar .container {
+    position: relative;
+    height: 100%;
+    display: flex;
+    align-items: center; /* Centraliza verticalmente todos os elementos */
+    justify-content: space-between; /* Distribui espaço entre logo e hambúrguer */
+  }
+
+  /* Logo centralizado */
+  .navbar .navbar-brand {
+    position: absolute !important;
+    left: 50%;
+    top: 50%; /* Adiciona centralização vertical */
+    transform: translate(-50%, -50%); /* Centraliza tanto horizontal quanto verticalmente */
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Hambúrguer alinhado à direita e centralizado verticalmente */
+  .navbar .navbar-toggler {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* Remove as propriedades que estavam empurrando para baixo */
+    align-self: center; /* Centraliza verticalmente no container */
+    margin-bottom: 0; /* Remove o margin-bottom que estava desalinhando */
+    margin-right: 15px; /* Adiciona um pequeno respiro da borda direita */
+    
+    /* Garante que o botão tenha uma altura consistente */
+    min-height: 40px;
+    width: 45px;
+    
+    /* Centraliza o conteúdo interno do botão */
+    border: 2px solid var(--lafer-blue) !important;
+    background: transparent;
+    border-radius: 5px;
+    padding: 8px;
+  }
+
+  /* Garante que o ícone dentro do botão também esteja centralizado */
+  .navbar .navbar-toggler .navbar-toggler-icon {
+    margin: 0;
+    vertical-align: middle;
+  }
+
+  /* Fix para o foco/active states */
+  .navbar .navbar-toggler:focus,
+  .navbar .navbar-toggler:active {
+    border-color: var(--lafer-blue) !important;
+    outline: none;
+    box-shadow: 0 0 5px rgba(34,61,103,.5);
+  }
+}
+
+/* === Ajuste fino para diferentes alturas de navbar === */
+.navbar {
+  min-height: 80px; /* Garante altura mínima consistente */
+}
+
+/* Para telas muito pequenas, ajuste adicional se necessário */
+@media (max-width: 480px) {
+  .navbar .navbar-toggler {
+    margin-right: 10px; /* Menos margem em telas muito pequenas */
+    min-height: 35px;
+    width: 40px;
+    padding: 6px;
   }
 }
