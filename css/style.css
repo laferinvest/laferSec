@@ -620,10 +620,10 @@ ul.info-bottom li .h6 { font-weight: 200; }
     position: absolute;
     top: 100%;
     left: 0;
-    width: 100%;
+    right: 0; /* Garante que ocupe 100% da largura */
     background: var(--white);
     box-shadow: 0 10px 5px rgba(0,0,0,.2);
-    padding: 15px 20px;
+    padding: 15px 0; /* Remove o padding lateral */
     z-index: 1000;
   }
 }
@@ -789,10 +789,10 @@ ul.navbar-nav .nav-link {
     position: absolute;
     top: 100%;
     left: 0;
-    width: 100%;
+    right: 0; /* Garante que ocupe 100% da largura */
     background: #fff !important;
     box-shadow: 0 10px 5px rgba(0,0,0,.2);
-    padding: 15px 20px;
+    padding: 15px 0; /* Remove o padding lateral */
     z-index: 1000;
   }
 
@@ -865,3 +865,114 @@ ul.navbar-nav .nav-link {
     background: #e8cb9c;
   }
 }
+
+/* === NAVBAR (colapsada): alinhamento e recuos === */
+@media (max-width: 1199.98px) {
+  /* Painel colapsado: tudo à esquerda */
+  .navbar .navbar-collapse {
+    text-align: left !important;
+  }
+  .navbar .navbar-collapse .navbar-nav {
+    width: 100%;
+    /* Adiciona o espaçamento lateral aqui, para que o fundo vá até as bordas */
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+  .navbar .navbar-collapse .nav-item,
+  .navbar .navbar-collapse .nav-link,
+  .navbar .navbar-collapse .dropdown-item {
+    text-align: left !important;
+  }
+
+  /* Itens de 1º nível (títulos das seções) */
+  .navbar .navbar-collapse .nav-link {
+    border: 0 !important;        /* sem divisores verticais no colapsado */
+    padding: 10px 20px !important;
+    line-height: 1.4;
+  }
+  .navbar .navbar-collapse .nav-item + .nav-item .nav-link {
+    border-top: 1px solid rgba(0,0,0,.10); /* divisor horizontal sutil */
+  }
+
+  /* “Saiba mais”: leve indentação à direita do início do título */
+  /* 20px (padding do título) + 16px (recuo extra) = 36px */
+  .navbar .navbar-collapse .dropdown.has-saiba > .dropdown-menu {
+    display: block !important;   /* visível abaixo do pai no colapsado */
+    position: static !important;
+    float: none !important;
+    padding: 0 !important;
+    margin: 4px 0 8px 0 !important;
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+  }
+  .navbar .navbar-collapse .dropdown.has-saiba > .dropdown-menu .dropdown-item {
+    padding: .25rem 1rem .45rem 36px !important; /* recuo calibrado */
+    font-size: .95rem; font-weight: 600; opacity: .95;
+  }
+  .navbar .navbar-collapse .dropdown.has-saiba > .dropdown-menu .dropdown-item::before{
+    content: "↳ ";
+    margin-right: .15rem;
+    opacity: .8;
+  }
+}
+
+/* === Desktop (>=1200px): eliminar o vão e manter centralizado === */
+@media (min-width: 1200px) {
+  .navbar .dropdown.has-saiba { position: relative; }
+
+  /* Centraliza sob o texto e cola no item (sem gap) */
+  .navbar .dropdown.has-saiba > .dropdown-menu {
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    right: auto !important;
+
+    top: 100% !important;        /* substitui o top:50px herdado */
+    margin-top: 0 !important;    /* encostado no item */
+    z-index: 1050;               /* acima da barra */
+  }
+
+  /* Ponte invisível de 10px entre o item e o dropdown:
+     o mouse pode atravessar sem perder o :hover no <li> */
+  .navbar .dropdown.has-saiba::after {
+    content: "";
+    position: absolute;
+    left: 0; right: 0;
+    top: 100%;
+    height: 10px;                /* ajuste fino: 8–14px */
+  }
+
+  /* Garante abertura por hover/foco (desktop) */
+  .navbar .dropdown.has-saiba:hover > .dropdown-menu,
+  .navbar .dropdown.has-saiba:focus-within > .dropdown-menu {
+    display: block;
+  }
+}
+
+/* === Navbar mobile (<= 1199.98px): logo central e hambúrguer à direita === */
+@media (max-width: 1199.98px) {
+  /* dá contexto para posicionar o logo no centro e define a altura */
+  .navbar .container {
+    position: relative;
+    height: 100%; /* Faz o container ocupar a altura total da navbar */
+  }
+
+  /* centraliza o logo (sem alterações) */
+  .navbar .navbar-brand {
+    position: absolute !important;
+    left: 50%;
+    transform: translateX(-50%);
+    margin: 0 !important;
+    padding-left: 0 !important; /* anula recuo atual */
+  }
+
+  /* empurra o botão hambúrguer para a direita e o alinha na base */
+  .navbar .navbar-toggler {
+    margin-left: auto;           /* ocupa a borda direita do container */
+    display: flex;
+    align-items: center;
+    align-self: flex-end;     /* Alinha o botão na parte inferior do container */
+    margin-bottom: 12px;      /* Adiciona um respiro para não colar na borda inferior */
+  }
+}
+

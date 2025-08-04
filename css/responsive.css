@@ -1003,3 +1003,25 @@ section#about-content {
     background: #fff !important;
   }
 }
+
+
+/* === NAVBAR: sem linhas verticais no menu colapsado (<= 1199.98px) === */
+@media (max-width: 1199.98px) {
+  /* Painel aberto do colapso: nenhum border-left */
+  .navbar .navbar-collapse .nav-link {
+    border: 0 !important;
+    padding: 10px 20px; /* mais confortável no empilhado */
+    line-height: 1.4;
+  }
+  /* Separador horizontal sutil entre itens empilhados */
+  .navbar .navbar-collapse .nav-item + .nav-item .nav-link {
+    border-top: 1px solid rgba(0,0,0,.10);
+  }
+}
+
+/* === NAVBAR: linhas verticais só no desktop largo (>= 1200px) === */
+@media (min-width: 1200px) {
+  .navbar ul.navbar-nav .nav-item + .nav-item .nav-link {
+    border-left: 2px solid #0c183b; /* mantém o visual do desktop */
+  }
+}
