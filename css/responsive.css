@@ -934,3 +934,72 @@ ul.navbar-nav .nav-item .nav-link {
     font-size: 1.2em !important;
   }
   
+  /* === PATCH: evitar overlay do #about-content sobre o slider === */
+/* Em telas até 1400px, zera a margem negativa e dá respiro após o banner */
+@media (max-width: 1399.98px) {
+  section#about-content { 
+    margin-top: 0 !important;   /* anula -250px herdado */
+  }
+  #banner { 
+    margin-bottom: 24px;        /* separa visualmente do próximo bloco */
+  }
+}
+
+/* Entre 1400 e 1700px, uma margem negativa menor ainda mantém a “colagem” sem invadir o slider */
+@media (min-width: 1400px) and (max-width: 1699.98px) {
+  section#about-content { 
+    margin-top: -120px;         /* menos agressivo que -250px */
+  }
+}
+
+/* >= 1700px mantém o layout original (se desejar o efeito “colado” no desktop amplo) */
+/* ===== FIX DEFINITIVO DE OVERLAY ===== */
+
+/* 1) Menu é 100px de altura -> empurre o banner para baixo em desktop */
+@media (min-width: 992px) {
+  #banner {
+    margin-top: 100px !important; /* mesma altura da nav.navbar */
+  }
+}
+
+/* 2) Remover qualquer margem negativa ou agressiva do about-content */
+section#about-content {
+  margin-top: 0 !important;
+}
+
+/* 3) Garanta um respiro entre o banner (slider) e a próxima seção */
+#banner {
+  margin-bottom: 24px !important;
+}
+
+/* (Opcional) Em tablets e mobile, dê um pequeno respiro também.
+   Ajuste fino para evitar qualquer toque do menu no slider nos 651–991px */
+@media (min-width: 651px) and (max-width: 991.98px) {
+  #banner { margin-top: 90px !important; }
+}
+
+/* ===== Navbar branca entre ~990 e 1200 px (colapsada por causa do navbar-expand-xl) ===== */
+@media (min-width: 990px) and (max-width: 1199.98px) {
+  nav.navbar {
+    background: #fff !important;        /* força fundo sólido */
+    box-shadow: 0 4px 6px rgba(0,0,0,.08);
+  }
+  /* quando o menu abre colapsado, painel também branco */
+  .navbar .navbar-collapse {
+    background: #fff !important;
+    box-shadow: 0 10px 20px rgba(0,0,0,.10);
+  }
+  /* garante que o container não “transparente” o fundo */
+  .navbar .container {
+    background: #fff !important;
+  }
+}
+
+/* Segurança extra: em <= 989px mantenha branco também (opcional) */
+@media (max-width: 989.98px) {
+  nav.navbar,
+  .navbar .navbar-collapse,
+  .navbar .container {
+    background: #fff !important;
+  }
+}
