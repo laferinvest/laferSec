@@ -1,5 +1,5 @@
-<!DOCTYPE html>
 
+<!DOCTYPE html>
 <html lang="pt-br">
 <head>
 <meta charset="utf-8"/>
@@ -189,6 +189,107 @@ body { padding-top: 96px; }
   font-weight: 700; /* negrito */
 }
 
+/* === ENHANCED SOCIAL MEDIA ICONS === */
+.team-social {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.social-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  text-decoration: none;
+  font-size: 16px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+  border: 2px solid transparent;
+  background: linear-gradient(135deg, rgba(255,255,255,0.15), rgba(255,255,255,0.05));
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.social-icon::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(255,255,255,0.2), rgba(255,255,255,0.05));
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.social-icon:hover::before {
+  opacity: 1;
+}
+
+/* LinkedIn specific styling */
+.social-icon.linkedin {
+  background: linear-gradient(135deg, #0077B5, #00639C);
+  color: #ffffff;
+  border-color: rgba(255,255,255,0.2);
+}
+
+.social-icon.linkedin:hover {
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: 0 8px 24px rgba(0, 119, 181, 0.4);
+  border-color: rgba(255,255,255,0.4);
+}
+
+/* Email specific styling */
+.social-icon.email {
+  background: linear-gradient(135deg, #c5a47e, #d4b885);
+  color: #ffffff;
+  border-color: rgba(255,255,255,0.2);
+}
+
+.social-icon.email:hover {
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: 0 8px 24px rgba(197, 164, 126, 0.4);
+  border-color: rgba(255,255,255,0.4);
+}
+
+/* Icon sizing and positioning */
+.social-icon .fa {
+  font-size: 16px;
+  line-height: 1;
+  z-index: 1;
+  position: relative;
+}
+
+/* Responsive adjustments */
+@media (max-width: 576px) {
+  .social-icon {
+    width: 36px;
+    height: 36px;
+    font-size: 15px;
+  }
+  
+  .team-social {
+    gap: 6px;
+    margin-top: 10px;
+  }
+}
+
+/* Accessibility improvements */
+.social-icon:focus {
+  outline: 2px solid #c5a47e;
+  outline-offset: 2px;
+}
+
+.social-icon:focus:not(:focus-visible) {
+  outline: none;
+}
+
 /* === Vertical spacing between team cards, esp. on mobile === */
 .partner-card {
   /* ensure there's breathing room around each card */
@@ -226,7 +327,6 @@ body { padding-top: 96px; }
 /* === Title card for team === */
 .partner-stack .partner-card .text-center { text-align: center; }
 
-
 /* === Team title (no card) === */
 .team-title-block {background: transparent;
   padding: 12px 16px 6px 16px;
@@ -256,7 +356,6 @@ body { padding-top: 96px; }
 .partner-stack > .team-title-block + * {
   margin-top: 8px;
 }
-
 
 /* === Typography upgrade for Nossos Valores === */
 .valores-strong, .valores-strong p, .valores-strong li, .valores-strong .lead, .valores-strong .text-secondary {
@@ -392,10 +491,88 @@ body { padding-top: 96px; }
 <div aria-label="Título da seção de equipe" class="team-title-block">
 <h2 class="team-title">A Equipe</h2>
 </div>
-<div class="lafermore-card-custom partner-card"><div class="team-item"><img alt="Laerte Ferreira" class="team-photo" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" src="img/team/laerte.jpg"/><div class="team-photo-fallback">LF</div><div class="team-info"><h3 class="h5 team-name">Laerte Ferreira</h3><div class="team-role">Sócio<br>Diretor Executivo</div></div></div></div>
-<div class="lafermore-card-custom partner-card"><div class="team-item"><img alt="Eliene Ferreira" class="team-photo" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" src="img/team/eliene.jpg"/><div class="team-photo-fallback">EF</div><div class="team-info"><h3 class="h5 team-name">Eliene Ferreira</h3><div class="team-role">Sócia<br>Diretora Administrativa</div></div></div></div>
-<div class="lafermore-card-custom partner-card"><div class="team-item"><img alt="Késia Jaqueline" class="team-photo" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" src="img/team/kesia.jpeg"/><div class="team-photo-fallback">KJ</div><div class="team-info"><h3 class="h5 team-name">Késia Jaqueline</h3><div class="team-role">Analista de Operações</div></div></div></div>
-<div class="lafermore-card-custom partner-card"><div class="team-item"><img alt="Daniel Ferreira" class="team-photo" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" src="img/team/daniel.png"/><div class="team-photo-fallback">DF</div><div class="team-info"><h3 class="h5 team-name">Daniel Ferreira</h3><div class="team-role">Head de Tecnologia</div></div></div></div>
+<div class="lafermore-card-custom partner-card">
+  <div class="team-item">
+    <img alt="Laerte Ferreira" class="team-photo" src="img/team/laerte.jpg" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"/>
+    <div class="team-photo-fallback">LF</div>
+    <div class="team-info">
+      <h3 class="h5 team-name">Laerte Ferreira</h3>
+      <div class="team-role">
+        Sócio<br>
+        Diretor Executivo
+      </div>
+      <div class="team-social">
+        <a href="https://linkedin.com/in/laerte-ferreira-b1803740/" target="_blank" class="social-icon linkedin" aria-label="LinkedIn de Laerte Ferreira">
+          <i class="fa fa-linkedin" aria-hidden="true"></i>
+        </a>
+        <a href="mailto:laerte@lafersec.com.br" class="social-icon email" aria-label="E-mail de Laerte Ferreira">
+          <i class="fa fa-envelope" aria-hidden="true"></i>
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="lafermore-card-custom partner-card">
+  <div class="team-item">
+    <img alt="Eliene Ferreira" class="team-photo" src="img/team/eliene.jpg" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"/>
+    <div class="team-photo-fallback">EF</div>
+    <div class="team-info">
+      <h3 class="h5 team-name">Eliene Ferreira</h3>
+      <div class="team-role">
+        Sócia<br>
+        Diretora Administrativa
+      </div>
+      <div class="team-social">
+        <a href="mailto:eliene@lafersec.com.br" class="social-icon email" aria-label="E-mail de Eliene Ferreira">
+          <i class="fa fa-envelope" aria-hidden="true"></i>
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="lafermore-card-custom partner-card">
+  <div class="team-item">
+    <img alt="Késia Jaqueline" class="team-photo" src="img/team/kesia.jpeg" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"/>
+    <div class="team-photo-fallback">KJ</div>
+    <div class="team-info">
+      <h3 class="h5 team-name">Késia Jaqueline</h3>
+      <div class="team-role">
+        Analista de Operações
+      </div>
+      <div class="team-social">
+        <a href="https://linkedin.com/in/késia-jaqueline-a27542224/" target="_blank" class="social-icon linkedin" aria-label="LinkedIn de Késia Jaqueline">
+          <i class="fa fa-linkedin" aria-hidden="true"></i>
+        </a>
+        <a href="mailto:kesia@lafersec.com.br" class="social-icon email" aria-label="E-mail de Késia Jaqueline">
+          <i class="fa fa-envelope" aria-hidden="true"></i>
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="lafermore-card-custom partner-card">
+  <div class="team-item">
+    <img alt="Daniel Ferreira" class="team-photo" src="img/team/daniel.png" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"/>
+    <div class="team-photo-fallback">DF</div>
+    <div class="team-info">
+      <h3 class="h5 team-name">Daniel Ferreira</h3>
+      <div class="team-role">
+        Head de Tecnologia
+      </div>
+      <div class="team-social">
+        <a href="https://linkedin.com/in/danielferreira1997/" target="_blank" class="social-icon linkedin" aria-label="LinkedIn de Daniel Ferreira">
+          <i class="fa fa-linkedin" aria-hidden="true"></i>
+        </a>
+        <a href="mailto:daniel@lafersec.com.br" class="social-icon email" aria-label="E-mail de Daniel Ferreira">
+          <i class="fa fa-envelope" aria-hidden="true"></i>
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
 </div>
 </div>
 <!-- RIGHT: Story + Mission (blue) + Values + CTA fixed to bottom -->
