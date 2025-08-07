@@ -98,7 +98,7 @@
     });
     if (error) return showErr(error.message);
 
-    alert('Conta criada! Verifique seu e-mail para confirmar.');
+    alert('Conta criada!');
     location.href = 'cliente.html';          // redirect to login
   });
 })();
