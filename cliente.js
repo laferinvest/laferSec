@@ -27,7 +27,8 @@
     "valor_corrigido", // numeric
     "rendimento",      // numeric
     "rentabilidade",   // numeric (%)
-    "user_id"          // uuid para RLS
+    "user_id",
+    "updated_at"          // uuid para RLS
   ].join(",");
 
   // Paginação
@@ -77,10 +78,15 @@
     el.classList.remove("hidden");
     setTimeout(() => el.classList.add("hidden"), 6000);
   }
-  function getDisplayName(user){
-    const md = user?.user_metadata || {};
-    return md.nome || md.name || md.full_name || (user?.email?.split("@")[0]) || "Cliente";
-  }
+ function getDisplayName(user){
+   const md = user?.user_metadata || {};
+   // full_name agora tem prioridade
+   return md.full_name
+       || md.nome
+       || md.name
+       || (user?.email?.split("@")[0])
+       || "Cliente";
+ }
 
   // ===== State/Elements (serão definidos no boot) =====
   let authView, appView, authAlert, signupAlert,
@@ -89,19 +95,19 @@
       loginForm, btnLogout, btnPrev, btnNext;
 
   // ===== Auth & Routing =====
-  async function checkSessionAndRoute(){
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session?.user){
-      if (userEmailBadge) userEmailBadge.textContent = session.user.email || "";
-      if (nomeEl) nomeEl.textContent = getDisplayName(session.user);
-      if (dataCorrecaoEl) dataCorrecaoEl.textContent = new Date().toLocaleDateString("pt-BR");
-      hide(authView); show(appView);
-      page = 1;
-      await refreshData();
-    } else {
-      show(authView); hide(appView);
-    }
-  }
+ async function checkSessionAndRoute(){
+   // Pega o usuário “live” do Auth (traz metadata atualizada do servidor)
+   const { data: { user } } = await supabase.auth.getUser();
+   if (user){
+     if (userEmailBadge) userEmailBadge.textContent = user.email || "";
+     if (nomeEl) nomeEl.textContent = getDisplayName(user);
+     hide(authView); show(appView);
+     page = 1;
+     await refreshData();
+   } else {
+     show(authView); hide(appView);
+   }
+ }
 
   // ===== Data Fetch =====
   async function refreshData(){
@@ -140,8 +146,19 @@
 
     renderRows(data || []);
     computeTotals(data || []);
-    if (pageInfo) pageInfo.textContent = `Página ${page}`;
-  }
+    /* --- Data de correção = maior updated_at que chegou --- */
+    if (dataCorrecaoEl){
+      const latest = (data || []).reduce((max, r) => {
+        const dt = r.updated_at ? new Date(r.updated_at) : null;
+        return dt && (!max || dt > max) ? dt : max;
+      }, null);
+
+      dataCorrecaoEl.textContent = latest
+        ? latest.toLocaleDateString("pt-BR")   // ex.: 07/08/2025
+        : "—";
+    }
+      if (pageInfo) pageInfo.textContent = `Página ${page}`;
+    }
 
   function renderRows(items){
     if (!rowsEl) return;
@@ -237,7 +254,15 @@
         const password = $("signup-password")?.value;
         const nome = $("signup-name")?.value.trim();
         const { error } = await supabase.auth.signUp({
-          email, password, options:{ data:{ nome } }
+          email,
+          password,
+          options: {
+            data: {
+              full_name: nome,
+              nome,
+              name: nome
+            }
+          }
         });
         if (error){ showError(signupAlert || authAlert, error.message); return; }
         alert("Conta criada. Verifique seu e-mail se necessário e faça login.");

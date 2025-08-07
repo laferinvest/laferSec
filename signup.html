@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Criar conta — Lafer Invest</title>
+
+  <!-- Bootstrap + FontAwesome (mesmos CDNs da página cliente) -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"/>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css"/>
+
+  <!-- Paleta & componentes idênticos ao dashboard -->
+  <style>
+    :root{
+      --azul:#0d2c4a; --azul-2:#103b61; --dourado:#c5a47e; --bg:#f7fafc;
+    }                                             /* mesma definição da página existente :contentReference[oaicite:0]{index=0}*/
+    html,body{background:var(--bg);}
+    .brand-bar{background:var(--azul);color:#fff;padding:.6rem 0}
+    .brand-bar a{color:#fff;text-decoration:none;font-weight:700;letter-spacing:.2px}
+    .card{box-shadow:0 10px 30px rgba(0,0,0,.06);border:0;border-radius:14px}
+    .btn-gold{background:var(--dourado);color:#fff;border-radius:50px;font-weight:700;letter-spacing:.4px}
+    .btn-gold:hover{filter:brightness(.95);color:#fff}
+  </style>
+</head>
+<body>
+  <div class="brand-bar">
+    <div class="container d-flex justify-content-between align-items-center">
+      <a href="index.html">LAFER INVEST</a>
+      <span class="small">Cadastro</span>
+    </div>
+  </div>
+
+  <main class="container my-4 my-md-5">
+    <section class="row justify-content-center">
+      <div class="col-md-6 col-lg-5">
+        <div class="card">
+          <div class="card-body p-4 p-md-5">
+            <h1 class="h4 mb-3 text-center" style="color:#0d2c4a">Criar conta</h1>
+            <p class="text-center text-muted mb-4">
+              Defina sua senha para ativar o acesso.
+            </p>
+
+            <div id="signup-alert" class="alert alert-danger d-none" role="alert"></div>
+
+            <form id="signup-form" novalidate>
+              <div class="form-group">
+                <label for="signup-email">E-mail</label>
+                <input id="signup-email" type="email" class="form-control" readonly>
+              </div>
+              <div class="form-row">
+                <div class="form-group col-sm-6">
+                  <label for="signup-name">Nome</label>
+                  <input id="signup-name" type="text" class="form-control" required>
+                </div>
+                <div class="form-group col-sm-6">
+                  <label for="signup-lastname">Sobrenome</label>
+                  <input id="signup-lastname" type="text" class="form-control" required>
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="signup-password">Senha</label>
+                <input id="signup-password" type="password" class="form-control" required>
+                <small class="form-text text-muted">
+                  Mínimo 8 caracteres e ao menos um número.
+                </small>
+              </div>
+              <div class="form-group">
+                <label for="signup-password2">Confirmar senha</label>
+                <input id="signup-password2" type="password" class="form-control" required>
+              </div>
+
+              <button id="btn-signup" class="btn btn-gold btn-block" type="submit">
+                Criar conta
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Supabase SDK + JS -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="signup.js"></script>
+</body>
+</html>
