@@ -49,18 +49,20 @@
     if(pwd1!==pwd2){ return showErr("As senhas não coincidem."); }
 
     /* cria/ativa a conta */
-    const { error } = await supabase.auth.signUp({
-      email,
-      password: pwd1,
-      options:{
-        data:{
-          first_name:first,
-          last_name:last,
-          full_name:`${first} ${last}`,
-          nome:`${first} ${last}`
-        }
-      }
-    });
+     // 1. cria sessão a partir do #access_token
+     const { error: sessErr } = await supabase.auth.getSessionFromUrl({ storeSession:true });
+     if (sessErr) { showErr(sessErr.message); return; }
+      
+     // 2. agora sim, atualiza senha + metadata
+     const { error } = await supabase.auth.updateUser({
+       password: pwd1,
+       data: {
+         first_name: first,
+         last_name: last,
+         full_name: `${first} ${last}`,
+         nome: `${first} ${last}`
+       }
+     });
     if(error){ return showErr(error.message); }
 
     /* sucesso */
