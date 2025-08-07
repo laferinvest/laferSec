@@ -58,6 +58,119 @@
     .footer-note{ font-size:.9rem; color:#6b7280 }
     .btn-gold{ background:var(--dourado); color:#fff; border-radius:50px; font-weight:700; letter-spacing:.4px; }
     .btn-gold:hover{ filter:brightness(.95); color:#fff; }
+  
+    /* Garante cálculo de largura baseado no conteúdo */
+    .table { table-layout: auto; }
+
+    /* No mobile, não deixa NENHUMA célula quebrar linha */
+    @media (max-width: 767.98px) {
+      .table-responsive { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+      .table thead th,
+      .table tbody td,
+      .table tfoot th,
+      .table tfoot td {
+        white-space: nowrap;
+      }
+    }
+
+
+        /* Respiro no fim do scroll e mais espaço à direita da última coluna no mobile */
+    @media (max-width: 767.98px) {
+      /* 1) Sobra no fim do scroll horizontal */
+      .table-responsive {
+        /* valor pequeno para não criar muita rolagem “a mais” */
+        padding-right: 12px;
+      }
+
+      /* 2) Aumenta o respiro da ÚLTIMA coluna (thead, tbody e tfoot) */
+      .table thead th:last-child,
+      .table tbody td:last-child,
+      .table tfoot th:last-child,
+      .table tfoot td:last-child {
+        padding-right: 1rem; /* ajuste para 1.25rem se ainda parecer perto */
+      }
+
+      /* 3) (Opcional) Dê um respiro extra às 3 últimas colunas numéricas */
+      .table thead th:nth-last-child(-n+3),
+      .table tbody td:nth-last-child(-n+3),
+      .table tfoot td:nth-last-child(-n+3) {
+        padding-right: 0.75rem;
+      }
+    }
+
+    /* ====== Divisórias verticais entre colunas ====== */
+.table {
+  border-collapse: separate; /* evita colapso de bordas */
+  border-spacing: 0;         /* sem espaço extra entre células */
+}
+
+/* Linha fina à direita de cada coluna (exceto a última) */
+.table thead th,
+.table tbody td,
+.table tfoot td,
+.table tfoot th {
+  border-right: 1px solid var(--tbl-divider, rgba(0,0,0,.15));
+}
+
+/* Remove a linha da última coluna */
+.table thead th:last-child,
+.table tbody td:last-child,
+.table tfoot th:last-child,
+.table tfoot td:last-child {
+  border-right: 0;
+}
+
+/* Ajuste para temas claros/escuros (usa var do Bootstrap se existir) */
+:root {
+  /* tenta usar a borda padrão do Bootstrap; se não houver, cai no fallback */
+  --tbl-divider: var(--bs-border-color, rgba(0,0,0,.15));
+}
+
+/* No dark mode (ou telas de alta densidade), afinamos a linha */
+@media (prefers-color-scheme: dark) {
+  .table thead th,
+  .table tbody td,
+  .table tfoot td,
+  .table tfoot th {
+    border-right-width: 0.5px; /* “hairline” em telas retina */
+  }
+}
+
+/* No mobile, mantém a linha fina e evita serrilhado ao rolar horizontalmente */
+@media (max-width: 767.98px) {
+  .table thead th,
+  .table tbody td,
+  .table tfoot td,
+  .table tfoot th {
+    border-right-width: 0.5px;
+  }
+}
+
+/* Fix: manter largura por conteúdo e rolagem entre md e <xl */
+@media (min-width: 768px) and (max-width: 1199.98px) {
+  /* volta a permitir scroll no wrapper usado no HTML */
+  .table-responsive-md {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* deixa a tabela crescer pelo conteúdo sem encolher colunas */
+  .table {
+    width: max-content;   /* usa a soma das larguras "máximas" dos conteúdos */
+    min-width: 100%;      /* nunca menor que o container */
+    table-layout: auto;   /* calcula pelo conteúdo (já é o padrão, reforçamos) */
+  }
+
+  /* impede quebra de linha em TODAS as células nesse intervalo */
+  .table thead th,
+  .table tbody td,
+  .table tfoot th,
+  .table tfoot td {
+    white-space: nowrap;
+  }
+}
+
+
   </style>
 </head>
 <body>
@@ -101,7 +214,7 @@
       <div class="report-head mb-3">
         <div class="d-flex justify-content-between align-items-center">
           <div>
-            <div class="report-title">Portfólio de Debêntures no dia</div>
+            <div class="report-title">Portfólio de Debêntures</div>
             <div class="report-sub">
               <span class="mr-3"><strong>Debenturista:</strong> <span id="debenturista-nome">—</span></span>
               <span class="mr-3"><strong>Data Correção:</strong> <span id="data-correcao">—</span></span>
@@ -151,14 +264,11 @@
               </tfoot>
             </table>
           </div>
-          <div class="d-flex justify-content-between align-items-center mt-3">
-            <button id="prev" class="btn btn-outline-secondary btn-sm">Anterior</button>
-            <div>
-              <span id="page-info" class="small muted">Página 1</span>
-              <span id="total-info" class="small muted ml-2"></span>
-            </div>
-            <button id="next" class="btn btn-outline-secondary btn-sm">Próxima</button>
-          </div>
+        <!-- Pagination controls removed; only total remains -->
+        <div class="d-flex justify-content-end align-items-center mt-3">
+          <span id="total-info" class="small muted"></span>
+        </div>
+
         </div>
       </div>
 

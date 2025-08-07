@@ -427,7 +427,7 @@ body { padding-top: 96px; }
 @media (max-width: 576px){
   .valores-strong .valor-desc { display: block; margin-left: 0; margin-top: 2px; }
 }
-/* espaço entre itens para ritmo visual */
+
 .valores-strong ul.list-unstyled > li { margin-bottom: .45rem; }
 </style></head>
 <body>
@@ -442,17 +442,15 @@ body { padding-top: 96px; }
 <div class="collapse navbar-collapse" id="navbarSupportedContent">
 <ul class="navbar-nav ml-auto">
 <li class="nav-item dropdown has-saiba">
-<!-- Clique aqui leva para a seção -->
 <a class="nav-link main-link" href="index.html#about-content">SOBRE NÓS</a>
-<!-- Submenu: Saiba mais (página externa) -->
 <div class="dropdown-menu">
 <a class="dropdown-item" href="laferMore.html">Saiba mais</a>
 </div>
 </li>
 <li class="nav-item dropdown has-saiba">
-<!-- Clique aqui leva para a seção -->
+
 <a class="nav-link main-link" href="index.html#como-funciona">COMO FUNCIONA</a>
-<!-- Submenu: Saiba mais (página externa) -->
+
 <div class="dropdown-menu">
 <a class="dropdown-item" href="secMore.html">Saiba mais</a>
 </div>
@@ -473,7 +471,7 @@ body { padding-top: 96px; }
 </div>
 </div>
 </nav>
-<!-- Main Content Section -->
+
 <main class="lafermore-content-section">
 <div class="container">
 <div class="text-center mb-5">
@@ -485,7 +483,7 @@ body { padding-top: 96px; }
 <div class="mx-auto" style="width:96px;height:3px;background:linear-gradient(90deg,#d4af37,#f4d03f);border-radius:2px;"></div>
 </div>
 <div class="row equalize">
-<!-- LEFT: Partner cards stacked, fill full height and align bottom with button -->
+  
 <div class="col-md-6 mb-4 mb-md-0">
 <div class="partner-stack">
 <div aria-label="Título da seção de equipe" class="team-title-block">
@@ -575,10 +573,10 @@ body { padding-top: 96px; }
 </div>
 </div>
 </div>
-<!-- RIGHT: Story + Mission (blue) + Values + CTA fixed to bottom -->
+
 <div class="col-md-6">
 <div class="content-col">
-<!-- 1) HISTORINHA (primeiro bloco) -->
+
 <section class="mb-4" id="historia-jorge">
 <h2 class="h3 lafermore-font-blue mb-3">Jorge e o Banco do Pau-Brasil</h2>
 <div class="story-jorge">
@@ -587,7 +585,7 @@ body { padding-top: 96px; }
 </div>
 <hr class="hr-soft"/>
 </section>
-<!-- 2) MISSÃO dentro da caixa azul (somente o texto da missão) -->
+
 <section aria-labelledby="missao" class="mb-4">
 <div class="p-4 lafermore-bg-blue text-white rounded-lg shadow">
 <h2 class="h4 mb-3" id="missao" style="font-weight:600;">Missão</h2>
@@ -596,13 +594,13 @@ body { padding-top: 96px; }
                                 </p>
 </div>
 </section>
-<!-- 3) VALORES -->
+
 <section aria-labelledby="valores" class="mb-2 valores-strong">
 <h2 class="h4 lafermore-font-blue mb-3" id="valores">Nossos valores</h2>
 <ul class="list-unstyled mb-0"><li class="d-flex align-items-start mb-2"><i aria-hidden="true" class="fa fa-check-circle mr-2 lafermore-font-gold"></i><span class="valor-item"><span class="valor-title">Transparência:</span> <span class="valor-desc">Linguagem direta. Contratos claros. Custos sem pegadinhas.</span></span></li><li class="d-flex align-items-start mb-2"><i aria-hidden="true" class="fa fa-check-circle mr-2 lafermore-font-gold"></i><span class="valor-item"><span class="valor-title">Agilidade:</span> <span class="valor-desc">Análise rápida. Resposta no mesmo dia. Zero fila.</span></span></li><li class="d-flex align-items-start mb-2"><i aria-hidden="true" class="fa fa-check-circle mr-2 lafermore-font-gold"></i><span class="valor-item"><span class="valor-title">Parceria:</span> <span class="valor-desc">Atendimento direto com quem decide. Sem labirinto.</span></span></li><li class="d-flex align-items-start mb-2"><i aria-hidden="true" class="fa fa-check-circle mr-2 lafermore-font-gold"></i><span class="valor-item"><span class="valor-title">Flexibilidade:</span> <span class="valor-desc">Estrutura sob medida para o seu ciclo de caixa.</span></span></li><li class="d-flex align-items-start mb-2"><i aria-hidden="true" class="fa fa-check-circle mr-2 lafermore-font-gold"></i><span class="valor-item"><span class="valor-title">Competitividade:</span> <span class="valor-desc">Taxas justas, alinhadas ao risco do negócio.</span></span></li><li class="d-flex align-items-start"><i aria-hidden="true" class="fa fa-check-circle mr-2 lafermore-font-gold"></i><span class="valor-item"><span class="valor-title">Rigor e segurança:</span> <span class="valor-desc">Análise técnica e compliance de ponta.</span></span></li></ul>
 </section>
 <div class="mt-4" style="margin-top:auto !important;">
-<!-- Substitua o botão antigo por este (mesmo estilo de "Entenda mais" + WhatsApp) -->
+
 <div class="cta">
   <a
     href="https://wa.me/5535998252372"
@@ -621,14 +619,13 @@ body { padding-top: 96px; }
 <script src="js/jquery-3.4.1.min.js"></script>
 <script src="js/bootstrap.min.js"></script>
 <script>
-        // Set current year in footer (guard in case footer exists on this page)
+
         var yearEl = document.getElementById('year');
         if (yearEl) { yearEl.textContent = new Date().getFullYear(); }
 
-        // Smooth scroll for anchor links
         $('a[href^="#"]').on("touchstart click", function(e) {
             var isSamePageAnchor = this.getAttribute('href') && this.getAttribute('href').charAt(0) === '#';
-            if (!isSamePageAnchor) return; // allow normal navigation to index.html#...
+            if (!isSamePageAnchor) return; 
             e.preventDefault();
             var target = $(this.hash);
             if (target.length) {
@@ -642,7 +639,6 @@ body { padding-top: 96px; }
             }
         });
         
-        // Close mobile menu on click outside
         $(document).click(function(event) {
             var clickover = $(event.target);
             var navbar = $(".navbar-collapse");
