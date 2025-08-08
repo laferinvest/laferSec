@@ -1,7 +1,6 @@
 /* === LAFER INVEST - Área do Investidor (cliente.js) ===
- * Versão robusta: listeners protegidos por checagem de elementos,
- * sem dependência de blocos de cadastro inexistentes.
- * Mantém sessão do Supabase e corrige logout/roteamento.
+ * Ajuste de colunas: remove Prazo; adiciona Rendimento Líquido e Rentabilidade Líquida;
+ * renomeia cabeçalhos para Rendimento Bruto e Rentabilidade Bruta (valores já existentes).
  */
 
 (function(){
@@ -16,22 +15,24 @@
   // Tabela/view com as colunas pedidas (adeque ao seu schema real)
   const TABLE_NAME = "debentures_portal";
   const COLUMNS = [
-    "compra",          // date
-    "debenture",       // text
-    "serie",           // text
-    "pu_inicial",      // numeric
-    "qtde",            // numeric
-    "valor_compra",    // numeric
-    "prazo",           // integer (dias)
-    "pu_corrigido",    // numeric
-    "valor_corrigido", // numeric
-    "rendimento",      // numeric
-    "rentabilidade",   // numeric (%)
+    "compra",              // date
+    "debenture",           // text
+    "serie",               // text
+    "pu_inicial",          // numeric
+    "qtde",                // numeric
+    "valor_compra",        // numeric
+    // "prazo" removido
+    "pu_corrigido",        // numeric
+    "valor_corrigido",     // numeric
+    "rendimento_bruto",          // numeric (BRUTO)
+    "rentabilidade_bruta",       // numeric (%) BRUTA
+    "rendimento_liquido",  // numeric (LIQ)
+    "rentabilidade_liquida", // numeric (%) LIQ
     "user_id",
-    "updated_at"          // uuid para RLS
+    "updated_at"
   ].join(",");
 
-  // Paginação
+  // Paginação (mantida)
   const LIMIT = 1000;
   let page = 1;
   let totalCount = 0;
@@ -78,40 +79,35 @@
     el.classList.remove("hidden");
     setTimeout(() => el.classList.add("hidden"), 6000);
   }
- function getDisplayName(user){
-   const md = user?.user_metadata || {};
-   // full_name agora tem prioridade
-   return md.full_name
-       || md.nome
-       || md.name
-       || (user?.email?.split("@")[0])
-       || "Cliente";
- }
+  function getDisplayName(user){
+    const md = user?.user_metadata || {};
+    return md.full_name || md.nome || md.name || (user?.email?.split("@")[0]) || "Cliente";
+  }
 
-  // ===== State/Elements (serão definidos no boot) =====
+  // ===== State/Elements =====
   let authView, appView, authAlert, signupAlert,
       rowsEl, userEmailBadge, pageInfo, totalInfo, nomeEl, dataCorrecaoEl,
-      totQtde, totVCompra, totVCorrigido, totRendimento, totRentab,
+      totQtde, totVCompra, totVCorrigido, totRendimentoBruto, totRentabBruta,
+      totRendimentoLiq, totRentabLiq,
       loginForm, btnLogout, btnPrev, btnNext;
 
   // ===== Auth & Routing =====
- async function checkSessionAndRoute(){
-   // Pega o usuário “live” do Auth (traz metadata atualizada do servidor)
-   const { data: { user } } = await supabase.auth.getUser();
-   if (user){
-     if (userEmailBadge) userEmailBadge.textContent = user.email || "";
-     if (nomeEl) nomeEl.textContent = getDisplayName(user);
-     hide(authView); show(appView);
-     page = 1;
-     await refreshData();
-   } else {
-     show(authView); hide(appView);
-   }
- }
+  async function checkSessionAndRoute(){
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user){
+      if (userEmailBadge) userEmailBadge.textContent = user.email || "";
+      if (nomeEl) nomeEl.textContent = getDisplayName(user);
+      hide(authView); show(appView);
+      page = 1;
+      await refreshData();
+    } else {
+      show(authView); hide(appView);
+    }
+  }
 
   // ===== Data Fetch =====
   async function refreshData(){
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { session} } = await supabase.auth.getSession();
     const user = session?.user;
     if (!user) return;
 
@@ -119,25 +115,23 @@
     const to   = from + LIMIT - 1;
 
     // 1) Count
-    const countQuery = supabase
+    const { count, error: countError } = await supabase
       .from(TABLE_NAME)
       .select("compra", { count: "exact", head: true })
       .eq("user_id", user.id);
 
-    const { count, error: countError } = await countQuery;
     if (countError){ console.error(countError); }
     totalCount = typeof count === "number" ? count : 0;
     if (totalInfo) totalInfo.textContent = totalCount ? `Total de lançamentos: ${totalCount}` : "";
 
     // 2) Page data
-    const query = supabase
+    const { data, error } = await supabase
       .from(TABLE_NAME)
       .select(COLUMNS)
       .eq("user_id", user.id)
       .order("compra", { ascending: true })
       .range(from, to);
 
-    const { data, error } = await query;
     if (error){
       console.error(error);
       showError(authAlert, error.message);
@@ -146,19 +140,18 @@
 
     renderRows(data || []);
     computeTotals(data || []);
-    /* --- Data de correção = maior updated_at que chegou --- */
+
+    // Data de correção = maior updated_at recebido
     if (dataCorrecaoEl){
       const latest = (data || []).reduce((max, r) => {
         const dt = r.updated_at ? new Date(r.updated_at) : null;
         return dt && (!max || dt > max) ? dt : max;
       }, null);
+      dataCorrecaoEl.textContent = latest ? latest.toLocaleDateString("pt-BR") : "—";
+    }
 
-      dataCorrecaoEl.textContent = latest
-        ? latest.toLocaleDateString("pt-BR")   // ex.: 07/08/2025
-        : "—";
-    }
-      if (pageInfo) pageInfo.textContent = `Página ${page}`;
-    }
+    if (pageInfo) pageInfo.textContent = `Página ${page}`;
+  }
 
   function renderRows(items){
     if (!rowsEl) return;
@@ -166,35 +159,47 @@
       <tr>
         <td class="nowrap">${fmtDate(r.compra)}</td>
         <td>${r.debenture ?? "—"}</td>
-        <td>${r.serie ?? "—"}</td>
+        <td class="nowrap">${r.serie ?? "—"}</td>
         <td class="r">${fmtNum(r.pu_inicial)}</td>
         <td class="r">${fmtInt(r.qtde)}</td>
         <td class="r">${fmtBRL(r.valor_compra)}</td>
-        <td class="r">${fmtInt(r.prazo)}</td>
+        <!-- prazo removido -->
         <td class="r">${fmtNum(r.pu_corrigido)}</td>
         <td class="r">${fmtBRL(r.valor_corrigido)}</td>
-        <td class="r">${fmtBRL(r.rendimento)}</td>
-        <td class="r">${fmtPct(r.rentabilidade)}</td>
+        <td class="r">${fmtBRL(r.rendimento_bruto)}</td>
+        <td class="r">${fmtPct(r.rentabilidade_bruta)}</td>
+        <td class="r">${fmtBRL(r.rendimento_liquido)}</td>
+        <td class="r">${fmtPct(r.rentabilidade_liquida)}</td>
       </tr>
     `).join("");
   }
 
   function computeTotals(items){
-    let tQtde = 0, tCompra = 0, tCorr = 0, tRend = 0;
+    let tQtde = 0, tCompra = 0, tCorr = 0, tRendB = 0, tRendL = 0;
     for (const r of items){
       tQtde += Number(r.qtde || 0);
       tCompra += Number(r.valor_compra || 0);
       tCorr += Number(r.valor_corrigido || 0);
-      tRend += Number(r.rendimento || 0);
+      tRendB += Number(r.rendimento_bruto || 0);
+      tRendL += Number(r.rendimento_liquido || 0);
     }
     if (totQtde) totQtde.textContent = fmtInt(tQtde);
     if (totVCompra) totVCompra.textContent = fmtBRL(tCompra);
     if (totVCorrigido) totVCorrigido.textContent = fmtBRL(tCorr);
-    if (totRendimento) totRendimento.textContent = fmtBRL(tRend);
-    const rentab = tCompra ? (tRend / tCompra) * 100 : 0;
-    if (totRentab) {
-      totRentab.textContent = isFinite(rentab)
-        ? rentab.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' %'
+
+    if (totRendimentoBruto) totRendimentoBruto.textContent = fmtBRL(tRendB);
+    const rentabBruta = tCompra ? (tRendB / tCompra) * 100 : 0;
+    if (totRentabBruta) {
+      totRentabBruta.textContent = isFinite(rentabBruta)
+        ? rentabBruta.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' %'
+        : '—';
+    }
+
+    if (totRendimentoLiq) totRendimentoLiq.textContent = fmtBRL(tRendL);
+    const rentabLiq = tCompra ? (tRendL / tCompra) * 100 : 0;
+    if (totRentabLiq) {
+      totRentabLiq.textContent = isFinite(rentabLiq)
+        ? rentabLiq.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' %'
         : '—';
     }
   }
@@ -205,7 +210,7 @@
     authView = $("auth-view");
     appView  = $("app-view");
     authAlert = $("auth-alert");
-    signupAlert = $("signup-alert"); // pode nem existir na página
+    signupAlert = $("signup-alert");
     rowsEl = $("rows");
     userEmailBadge = $("user-email");
     pageInfo = $("page-info");
@@ -217,8 +222,10 @@
     totQtde = $("tot-qtde");
     totVCompra = $("tot-vcompra");
     totVCorrigido = $("tot-vcorrigido");
-    totRendimento = $("tot-rendimento");
-    totRentab = $("tot-rentab");
+    totRendimentoBruto = $("tot-rendimento");
+    totRentabBruta = $("tot-rentab");
+    totRendimentoLiq = $("tot-rendimento-liquido");
+    totRentabLiq = $("tot-rentab-liquida");
 
     // Forms/Buttons
     loginForm = $("login-form");
@@ -226,7 +233,7 @@
     btnPrev = $("prev");
     btnNext = $("next");
 
-    // Listeners (somente se os elementos existem)
+    // Listeners
     if (loginForm){
       loginForm.addEventListener("submit", async (e) => {
         e.preventDefault();
@@ -238,7 +245,6 @@
       });
     }
 
-    // Se sua página tiver seção de cadastro no futuro, estes IDs serão detectados e os listeners ativados
     const btnOpenSignup = $("btn-open-signup");
     if (btnOpenSignup){
       btnOpenSignup.addEventListener("click", () => {
@@ -256,13 +262,7 @@
         const { error } = await supabase.auth.signUp({
           email,
           password,
-          options: {
-            data: {
-              full_name: nome,
-              nome,
-              name: nome
-            }
-          }
+          options: { data: { full_name: nome, nome, name: nome } }
         });
         if (error){ showError(signupAlert || authAlert, error.message); return; }
         alert("Conta criada. Verifique seu e-mail se necessário e faça login.");
@@ -292,7 +292,6 @@
     checkSessionAndRoute();
   }
 
-  // Garante que os elementos já existam
   if (document.readyState === "loading"){
     document.addEventListener("DOMContentLoaded", boot, { once:true });
   } else {
