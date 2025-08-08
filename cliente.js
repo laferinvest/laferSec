@@ -1,43 +1,37 @@
 /* === LAFER INVEST - Área do Investidor (cliente.js) ===
- * Ajuste de colunas: remove Prazo; adiciona Rendimento Líquido e Rentabilidade Líquida;
- * renomeia cabeçalhos para Rendimento Bruto e Rentabilidade Bruta (valores já existentes).
+ * Ajuste: cria grupos BRUTO/LÍQUIDO com cabeçalho em 2 linhas e
+ * adiciona "Valor Atualizado Líquido" (derivado = valor_compra + rendimento_liquido).
  */
 
 (function(){
   'use strict';
 
-  /* === Config ===
-   * Preencha com seus valores do projeto Supabase (NUNCA exponha a service_role aqui).
-   */
   const SUPABASE_URL = "https://sjjxlabvdzihqyadquip.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNqanhsYWJ2ZHppaHF5YWRxdWlwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ0MDA3NDMsImV4cCI6MjA2OTk3Njc0M30.CvZ50a2dVbv63l8A2ADNNxF9Rab-QMk1rcBv_ZF-UXc"; // público (ok no front)
 
-  // Tabela/view com as colunas pedidas (adeque ao seu schema real)
+  // VIEW: usar as colunas existentes; o "valor_atualizado_liquido" será calculado no front.
   const TABLE_NAME = "debentures_portal";
   const COLUMNS = [
-    "compra",              // date
-    "debenture",           // text
-    "serie",               // text
-    "pu_inicial",          // numeric
-    "qtde",                // numeric
-    "valor_compra",        // numeric
-    // "prazo" removido
-    "pu_corrigido",        // numeric
-    "valor_corrigido",     // numeric
-    "rendimento_bruto",          // numeric (BRUTO)
-    "rentabilidade_bruta",       // numeric (%) BRUTA
-    "rendimento_liquido",  // numeric (LIQ)
-    "rentabilidade_liquida", // numeric (%) LIQ
+    "compra",
+    "debenture",
+    "serie",
+    "pu_inicial",
+    "qtde",
+    "valor_compra",
+    "pu_corrigido",
+    "valor_corrigido",
+    "rendimento_bruto",
+    "rentabilidade_bruta",
+    "rendimento_liquido",
+    "rentabilidade_liquida",
     "user_id",
     "updated_at"
   ].join(",");
 
-  // Paginação (mantida)
   const LIMIT = 1000;
   let page = 1;
   let totalCount = 0;
 
-  // Supabase client
   const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
   });
@@ -87,7 +81,7 @@
   // ===== State/Elements =====
   let authView, appView, authAlert, signupAlert,
       rowsEl, userEmailBadge, pageInfo, totalInfo, nomeEl, dataCorrecaoEl,
-      totQtde, totVCompra, totVCorrigido, totRendimentoBruto, totRentabBruta,
+      totQtde, totVCompra, totVCorrigido, totVCorrigidoLiq, totRendimentoBruto, totRentabBruta,
       totRendimentoLiq, totRentabLiq,
       loginForm, btnLogout, btnPrev, btnNext;
 
@@ -153,9 +147,17 @@
     if (pageInfo) pageInfo.textContent = `Página ${page}`;
   }
 
+  function valorAtualizadoLiquido(r){
+    const compra = Number(r.valor_compra || 0);
+    const rendL  = Number(r.rendimento_liquido || 0);
+    return compra + rendL;
+  }
+
   function renderRows(items){
     if (!rowsEl) return;
-    rowsEl.innerHTML = items.map(r => `
+    rowsEl.innerHTML = items.map(r => {
+      const vAtuLiq = valorAtualizadoLiquido(r);
+      return `
       <tr>
         <td class="nowrap">${fmtDate(r.compra)}</td>
         <td>${r.debenture ?? "—"}</td>
@@ -163,29 +165,39 @@
         <td class="r">${fmtNum(r.pu_inicial)}</td>
         <td class="r">${fmtInt(r.qtde)}</td>
         <td class="r">${fmtBRL(r.valor_compra)}</td>
-        <!-- prazo removido -->
         <td class="r">${fmtNum(r.pu_corrigido)}</td>
-        <td class="r">${fmtBRL(r.valor_corrigido)}</td>
-        <td class="r">${fmtBRL(r.rendimento_bruto)}</td>
-        <td class="r">${fmtPct(r.rentabilidade_bruta)}</td>
-        <td class="r">${fmtBRL(r.rendimento_liquido)}</td>
-        <td class="r">${fmtPct(r.rentabilidade_liquida)}</td>
-      </tr>
-    `).join("");
+
+        <!-- Grupo BRUTO -->
+        <td class="r group-bruto-cell group-sep">${fmtBRL(r.valor_corrigido)}</td>
+        <td class="r group-bruto-cell">${fmtBRL(r.rendimento_bruto)}</td>
+        <td class="r group-bruto-cell">${fmtPct(r.rentabilidade_bruta)}</td>
+
+        <!-- Grupo LÍQUIDO -->
+        <td class="r group-liquido-cell">${fmtBRL(vAtuLiq)}</td>
+        <td class="r group-liquido-cell">${fmtBRL(r.rendimento_liquido)}</td>
+        <td class="r group-liquido-cell">${fmtPct(r.rentabilidade_liquida)}</td>
+      </tr>`;
+    }).join("");
   }
 
   function computeTotals(items){
-    let tQtde = 0, tCompra = 0, tCorr = 0, tRendB = 0, tRendL = 0;
+    let tQtde = 0, tCompra = 0, tCorr = 0, tCorrLiq = 0, tRendB = 0, tRendL = 0;
     for (const r of items){
       tQtde += Number(r.qtde || 0);
       tCompra += Number(r.valor_compra || 0);
-      tCorr += Number(r.valor_corrigido || 0);
-      tRendB += Number(r.rendimento_bruto || 0);
-      tRendL += Number(r.rendimento_liquido || 0);
+      const corr = Number(r.valor_corrigido || 0);
+      const rendB = Number(r.rendimento_bruto || 0);
+      const rendL = Number(r.rendimento_liquido || 0);
+      tCorr += corr;
+      tRendB += rendB;
+      tRendL += rendL;
+      tCorrLiq += Number(r.valor_compra || 0) + rendL;
     }
+
     if (totQtde) totQtde.textContent = fmtInt(tQtde);
     if (totVCompra) totVCompra.textContent = fmtBRL(tCompra);
     if (totVCorrigido) totVCorrigido.textContent = fmtBRL(tCorr);
+    if (totVCorrigidoLiq) totVCorrigidoLiq.textContent = fmtBRL(tCorrLiq);
 
     if (totRendimentoBruto) totRendimentoBruto.textContent = fmtBRL(tRendB);
     const rentabBruta = tCompra ? (tRendB / tCompra) * 100 : 0;
@@ -222,6 +234,7 @@
     totQtde = $("tot-qtde");
     totVCompra = $("tot-vcompra");
     totVCorrigido = $("tot-vcorrigido");
+    totVCorrigidoLiq = $("tot-vcorrigido-liquido");
     totRendimentoBruto = $("tot-rendimento");
     totRentabBruta = $("tot-rentab");
     totRendimentoLiq = $("tot-rendimento-liquido");

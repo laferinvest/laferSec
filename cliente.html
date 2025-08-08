@@ -13,6 +13,16 @@
       --dourado:#c5a47e;
       --cinza:#6b7280;
       --bg:#f7fafc;
+      --bruto-bg:#f8fafc;
+      --bruto-head:#1a4a73;
+      /* ===== Verde do code 2 ===== */
+    --liquido-bg: linear-gradient(
+      135deg,
+      rgba(240, 253, 244, 0.3) 0%,
+      rgba(220, 252, 231, 0.3) 100%
+    );
+    --liquido-bg-solid: rgba(240, 253, 244, 0.2);
+      --liquido-head: linear-gradient(135deg, #065f46 0%, #047857 100%);
     }
     html,body{ background:var(--bg); }
     .brand-bar{ background:var(--azul); color:#fff; padding:.6rem 0; }
@@ -21,7 +31,6 @@
     .muted{ color:var(--cinza); }
     .hidden{ display:none !important; }
 
-    /* Header estilo relatório */
     .report-head{
       background:#fff;
       border-radius:14px;
@@ -36,11 +45,18 @@
     }
     .report-sub{ color:var(--cinza); font-size:.95rem; }
 
-    /* Tabela com cores */
     .table thead th {
       background:linear-gradient(0deg, var(--azul), var(--azul-2));
       color:#fff; border:0; white-space:nowrap; vertical-align:middle;
       font-weight:700; font-size:.85rem; letter-spacing:.3px;
+    }
+    .table thead tr.group-top th.group-bruto {
+      background:linear-gradient(0deg, var(--bruto-head), #0f3557);
+      border-right:1px solid rgba(255,255,255,.18);
+    }
+    /* Verde do code 2 aplicado ao cabeçalho líquido */
+    .table thead tr.group-top th.group-liquido {
+      background: var(--liquido-head);
     }
     .table tbody td{ vertical-align:middle; font-size:.92rem; }
     .table tfoot th, .table tfoot td{
@@ -57,13 +73,9 @@
     .footer-note{ font-size:.9rem; color:#6b7280 }
     .btn-gold{ background:var(--dourado); color:#fff; border-radius:50px; font-weight:700; letter-spacing:.4px; }
     .btn-gold:hover{ filter:brightness(.95); color:#fff; }
-  
-    /* Garante cálculo de largura baseado no conteúdo */
+
     .table { table-layout: auto; }
-    .nowrap {
-      white-space: nowrap;
-    }
-    /* No mobile, não deixa NENHUMA célula quebrar linha */
+    .nowrap { white-space: nowrap; }
     @media (max-width: 767.98px) {
       .table-responsive { overflow-x: auto; -webkit-overflow-scrolling: touch; }
       .table thead th,
@@ -73,8 +85,6 @@
         white-space: nowrap;
       }
     }
-
-    /* Respiro no fim do scroll e mais espaço à direita da última coluna no mobile */
     @media (max-width: 767.98px) {
       .table-responsive { padding-right: 12px; }
       .table thead th:last-child,
@@ -86,7 +96,6 @@
       .table tfoot td:nth-last-child(-n+3) { padding-right: 0.75rem; }
     }
 
-    /* ====== Divisórias verticais entre colunas ====== */
     .table {
       border-collapse: separate;
       border-spacing: 0;
@@ -145,19 +154,38 @@
     .table thead th,
     .table thead td { border-top: 0; }
 
-    /* ===== Cabeçalho em 2 linhas para Bruto/Líquido ===== */
+    .group-bruto-cell { background: var(--bruto-bg); }
+    /* Verde do code 2 aplicado às células líquidas */
+    .group-liquido-cell { 
+      background: var(--liquido-bg-solid);
+      position: relative;
+    }
+    .group-liquido-cell::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: var(--liquido-bg);
+      pointer-events: none;
+      z-index: -1;
+    }
+    .group-sep { border-left: 2px solid #e5e7eb; }
+
+    /* Rodapé líquido com verde */
+    .table tfoot .group-liquido-cell {
+      background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%) !important;
+      color: #065f46;
+      font-weight: 800;
+    }
+
     .th-2line { display:inline-block; line-height:1.05; }
     .th-2line .sub { display:block; font-size:.72rem; font-weight:700; opacity:.95; margin-top:2px; }
 
   </style>
 </head>
 <body>
-  <!-- BRAND-BAR (substitua a sua) -->
   <div class="brand-bar">
     <div class="container d-flex justify-content-between align-items-center">
       <a href="index.html" aria-label="Voltar ao site">LAFER INVEST</a>
-
-      <!-- NOVO bloco autenticado -->
       <div id="auth-area" class="d-flex align-items-center gap-2 d-none">
         <span id="user-email" class="badge badge-light small mr-2"></span>
         <button id="btn-logout" class="btn btn-outline-light btn-sm">
@@ -167,16 +195,13 @@
     </div>
   </div>
   <main class="container my-4 my-md-5">
-    <!-- AUTH VIEW -->
     <section id="auth-view" class="row justify-content-center">
       <div class="col-md-6 col-lg-5">
         <div class="card">
           <div class="card-body p-4 p-md-5">
             <h1 class="h4 mb-3 text-center" style="color:#0d2c4a">Entrar</h1>
             <p class="text-center muted mb-4">Use seu e-mail e senha cadastrados.</p>
-
             <div id="auth-alert" class="alert alert-danger hidden" role="alert"></div>
-
             <form id="login-form" novalidate>
               <div class="form-group">
                 <label for="email">E-mail</label>
@@ -194,7 +219,6 @@
       </div>
     </section>
 
-    <!-- APP VIEW (RELATÓRIO) -->
     <section id="app-view" class="hidden">
       <div class="report-head mb-3">
         <div class="d-flex justify-content-between align-items-center">
@@ -213,20 +237,24 @@
           <div class="table-responsive">
             <table class="table table-sm mb-0">
               <thead>
+                <tr class="group-top">
+                  <th rowspan="2" class="nowrap">Compra</th>
+                  <th rowspan="2" class="nowrap">Debênture</th>
+                  <th rowspan="2" class="nowrap">Série</th>
+                  <th rowspan="2" class="nowrap">PU Inicial</th>
+                  <th rowspan="2" class="nowrap">Qtde</th>
+                  <th rowspan="2" class="nowrap">Valor Compra</th>
+                  <th rowspan="2" class="nowrap">PU Atualizado</th>
+                  <th colspan="3" class="nowrap text-center group-bruto group-sep">Bruto</th>
+                  <th colspan="3" class="nowrap text-center group-liquido">Líquido</th>
+                </tr>
                 <tr>
-                  <th class="nowrap">Compra</th>
-                  <th class="nowrap">Debênture</th>
-                  <th class="nowrap">Série</th>
-                  <th class="nowrap">PU Inicial</th>
-                  <th class="nowrap">Qtde</th>
-                  <th class="nowrap">Valor Compra</th>
-                  <!-- Prazo removido -->
-                  <th class="nowrap">PU Corrigido</th>
-                  <th class="nowrap">Valor Corrigido</th>
-                  <th class="nowrap"><span class="th-2line">Rendimento<span class="sub">Bruto</span></span></th>
-                  <th class="nowrap"><span class="th-2line">Rentabilidade<span class="sub">Bruta</span></span></th>
-                  <th class="nowrap"><span class="th-2line">Rendimento<span class="sub">Líquido</span></span></th>
-                  <th class="nowrap"><span class="th-2line">Rentabilidade<span class="sub">Líquida</span></span></th>
+                  <th class="nowrap group-bruto">Valor Atualizado</th>
+                  <th class="nowrap group-bruto">Rendimento</th>
+                  <th class="nowrap group-bruto">Rentabilidade</th>
+                  <th class="nowrap group-liquido">Valor Atualizado</th>
+                  <th class="nowrap group-liquido">Rendimento</th>
+                  <th class="nowrap group-liquido">Rentabilidade</th>
                 </tr>
               </thead>
               <tbody id="rows"></tbody>
@@ -238,13 +266,13 @@
                   <td></td>
                   <td class="r" id="tot-qtde">—</td>
                   <td class="r" id="tot-vcompra">—</td>
-                  <!-- prazo removido -->
                   <td></td>
-                  <td class="r" id="tot-vcorrigido">—</td>
-                  <td class="r" id="tot-rendimento">—</td>
-                  <td class="r" id="tot-rentab">—</td>
-                  <td class="r" id="tot-rendimento-liquido">—</td>
-                  <td class="r" id="tot-rentab-liquida">—</td>
+                  <td class="r group-bruto-cell group-sep" id="tot-vcorrigido">—</td>
+                  <td class="r group-bruto-cell" id="tot-rendimento">—</td>
+                  <td class="r group-bruto-cell" id="tot-rentab">—</td>
+                  <td class="r group-liquido-cell" id="tot-vcorrigido-liquido">—</td>
+                  <td class="r group-liquido-cell" id="tot-rendimento-liquido">—</td>
+                  <td class="r group-liquido-cell" id="tot-rentab-liquida">—</td>
                 </tr>
               </tfoot>
             </table>
@@ -262,7 +290,6 @@
     </section>
   </main>
 
-  <!-- Supabase -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="cliente.js"></script>
 </body>
