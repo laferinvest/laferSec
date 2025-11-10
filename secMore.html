@@ -334,7 +334,21 @@ body { padding-top: 96px; }
 }
 /* espaço entre itens para ritmo visual */
 .valores-strong ul.list-unstyled > li { margin-bottom: .45rem; }
-</style></head>
+</style>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-3Q66N7J22G"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  // Config padrão + boas práticas
+  gtag('config', 'G-3Q66N7J22G', {
+    send_page_view: true,   // já é o default, mas deixo explícito
+    anonymize_ip: true      // bom para LGPD/privacidade
+  });
+</script>
+</head>
 <body>
 <nav class="navbar navbar-expand-xl navbar-light fixed-top">
 <div class="container">

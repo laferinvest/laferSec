@@ -106,6 +106,20 @@
   margin-right: .35rem;
 }
 </style>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-3Q66N7J22G"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  // Config padrão + boas práticas
+  gtag('config', 'G-3Q66N7J22G', {
+    send_page_view: true,   // já é o default, mas deixo explícito
+    anonymize_ip: true      // bom para LGPD/privacidade
+  });
+</script>
+
 </head>
 <body>
 <nav class="navbar navbar-expand-xl navbar-light fixed-top">
@@ -579,22 +593,30 @@
         </script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js" type="text/javascript"></script>
 <script>
-            // Initialize EmailJS with your Public Key
-            emailjs.init("jTNhBYzdqj2ifDG_l"); // Replace with your actual Public Key
+  // Initialize EmailJS com sua Public Key
+  emailjs.init("jTNhBYzdqj2ifDG_l");
 
-            document.getElementById("contact-form").addEventListener("submit", function(e) {
-                e.preventDefault();
+  document.getElementById("contact-form").addEventListener("submit", function(e) {
+    e.preventDefault();
 
-                emailjs.send("service_4a0cmef", "template_m7d3pre", {
-                    user_name: document.getElementById("name").value,
-                    user_email: document.getElementById("email").value,
-                    message: document.getElementById("message").value
-                }).then(() => {
-                    alert("Email enviado com sucesso!");
-                    document.getElementById("contact-form").reset();
-                }).catch(error => console.error("Erro ao enviar email:", error));
-            });
-        </script>
+    emailjs.send("service_4a0cmef", "template_m7d3pre", {
+      user_name: document.getElementById("name").value,
+      user_email: document.getElementById("email").value,
+      message: document.getElementById("message").value
+    }).then(() => {
+      // 👉 Evento GA4 de lead enviado
+      if (typeof gtag === 'function') {
+        gtag('event', 'contact_form_submitted', {
+          event_category: 'lead',
+          event_label: 'fale-conosco'
+        });
+      }
+
+      alert("Email enviado com sucesso!");
+      document.getElementById("contact-form").reset();
+    }).catch(error => console.error("Erro ao enviar email:", error));
+  });
+</script>
 <script>
             $(document).click(function(event) {
                 var clickover = $(event.target);

@@ -253,6 +253,20 @@
       z-index:-1;
     }
 </style>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-3Q66N7J22G"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  // Config padrão + boas práticas
+  gtag('config', 'G-3Q66N7J22G', {
+    send_page_view: true,   // já é o default, mas deixo explícito
+    anonymize_ip: true      // bom para LGPD/privacidade
+  });
+</script>
+
 </head>
 <body>
 <div class="brand-bar">
