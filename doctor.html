@@ -65,7 +65,7 @@
 
 /* Page-specific styles for main content - scoped to avoid global conflicts */
 .secMore-content-section {
-  padding-top: 120px; /* account for fixed navbar */
+  padding-top: 40px; /* account for fixed navbar */
   padding-bottom: 80px;
   background-color: #f8f9fa;
 }
@@ -306,11 +306,51 @@ body { padding-top: 96px; }
 
 /* --- SCOPED AO MAIN: versão médicos --- */
 .sec-hero-title{
-  color:#0d2c4a;
+  color:#f8f9fa;   /* cor clara para ficar legível sobre a imagem */
   margin-bottom:12px;
   font-weight:700;
   letter-spacing:.2px;
 }
+
+/* Container de topo da página de médicos (apenas espaçamento) */
+.hero-doctor-bg{
+  padding: 0;             /* sem faixas extras acima/abaixo */
+  background: transparent;/* usa o fundo normal da página */
+}
+
+
+/* Painel com imagem de fundo, limitado ao width do .container */
+.hero-doctor-panel{
+  position: relative;
+  background: url('img/more/1.png') center/cover no-repeat;
+  border-radius: 18px;
+  padding: 90px 28px 50px 28px;
+  min-height: 380px;       /* aumenta um pouco a altura do bloco */
+  overflow: hidden;
+  margin: 24px auto 40px auto;  /* espaço em cima e embaixo, dentro da largura do container */
+}
+
+/* Descer só o card "Em vez de esperar..." dentro do hero com imagem */
+.hero-doctor-panel .hero-highlight{
+  margin-top: 80px;   /* testa com 32px; se quiser mais para baixo, aumenta esse valor */
+}
+
+/* Overlay leve para melhorar contraste com o fundo */
+.hero-doctor-panel::before{
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.38);
+}
+
+/* Conteúdo por cima da imagem */
+.hero-doctor-panel .text-center{
+  position: relative;
+  z-index: 1;
+}
+
+
+
 .sec-subtitle{
   max-width:860px;
   margin:0 auto 28px auto;
@@ -429,6 +469,65 @@ body { padding-top: 96px; }
   box-shadow:0 12px 26px rgba(197,164,126,.35);
   color:#fff;
 }
+
+
+/* === HERO COM FUNDO === */
+.hero-doctor {
+  position: relative;
+  width: 100%;
+  min-height: 420px;
+  padding: 120px 20px 100px 20px;
+  background: url('img/more/1.png') center/cover no-repeat;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+/* Overlay para melhorar contraste */
+.hero-doctor::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.35);  /* Escurece levemente a imagem */
+  backdrop-filter: blur(1px);
+  border-radius: 0;
+}
+
+/* Conteúdo por cima */
+.hero-doctor-content {
+  position: relative;
+  z-index: 5;
+  max-width: 900px;
+}
+
+.hero-doctor h1 {
+  color: #ffffff;
+  font-weight: 800;
+  font-size: clamp(26px, 5vw, 42px);
+  text-shadow: 0 2px 6px rgba(0,0,0,.4);
+  margin-bottom: 20px;
+}
+
+.hero-doctor p {
+  color: #f1f1f1;
+  font-size: clamp(16px, 2.4vw, 20px);
+  font-weight: 600;
+  line-height: 1.55;
+  padding: 0 12px;
+  text-shadow: 0 1px 4px rgba(0,0,0,.4);
+  margin-bottom: 0;
+}
+
+/* Espaço para não colidir com navbar fixa */
+body {
+  padding-top: 96px;
+}
+@media (max-width: 991px){
+  body { padding-top: 80px; }
+}
+
+
 </style>
 
 <!-- Google tag (gtag.js) -->
@@ -490,24 +589,30 @@ body { padding-top: 96px; }
   </div>
 </nav>
 
+<section class="hero-doctor-bg">
+  <div class="container">
+    <div class="hero-doctor-panel">
+      <div class="text-center mb-4">
+        <h1 class="h1 sec-hero-title">
+          Antecipação de plantões para médicos
+        </h1>
+        <div class="gold-underline"></div>
+        <p class="lead sec-subtitle hero-highlight">
+          Em vez de esperar <strong>30, 60 dias ou mais</strong> para receber seus plantões,
+          você pode transformar esse valor em <strong>dinheiro na conta hoje</strong>
+          sem entrar no cheque especial, cartão de crédito ou empréstimo bancário.
+          A Lafer ajuda médicos, especialmente no início de carreira,
+          a organizar o fluxo de caixa de forma simples e transparente.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+
 <!-- Main Content Section -->
 <main class="secMore-content-section" id="como-funciona">
   <div class="container">
-
-    <div class="text-center mb-4">
-      <h1 class="h1 sec-hero-title">
-        Antecipação de plantões para médicos
-      </h1>
-      <div class="gold-underline"></div>
-      <p class="lead sec-subtitle hero-highlight">
-        Em vez de esperar <strong>30, 60 dias ou mais</strong> para receber seus plantões,
-        você pode transformar esse valor em <strong>dinheiro na conta hoje</strong> —
-        sem entrar no cheque especial, cartão de crédito ou empréstimo bancário.
-        A Lafer ajuda médicos, especialmente no início de carreira,
-        a organizar o fluxo de caixa de forma simples e transparente.
-      </p>
-    </div>
-
     <div class="row">
       <!-- História focada em médico/plantão -->
       <div class="col-lg-6 mb-4">
@@ -521,7 +626,7 @@ body { padding-top: 96px; }
           <p>
             Ela recebe muitos plantões em <strong>30</strong> ou <strong>60</strong> dias de prazo.
             Na prática, ela trabalha hoje, mas o dinheiro só cai na conta
-            <strong>um ou dois meses depois</strong> — justamente quando surgem
+            <strong>um ou dois meses depois</strong>, justamente quando surgem
             gastos com moradia, transporte, alimentação, material, congressos…
           </p>
           <p>
