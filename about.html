@@ -1,0 +1,728 @@
+
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8"/>
+<meta content="IE=edge" http-equiv="X-UA-Compatible"/>
+<meta content="width=device-width, initial-scale=1" name="viewport"/>
+<link href="favicon.png" rel="icon" type="image/png"/>
+<title>Lafer Invest - Securitizadora</title>
+<link href="css/bootstrap-reboot.min.css" rel="stylesheet"/>
+<link href="css/bootstrap-grid.min.css" rel="stylesheet"/>
+<link href="css/bootstrap.min.css" rel="stylesheet"/>
+<link href="plugins/slick/slick.css" rel="stylesheet"/>
+<link href="plugins/slick/slick-theme.css" rel="stylesheet"/>
+<link href="plugins/nivoslider/nivo-slider.css" rel="stylesheet"/>
+<link href="plugins/lity/lity.min.css" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css?family=Montserrat:200,300,400,600&amp;display=swap" rel="stylesheet"/>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet"/>
+<link href="css/animate.css" rel="stylesheet"/>
+<link href="css/style.css" rel="stylesheet"/>
+<link href="css/responsive.css" rel="stylesheet"/>
+<style>
+  
+.lafer-brand {
+          font-weight: 900;           /* Negrito extra forte */
+          font-size: 1.8rem;          /* Aumenta bastante o tamanho (antes devia ser ~1.25rem) */
+          letter-spacing: 1px;        /* Espaçamento leve para dar elegância */
+          color: #0d2c4a !important;  /* O Azul Lafer */
+          text-transform: uppercase;  /* Garante caixa alta */
+          text-decoration: none;      /* Remove sublinhado */
+          line-height: 1;             /* Mantém a altura da barra compacta */
+          font-family: 'Montserrat', sans-serif; /* Garante a fonte padrão do site */
+        }
+        
+        /* Ajuste fino para Mobile (para não quebrar a linha em telas pequenas) */
+        @media (max-width: 576px) {
+            .lafer-brand {
+                font-size: 1.4rem;
+            }
+        }
+
+@media (max-width: 991px){
+
+  /* === COMO FUNCIONA: subir o botão (mais espaço abaixo) === */
+  section#como-funciona .about-content-shadow{
+    padding-bottom: 64px !important;
+    text-align: center !important;
+  }
+  section#como-funciona .about-content-shadow a.btn-gold{
+    margin-top: 16px !important;
+    display: inline-block;
+  }
+
+  /* === A LAFER INVEST: descer um pouco o botão (mais espaço acima) === */
+  section#about-content .about-content-shadow{
+    padding-bottom: 28px !important;
+    text-align: center !important;
+  }
+  section#about-content .about-content-shadow a.btn-gold{
+    margin-top: 36px !important;
+    display: inline-block;
+  }
+}
+
+/* Page-specific styles for main content - scoped to avoid global conflicts */
+.lafermore-content-section {
+    padding-top: 120px; /* account for fixed navbar */
+    padding-bottom: 80px;
+    background-color: #f8f9fa;
+}
+.lafermore-card-custom {
+    background-color: #0d2c4a;
+    border-radius: 15px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.06);
+    overflow: hidden;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+.lafermore-card-custom:hover {
+    transform: translateY(-6px);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.12);
+}
+.lafermore-btn-gold-modern {
+    background-color: #c5a47e;
+    color: #fff;
+    padding: 12px 30px;
+    border-radius: 50px;
+    text-transform: uppercase;
+    font-weight: 600;
+    letter-spacing: 1px;
+    transition: all 0.3s ease;
+    display: inline-block;
+    text-decoration: none;
+}
+.lafermore-btn-gold-modern:hover {
+    background-color: #b39167;
+    color: #fff;
+    transform: scale(1.03);
+    box-shadow: 0 8px 25px rgba(197, 164, 126, 0.35);
+}
+.lafermore-font-blue{ color:#0d2c4a; }
+.lafermore-bg-blue{ background-color:#0d2c4a; }
+.lafermore-font-gold{ color:#c5a47e; }
+.lafermore-bg-gold{ background-color:#c5a47e; }
+
+/* helper for subtle separators */
+.hr-soft {
+  height: 1px;
+  border: 0;
+  background: linear-gradient(90deg, rgba(0,0,0,0), rgba(0,0,0,.08), rgba(0,0,0,0));
+  margin: 24px 0;
+}
+
+/* keep spacing so content doesn't hide under fixed header */
+body { padding-top: 96px; }
+@media (max-width: 991px){ body { padding-top: 80px; } }
+/* Ensure visibility of menu text on non-hero pages */
+.navbar.fixed-top { background: #0d2c4a; } /* matches site palette */
+.navbar .nav-link { color: #ffffff !important; }
+.navbar .nav-link:hover { color: #c5a47e !important; }
+
+/* Equal-height columns so cards terminam junto com o botão */
+.equalize .col-md-6 { display: flex; }
+.content-col { display: flex; flex-direction: column; width: 100%; }
+.partner-stack { display: flex; flex-direction: column; justify-content: space-between; width: 100%; }
+
+/* Partner card: big photo area */
+.partner-card {
+  padding: 14px;
+}
+.partner-photo {
+  width: 100%;
+  height: 320px;              /* grande para a foto ficar bem visível */
+  object-fit: cover;
+  border-radius: 12px;
+  display: block;
+  background: transparent;
+}
+@media (min-width: 992px){
+  .partner-photo { height: 380px; } /* ainda maior no desktop */
+}
+.partner-name {
+  margin: 12px 4px 0 4px;
+  font-weight: 700;
+  color: #c5a47e;
+  letter-spacing: 0.2px;
+}
+
+/* Stack spacing - usamos space-between via partner-stack para preencher a altura */
+.partner-stack .lafermore-card-custom { width: 100%; }
+
+/* Remove default bottom margin between columns to align bottoms */
+.row.equalize { align-items: stretch; }
+
+/* === Team block: square photos, fluid up to a higher limit, name on the right === */
+.team-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.team-photo,
+.team-photo-fallback {
+  /* Fluid size with a higher cap: up to ~5cm (≈189px), but shrink on small viewports */
+  inline-size: min(32vw, 5cm, 192px);
+  block-size: auto;
+  aspect-ratio: 1 / 1;        /* perfect square */
+  object-fit: cover;
+  border-radius: 12px;
+  background: transparent;
+  flex: 0 0 auto;
+  display: block;
+}
+/* Fallback "initials" box mirrors the image box, centered text */
+.team-photo-fallback {
+  display: none;               /* shown only if image fails to load */
+  justify-content: center;
+  align-items: center;
+  font-size: clamp(18px, 6vw, 40px);
+  font-weight: 800;
+  color: #6c757d;
+}
+.team-info {
+  min-inline-size: 0;
+}
+.team-name {
+  margin: 0;
+  font-weight: 700;
+  color: #c5a47e;
+  letter-spacing: 0.2px;
+}
+/* Optional: on very small screens, allow wrap if there's no room */
+@media (max-width: 420px) {
+  .team-item { flex-wrap: wrap; }
+}
+
+.team-role {
+  margin-top: 4px;
+  font-size: clamp(12px, 1.9vw, 13.5px); /* smaller than name */
+  line-height: 1.25;
+  color: #6c757d; /* muted to differentiate */
+  font-weight: 500;
+}
+
+.team-role {
+  margin-top: 4px;
+  font-size: clamp(14px, 2.2vw, 18px); /* maior que antes */
+  line-height: 1.25;
+  color: #ffffff; /* branco */
+  font-weight: 700; /* negrito */
+}
+
+/* === ENHANCED SOCIAL MEDIA ICONS === */
+.team-social {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.social-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  text-decoration: none;
+  font-size: 16px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+  border: 2px solid transparent;
+  background: linear-gradient(135deg, rgba(255,255,255,0.15), rgba(255,255,255,0.05));
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.social-icon::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(255,255,255,0.2), rgba(255,255,255,0.05));
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.social-icon:hover::before {
+  opacity: 1;
+}
+
+/* LinkedIn specific styling */
+.social-icon.linkedin {
+  background: linear-gradient(135deg, #0077B5, #00639C);
+  color: #ffffff;
+  border-color: rgba(255,255,255,0.2);
+}
+
+.social-icon.linkedin:hover {
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: 0 8px 24px rgba(0, 119, 181, 0.4);
+  border-color: rgba(255,255,255,0.4);
+}
+
+/* Email specific styling */
+.social-icon.email {
+  background: linear-gradient(135deg, #c5a47e, #d4b885);
+  color: #ffffff;
+  border-color: rgba(255,255,255,0.2);
+}
+
+.social-icon.email:hover {
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: 0 8px 24px rgba(197, 164, 126, 0.4);
+  border-color: rgba(255,255,255,0.4);
+}
+
+/* Icon sizing and positioning */
+.social-icon .fa {
+  font-size: 16px;
+  line-height: 1;
+  z-index: 1;
+  position: relative;
+}
+
+/* Responsive adjustments */
+@media (max-width: 576px) {
+  .social-icon {
+    width: 36px;
+    height: 36px;
+    font-size: 15px;
+  }
+  
+  .team-social {
+    gap: 6px;
+    margin-top: 10px;
+  }
+}
+
+/* Accessibility improvements */
+.social-icon:focus {
+  outline: 2px solid #c5a47e;
+  outline-offset: 2px;
+}
+
+.social-icon:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* === Vertical spacing between team cards, esp. on mobile === */
+.partner-card {
+  /* ensure there's breathing room around each card */
+  padding-block: 8px;
+}
+/* Add space only between consecutive cards */
+.partner-card + .partner-card {
+  margin-top: 20px;
+}
+
+/* Tighten/expand spacing rules for small viewports */
+@media (max-width: 576px) {
+  .partner-card + .partner-card { margin-top: 24px; }
+  .team-item { gap: 14px; } /* a bit more gap between photo and text */
+}
+
+/* Optional subtle divider for clarity; can be removed if undesired */
+.partner-card {
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.partner-card:last-of-type {
+  border-bottom: none;
+}
+
+.team-header { 
+  margin-bottom: 12px;
+}
+.section-underline {
+  width: 72px;
+  height: 3px;
+  background: linear-gradient(90deg,#d4af37,#f4d03f);
+  border-radius: 2px;
+}
+
+/* === Title card for team === */
+.partner-stack .partner-card .text-center { text-align: center; }
+
+/* === Team title (no card) === */
+.team-title-block {background: transparent;
+  padding: 12px 16px 6px 16px;
+  text-align: center;}
+.team-title {
+  margin: 0;
+  text-align: center;
+  font-size: clamp(20px, 2.4vw, 28px);
+  line-height: 1.2;
+  color: #0d2c4a; /* azul */
+  position: relative;
+  display: inline-block;
+  padding-bottom: 8px;
+}
+.team-title::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 0;
+  width: 72px;
+  height: 3px;
+  background: #C9A227; /* dourado */
+  border-radius: 2px;
+}
+/* Ensure the block sits visually above the cards with some spacing */
+.partner-stack > .team-title-block + * {
+  margin-top: 8px;
+}
+
+/* === Typography upgrade for Nossos Valores === */
+.valores-strong, .valores-strong p, .valores-strong li, .valores-strong .lead, .valores-strong .text-secondary {
+  font-weight: 600;
+  color: #0b1220;
+  line-height: 1.7;
+  letter-spacing: 0.1px;
+}
+</style>
+<style>
+/* === Área do Cliente (desativada) === */
+.navbar .nav-link.disabled{
+  pointer-events: none;
+  opacity: .6;
+  cursor: not-allowed;
+  font-weight: 600;
+  letter-spacing: .02em;
+}
+/* Garante alinhamento do ícone com o texto */
+.navbar .nav-link.disabled .fa{
+  margin-right: .35rem;
+}
+</style>
+<style>
+/* === Readability upgrades for the Jorge story === */
+.story-jorge p {
+  font-weight: 600;           /* engrossar a letra */
+  color: #0b1220;             /* linha mais escura */
+  line-height: 1.7;           /* leitura mais confortável */
+  letter-spacing: 0.1px;
+}
+.story-jorge .hl-gold {
+  color: #d4af37;             /* dourado */
+  font-weight: 700;
+  text-decoration-thickness: 0.12em;
+}
+.story-jorge .hl-gold::selection { background: rgba(212,175,55,.25); }
+</style>
+<style>
+/* --- PATCH: Valores com título forte e descrição menor --- */
+.valores-strong .valor-item { display: inline; }
+.valores-strong .valor-title {
+  font-weight: 700;
+  color: #0d2c4a;
+}
+.valores-strong .valor-desc {
+  font-weight: 500;
+  font-size: 0.92rem;
+  color: #4b5563;
+  margin-left: .35ch;
+}
+@media (max-width: 576px){
+  .valores-strong .valor-desc { display: block; margin-left: 0; margin-top: 2px; }
+}
+</style><style>
+/* --- PATCH v2: Readability tuning for Valores --- */
+.valores-strong .valor-title {
+  font-weight: 700;
+  font-size: 1.075rem;   /* levemente maior que o corpo */
+  color: #0d2c4a;
+}
+.valores-strong .valor-desc {
+  font-weight: 500;
+  font-size: 1rem;       /* igual ao corpo do site */
+  line-height: 1.45;     /* leitura confortável */
+  color: #374151;        /* um pouco mais escuro para contraste */
+  margin-left: .35ch;
+}
+@media (max-width: 576px){
+  .valores-strong .valor-desc { display: block; margin-left: 0; margin-top: 2px; }
+}
+
+.valores-strong ul.list-unstyled > li { margin-bottom: .45rem; }
+</style>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-3Q66N7J22G"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  // Config padrão + boas práticas
+  gtag('config', 'G-3Q66N7J22G', {
+    send_page_view: true,   // já é o default, mas deixo explícito
+    anonymize_ip: true      // bom para LGPD/privacidade
+  });
+</script>
+</head>
+<body>
+<nav class="navbar navbar-expand-xl navbar-light fixed-top">
+<div class="container">
+<a class="navbar-brand lafer-brand" href="index.html">
+  LAFER INVEST
+</a>
+<button aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation" class="navbar-toggler custom-toggler" data-target="#navbarSupportedContent" data-toggle="collapse" type="button">
+<span class="navbar-toggler-icon"></span>
+</button>
+<div class="collapse navbar-collapse" id="navbarSupportedContent">
+<ul class="navbar-nav ml-auto">
+<li class="nav-item dropdown has-saiba">
+<a class="nav-link main-link" href="index.html#about-content">SOBRE NÓS</a>
+<div class="dropdown-menu">
+<a class="dropdown-item" href="about.html">Saiba mais</a>
+</div>
+</li>
+<li class="nav-item dropdown has-saiba">
+  <!-- Clique aqui leva para a seção -->
+  <a class="nav-link main-link" href="#como-funciona">COMO FUNCIONA</a>
+  <!-- Submenu: páginas externas -->
+  <div class="dropdown-menu">
+    <a class="dropdown-item" href="enterprise.html">Para Empresas</a>
+    <a class="dropdown-item" href="doctor.html">Para Médicos</a>
+  </div>
+</li>
+<li class="nav-item">
+<a class="nav-link" href="index.html#faq-content">PERGUNTAS FREQUENTES</a>
+</li>
+<li class="nav-item">
+<a class="nav-link" href="index.html#fale-conosco">FALE CONOSCO</a>
+</li>
+
+<li class="nav-item">
+<a class="nav-link" href="investor.html" title="Área do Investidor"> ÁREA DO INVESTIDOR
+</a>
+</li>
+</ul>
+
+</div>
+</div>
+</nav>
+
+<main class="lafermore-content-section">
+<div class="container">
+<div class="text-center mb-5">
+<h1 class="h1 lafermore-font-blue mb-3">Entenda Mais Sobre a Lafer Invest</h1>
+<p class="lead text-muted mx-auto" style="max-width: 720px;">
+                    Descubra como nossa expertise em securitização pode ser o motor para o crescimento
+                    e a estabilidade financeira do seu negócio.
+                </p>
+<div class="mx-auto" style="width:96px;height:3px;background:linear-gradient(90deg,#d4af37,#f4d03f);border-radius:2px;"></div>
+</div>
+<div class="row equalize">
+  
+<div class="col-md-6 mb-4 mb-md-0">
+<div class="partner-stack">
+<div aria-label="Título da seção de equipe" class="team-title-block">
+<h2 class="team-title">A Equipe</h2>
+</div>
+<div class="lafermore-card-custom partner-card">
+  <div class="team-item">
+    <img alt="Laerte Ferreira" class="team-photo" src="img/team/laerte.jpg" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"/>
+    <div class="team-photo-fallback">LF</div>
+    <div class="team-info">
+      <h3 class="h5 team-name">Laerte Ferreira</h3>
+      <div class="team-role">
+        Sócio<br>
+        Diretor Executivo - CEO
+      </div>
+      <div class="team-social">
+        <a href="https://linkedin.com/in/laerte-ferreira-b1803740/" target="_blank" class="social-icon linkedin" aria-label="LinkedIn de Laerte Ferreira">
+          <i class="fa fa-linkedin" aria-hidden="true"></i>
+        </a>
+        <a href="mailto:laerte@lafersec.com.br" class="social-icon email" aria-label="E-mail de Laerte Ferreira">
+          <i class="fa fa-envelope" aria-hidden="true"></i>
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="lafermore-card-custom partner-card">
+  <div class="team-item">
+    <img alt="Eliene Ferreira" class="team-photo" src="img/team/eliene.png" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"/>
+    <div class="team-photo-fallback">EF</div>
+    <div class="team-info">
+      <h3 class="h5 team-name">Eliene Ferreira</h3>
+      <div class="team-role">
+        Sócia<br>
+        Diretora Administrativa
+      </div>
+      <div class="team-social">
+        <a href="mailto:eliene@lafersec.com.br" class="social-icon email" aria-label="E-mail de Eliene Ferreira">
+          <i class="fa fa-envelope" aria-hidden="true"></i>
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="lafermore-card-custom partner-card">
+  <div class="team-item">
+    <img alt="Késia Jaqueline" class="team-photo" src="img/team/kesia.jpeg" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"/>
+    <div class="team-photo-fallback">KJ</div>
+    <div class="team-info">
+      <h3 class="h5 team-name">Késia Jaqueline</h3>
+      <div class="team-role">
+        Analista de Operações
+      </div>
+      <div class="team-social">
+        <a href="https://linkedin.com/in/késia-jaqueline-a27542224/" target="_blank" class="social-icon linkedin" aria-label="LinkedIn de Késia Jaqueline">
+          <i class="fa fa-linkedin" aria-hidden="true"></i>
+        </a>
+        <a href="mailto:kesia@lafersec.com.br" class="social-icon email" aria-label="E-mail de Késia Jaqueline">
+          <i class="fa fa-envelope" aria-hidden="true"></i>
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="lafermore-card-custom partner-card">
+  <div class="team-item">
+    <img alt="Daniel Ferreira" class="team-photo" src="img/team/daniel.png" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"/>
+    <div class="team-photo-fallback">DF</div>
+    <div class="team-info">
+      <h3 class="h5 team-name">Daniel Ferreira</h3>
+      <div class="team-role">
+        CTO
+      </div>
+      <div class="team-social">
+        <a href="https://linkedin.com/in/danielferreira1997/" target="_blank" class="social-icon linkedin" aria-label="LinkedIn de Daniel Ferreira">
+          <i class="fa fa-linkedin" aria-hidden="true"></i>
+        </a>
+        <a href="mailto:daniel@lafersec.com.br" class="social-icon email" aria-label="E-mail de Daniel Ferreira">
+          <i class="fa fa-envelope" aria-hidden="true"></i>
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+</div>
+
+<div class="col-md-6">
+<div class="content-col">
+
+<section class="mb-4" id="historia-jorge">
+<h2 class="h3 lafermore-font-blue mb-3">Jorge e o Banco do Pau-Brasil</h2>
+<div class="story-jorge">
+<p class="mb-3">Jorge tem uma empresa e precisava converter vendas a prazo em capital de giro imediato. Então, ele foi ao Banco do Pau-Brasil, assinou um empréstimo e logo começou a ser cobrado por taxas não combinadas e juros altíssimos. Ao pedir explicações e correções, ouviu que “só na agência”. Perdeu horas entre trânsito, senha e espera para uma reunião que poderia ter sido uma ligação — e voltou à operação com menos caixa e menos tempo.</p>
+<p class="mb-0">Um belo dia, Jorge descobriu a Lafer Invest: uma forma de obter capital de giro que realmente usa <span class="hl-gold">tecnologia</span> para <span class="hl-gold">automatizar operações</span> e tornar tudo mais <span class="hl-gold">rápido e simples</span>, <span class="hl-gold">sem taxas misteriosas</span> e com uma <span class="hl-gold">velocidade que superou todas as suas expectativas</span>.</p>
+</div>
+<hr class="hr-soft"/>
+</section>
+
+<section aria-labelledby="missao" class="mb-4">
+<div class="p-4 lafermore-bg-blue text-white rounded-lg shadow">
+<h2 class="h4 mb-3" id="missao" style="font-weight:600;">Missão</h2>
+<p class="mb-0" style="font-size:1.05rem;">
+                                    Missão: transformar recebíveis em capital imediato com análise ágil, custos transparentes e operações sob medida, para que sua empresa siga produzindo e crescendo.
+                                </p>
+</div>
+</section>
+
+<section aria-labelledby="valores" class="mb-2 valores-strong">
+<h2 class="h4 lafermore-font-blue mb-3" id="valores">Nossos valores</h2>
+<ul class="list-unstyled mb-0"><li class="d-flex align-items-start mb-2"><i aria-hidden="true" class="fa fa-check-circle mr-2 lafermore-font-gold"></i><span class="valor-item"><span class="valor-title">Transparência:</span> <span class="valor-desc">Linguagem direta, contratos claros e sem taxas não combinadas.</span></span></li><li class="d-flex align-items-start mb-2"><i aria-hidden="true" class="fa fa-check-circle mr-2 lafermore-font-gold"></i><span class="valor-item"><span class="valor-title">Agilidade:</span> <span class="valor-desc">Análise rápida. Resposta no mesmo dia.</span></span></li><li class="d-flex align-items-start mb-2"><i aria-hidden="true" class="fa fa-check-circle mr-2 lafermore-font-gold"></i><span class="valor-item"><span class="valor-title">Parceria:</span> <span class="valor-desc">Atendimento direto com quem decide.</span></span></li><li class="d-flex align-items-start mb-2"><i aria-hidden="true" class="fa fa-check-circle mr-2 lafermore-font-gold"></i><span class="valor-item"><span class="valor-title">Flexibilidade:</span> <span class="valor-desc">Estrutura sob medida para o seu ciclo de caixa.</span></span></li><li class="d-flex align-items-start mb-2"><i aria-hidden="true" class="fa fa-check-circle mr-2 lafermore-font-gold"></i><span class="valor-item"><span class="valor-title">Competitividade:</span> <span class="valor-desc">Taxas justas, alinhadas ao risco do negócio.</span></span></li><li class="d-flex align-items-start"><i aria-hidden="true" class="fa fa-check-circle mr-2 lafermore-font-gold"></i><span class="valor-item"><span class="valor-title">Rigor e segurança:</span> <span class="valor-desc">Análise técnica e compliance de ponta.</span></span></li></ul>
+</section>
+<div class="mt-4" style="margin-top:auto !important;">
+
+<div class="cta">
+  <a
+    href="https://wa.me/5535998252372"
+    class="btn-gold btn-xl"
+    aria-label="Falar com a Lafer pelo WhatsApp"
+  >Fale com quem decide</a>
+</div>
+
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- Scripts -->
+<script src="js/jquery-3.4.1.min.js"></script>
+<script src="js/bootstrap.min.js"></script>
+<script>
+
+        var yearEl = document.getElementById('year');
+        if (yearEl) { yearEl.textContent = new Date().getFullYear(); }
+
+        $('a[href^="#"]').on("touchstart click", function(e) {
+            var isSamePageAnchor = this.getAttribute('href') && this.getAttribute('href').charAt(0) === '#';
+            if (!isSamePageAnchor) return; 
+            e.preventDefault();
+            var target = $(this.hash);
+            if (target.length) {
+                var offset = $('.navbar').outerHeight();
+                var extraOffset = -50;
+                $('html, body').stop(true, false).animate(
+                    { scrollTop: target.offset().top - offset + extraOffset },
+                    400,
+                    "linear"
+                );
+            }
+        });
+        
+        $(document).click(function(event) {
+            var clickover = $(event.target);
+            var navbar = $(".navbar-collapse");
+            var toggler = $(".navbar-toggler");
+            var opened = navbar.hasClass("show");
+
+            if (opened && !clickover.closest(".navbar").length) {
+                toggler.click();
+            }
+        });
+    </script>
+<footer>
+<div class="container">
+<div class="row">
+<div class="col-md-6">
+<h4 class="text-white text-uppercase">LAFER Invest</h4>
+<h6 class="mb-5 text-white">Securitizadora</h6>
+
+        <!-- Endereço embaixo com quebras de linha -->
+<div class="text-white" style="line-height:1.6; margin-top:6px; margin-bottom:16px;">
+  Avenida Coronel Jorge Vieira, 535<br/>
+  Sala 01 - Centro<br/>
+  Areado - MG<br/>
+  37140-000
+</div>
+
+</div>
+<div class="col-md-6 my-auto ml-auto">
+<div class="address-footer-holder mb-3">
+<h6 class="text-white text-uppercase" style="font-weight:bold">CONTATOS</h6>
+</div>
+<div class="text-white mt-2">
+<a href="mailto:laerte@lafersec.com.br" target="_blank">
+<i class="fa fa-envelope" style="font-size: 1.2em; color: #ffffff; margin-right: 5px;"></i> laerte@lafersec.com.br
+                            </a>
+</div>
+<div class="text-white mt-2">
+<a href="https://wa.me/5535998252372" target="_blank">
+<i class="fa fa-whatsapp fa-lg" style="color: #25D366; margin-right: 5px;"></i> +55 35 99825-2372
+                            </a>
+</div>
+<div class="text-white mt-2">
+<a href="https://www.instagram.com/laferinvest/" style="display: inline-flex; align-items: center;" target="_blank">
+<i class="fa fa-instagram" style="font-size: 1.5em; color: #E4405F; margin-right: 5px; vertical-align: middle;"></i>
+                                @laferinvest
+                            </a>
+</div>
+</div>
+</div>
+</div>
+</footer>
+</body>
+</html>

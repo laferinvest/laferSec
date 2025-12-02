@@ -20,6 +20,25 @@
 <link href="css/style.css" rel="stylesheet"/>
 <link href="css/responsive.css" rel="stylesheet"/>
 <style>
+
+.lafer-brand {
+          font-weight: 900;           /* Negrito extra forte */
+          font-size: 1.8rem;          /* Aumenta bastante o tamanho (antes devia ser ~1.25rem) */
+          letter-spacing: 1px;        /* Espaçamento leve para dar elegância */
+          color: #0d2c4a !important;  /* O Azul Lafer */
+          text-transform: uppercase;  /* Garante caixa alta */
+          text-decoration: none;      /* Remove sublinhado */
+          line-height: 1;             /* Mantém a altura da barra compacta */
+          font-family: 'Montserrat', sans-serif; /* Garante a fonte padrão do site */
+        }
+        
+        /* Ajuste fino para Mobile (para não quebrar a linha em telas pequenas) */
+        @media (max-width: 576px) {
+            .lafer-brand {
+                font-size: 1.4rem;
+            }
+        }
+
         @media (max-width: 991px){
 
         /* === COMO FUNCIONA: subir o botão (mais espaço abaixo) === */
@@ -124,9 +143,10 @@
 <body>
 <nav class="navbar navbar-expand-xl navbar-light fixed-top">
 <div class="container">
-<a class="navbar-brand" href="index.html">
-<img alt="" class="img-fluid logo" src="img/logo-white.png"/>
+<a class="navbar-brand lafer-brand" href="index.html">
+  LAFER INVEST
 </a>
+
 <button aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation" class="navbar-toggler custom-toggler" data-target="#navbarSupportedContent" data-toggle="collapse" type="button">
 <span class="navbar-toggler-icon"></span>
 </button>
@@ -137,17 +157,19 @@
 <a class="nav-link main-link" href="#about-content">SOBRE NÓS</a>
 <!-- Submenu: Saiba mais (página externa) -->
 <div class="dropdown-menu">
-<a class="dropdown-item" href="laferMore.html">Saiba mais</a>
+<a class="dropdown-item" href="about.html">Saiba mais</a>
 </div>
 </li>
 <li class="nav-item dropdown has-saiba">
-<!-- Clique aqui leva para a seção -->
-<a class="nav-link main-link" href="#como-funciona">COMO FUNCIONA</a>
-<!-- Submenu: Saiba mais (página externa) -->
-<div class="dropdown-menu">
-<a class="dropdown-item" href="secMore.html">Saiba mais</a>
-</div>
+  <!-- Clique aqui leva para a seção -->
+  <a class="nav-link main-link" href="#como-funciona">COMO FUNCIONA</a>
+  <!-- Submenu: páginas externas -->
+  <div class="dropdown-menu">
+    <a class="dropdown-item" href="enterprise.html">Para Empresas</a>
+    <a class="dropdown-item" href="doctor.html">Para Médicos</a>
+  </div>
 </li>
+
 <li class="nav-item">
 <a class="nav-link" href="#faq-content">PERGUNTAS FREQUENTES</a>
 </li>
@@ -156,7 +178,7 @@
 </li>
 
 <li class="nav-item">
-<a class="nav-link" href="cliente.html" title="Área do Investidor"> ÁREA DO INVESTIDOR
+<a class="nav-link" href="investor.html" title="Área do Investidor"> ÁREA DO INVESTIDOR
 </a>
 </li>
 </ul>
@@ -336,7 +358,7 @@
 </div>
 </div>
 <div class="mt-1 mt-lg-5 text-center text-lg-left">
-<a aria-label="Entenda mais sobre os benefícios da LAFER INVEST" class="btn-gold" href="laferMore.html">
+<a aria-label="Entenda mais sobre os benefícios da LAFER INVEST" class="btn-gold" href="about.html">
                                         Entenda mais
                                       </a>
 </div>
@@ -373,7 +395,7 @@
 </div>
 </div>
 <div class="mt-1 mt-lg-5 text-center text-lg-right">
-<a aria-label="Entenda mais sobre como funciona o processo" class="btn-gold" href="secMore.html">
+<a aria-label="Entenda mais sobre como funciona o processo" class="btn-gold" href="enterprise.html">
                                         Entenda mais
                                     </a>
 </div>

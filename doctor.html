@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=edge"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="icon" type="image/png" href="favicon.png"/>
+<title>Lafer Invest - Antecipação de Plantões para Médicos</title>
+
+<link rel="stylesheet" href="css/bootstrap-reboot.min.css"/>
+<link rel="stylesheet" href="css/bootstrap-grid.min.css"/>
+<link rel="stylesheet" href="css/bootstrap.min.css"/>
+<link rel="stylesheet" href="plugins/slick/slick.css"/>
+<link rel="stylesheet" href="plugins/slick/slick-theme.css"/>
+<link rel="stylesheet" href="plugins/nivoslider/nivo-slider.css"/>
+<link rel="stylesheet" href="plugins/lity/lity.min.css"/>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Montserrat:200,300,400,600&amp;display=swap"/>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css"/>
+<link rel="stylesheet" href="css/animate.css"/>
+<link rel="stylesheet" href="css/style.css"/>
+<link rel="stylesheet" href="css/responsive.css"/>
+
+<style>
+.lafer-brand {
+  font-weight: 900;
+  font-size: 1.8rem;
+  letter-spacing: 1px;
+  color: #0d2c4a !important;
+  text-transform: uppercase;
+  text-decoration: none;
+  line-height: 1;
+  font-family: 'Montserrat', sans-serif;
+}
+@media (max-width: 576px) {
+  .lafer-brand {
+    font-size: 1.4rem;
+  }
+}
+
+@media (max-width: 991px){
+  section#como-funciona .about-content-shadow{
+    padding-bottom: 64px !important;
+    text-align: center !important;
+  }
+  section#como-funciona .about-content-shadow a.btn-gold{
+    margin-top: 16px !important;
+    display: inline-block;
+  }
+
+  section#about-content .about-content-shadow{
+    padding-bottom: 28px !important;
+    text-align: center !important;
+  }
+  section#about-content .about-content-shadow a.btn-gold{
+    margin-top: 36px !important;
+    display: inline-block;
+  }
+}
+
+.story-card .hl-gold {
+  color: #d4af37;
+  font-weight: 700;
+  text-decoration-thickness: 0.12em;
+}
+
+/* Page-specific styles for main content - scoped to avoid global conflicts */
+.secMore-content-section {
+  padding-top: 120px; /* account for fixed navbar */
+  padding-bottom: 80px;
+  background-color: #f8f9fa;
+}
+.secMore-card-custom {
+  background-color: #0d2c4a;
+  border-radius: 15px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+.secMore-card-custom:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.12);
+}
+.secMore-btn-gold-modern {
+  background-color: #c5a47e;
+  color: #fff;
+  padding: 12px 30px;
+  border-radius: 50px;
+  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 1px;
+  transition: all 0.3s ease;
+  display: inline-block;
+  text-decoration: none;
+}
+.secMore-btn-gold-modern:hover {
+  background-color: #b39167;
+  color: #fff;
+  transform: scale(1.03);
+  box-shadow: 0 8px 25px rgba(197, 164, 126, 0.35);
+}
+.secMore-font-blue{ color:#0d2c4a; }
+.secMore-bg-blue{ background-color:#0d2c4a; }
+.secMore-font-gold{ color:#c5a47e; }
+.secMore-bg-gold{ background-color:#c5a47e; }
+
+.hr-soft {
+  height: 1px;
+  border: 0;
+  background: linear-gradient(90deg, rgba(0,0,0,0), rgba(0,0,0,.08), rgba(0,0,0,0));
+  margin: 24px 0;
+}
+
+/* keep spacing so content doesn't hide under fixed header */
+body { padding-top: 96px; }
+@media (max-width: 991px){ body { padding-top: 80px; } }
+
+/* Ensure visibility of menu text on non-hero pages */
+.navbar.fixed-top { background: #0d2c4a; }
+.navbar .nav-link { color: #ffffff !important; }
+.navbar .nav-link:hover { color: #c5a47e !important; }
+
+/* Equal-height columns */
+.equalize .col-md-6 { display: flex; }
+.content-col { display: flex; flex-direction: column; width: 100%; }
+.partner-stack { display: flex; flex-direction: column; justify-content: space-between; width: 100%; }
+
+.partner-card { padding: 14px; }
+.partner-photo {
+  width: 100%;
+  height: 320px;
+  object-fit: cover;
+  border-radius: 12px;
+  display: block;
+  background: transparent;
+}
+@media (min-width: 992px){
+  .partner-photo { height: 380px; }
+}
+.partner-name {
+  margin: 12px 4px 0 4px;
+  font-weight: 700;
+  color: #c5a47e;
+  letter-spacing: 0.2px;
+}
+
+.partner-stack .secMore-card-custom { width: 100%; }
+.row.equalize { align-items: stretch; }
+
+.team-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.team-photo,
+.team-photo-fallback {
+  inline-size: min(32vw, 5cm, 192px);
+  block-size: auto;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  border-radius: 12px;
+  background: transparent;
+  flex: 0 0 auto;
+  display: block;
+}
+.team-photo-fallback {
+  display: none;
+  justify-content: center;
+  align-items: center;
+  font-size: clamp(18px, 6vw, 40px);
+  font-weight: 800;
+  color: #6c757d;
+}
+.team-info { min-inline-size: 0; }
+.team-name {
+  margin: 0;
+  font-weight: 700;
+  color: #c5a47e;
+  letter-spacing: 0.2px;
+}
+@media (max-width: 420px) {
+  .team-item { flex-wrap: wrap; }
+}
+
+.team-role {
+  margin-top: 4px;
+  font-size: clamp(14px, 2.2vw, 18px);
+  line-height: 1.25;
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.partner-card { padding-block: 8px; }
+.partner-card + .partner-card { margin-top: 20px; }
+
+@media (max-width: 576px) {
+  .partner-card + .partner-card { margin-top: 24px; }
+  .team-item { gap: 14px; }
+}
+
+.partner-card {
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.partner-card:last-of-type {
+  border-bottom: none;
+}
+
+.team-header { margin-bottom: 12px; }
+.section-underline {
+  width: 72px;
+  height: 3px;
+  background: linear-gradient(90deg,#d4af37,#f4d03f);
+  border-radius: 2px;
+}
+
+.partner-stack .partner-card .text-center { text-align: center; }
+
+.team-title-block {
+  background: transparent;
+  padding: 12px 16px 6px 16px;
+  text-align: center;
+}
+.team-title {
+  margin: 0;
+  text-align: center;
+  font-size: clamp(20px, 2.4vw, 28px);
+  line-height: 1.2;
+  color: #0d2c4a;
+  position: relative;
+  display: inline-block;
+  padding-bottom: 8px;
+}
+.team-title::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 0;
+  width: 72px;
+  height: 3px;
+  background: #C9A227;
+  border-radius: 2px;
+}
+.partner-stack > .team-title-block + * {
+  margin-top: 8px;
+}
+
+/* === Typography upgrade for Nossos Valores === */
+.valores-strong, .valores-strong p, .valores-strong li,
+.valores-strong .lead, .valores-strong .text-secondary {
+  font-weight: 600;
+  color: #0b1220;
+  line-height: 1.7;
+  letter-spacing: 0.1px;
+}
+
+/* Valores título + descrição */
+.valores-strong .valor-item { display: inline; }
+.valores-strong .valor-title {
+  font-weight: 700;
+  font-size: 1.075rem;
+  color: #0d2c4a;
+}
+.valores-strong .valor-desc {
+  font-weight: 500;
+  font-size: 1rem;
+  line-height: 1.45;
+  color: #374151;
+  margin-left: .35ch;
+}
+@media (max-width: 576px){
+  .valores-strong .valor-desc {
+    display: block;
+    margin-left: 0;
+    margin-top: 2px;
+  }
+}
+.valores-strong ul.list-unstyled > li { margin-bottom: .45rem; }
+
+/* Readability upgrades for story */
+.story-jorge p {
+  font-weight: 600;
+  color: #0b1220;
+  line-height: 1.7;
+  letter-spacing: 0.1px;
+}
+.story-jorge .hl-gold {
+  color: #d4af37;
+  font-weight: 700;
+  text-decoration-thickness: 0.12em;
+}
+.story-jorge .hl-gold::selection {
+  background: rgba(212,175,55,.25);
+}
+
+/* Área do Cliente (desativada) */
+.navbar .nav-link.disabled{
+  pointer-events: none;
+  opacity: .6;
+  cursor: not-allowed;
+  font-weight: 600;
+  letter-spacing: .02em;
+}
+.navbar .nav-link.disabled .fa{
+  margin-right: .35rem;
+}
+
+/* --- SCOPED AO MAIN: versão médicos --- */
+.sec-hero-title{
+  color:#0d2c4a;
+  margin-bottom:12px;
+  font-weight:700;
+  letter-spacing:.2px;
+}
+.sec-subtitle{
+  max-width:860px;
+  margin:0 auto 28px auto;
+}
+
+/* Destaque forte pro texto principal */
+.hero-highlight{
+  color:#0b1220 !important;             /* preto/azul bem escuro */
+  background:#ffffff;
+  padding:18px 22px;
+  border-radius:14px;
+  box-shadow:0 10px 30px rgba(0,0,0,.06);
+  border-left:4px solid #c5a47e;
+}
+
+.gold-underline{
+  width:96px;
+  height:3px;
+  margin:0 auto 18px auto;
+  background:linear-gradient(90deg,#d4af37,#f4d03f);
+  border-radius:2px;
+}
+
+.story-card{
+  background:#fff;
+  border-radius:14px;
+  padding:22px 22px 12px 22px;
+  box-shadow:0 8px 24px rgba(0,0,0,.06);
+}
+.story-card h2{
+  color:#0d2c4a;
+  font-size:1.25rem;
+  font-weight:700;
+  margin-bottom:10px;
+}
+.story-card p{
+  color:#0b1220;
+  line-height:1.7;
+  font-weight:600;
+  letter-spacing:.1px;
+}
+.story-card ul{
+  padding-left:18px;
+  margin-bottom:10px;
+}
+.story-card ul li{
+  margin-bottom:4px;
+}
+
+/* Fluxo */
+.flow-card{
+  background:#0d2c4a;
+  color:#fff;
+  border-radius:14px;
+  padding:18px 18px 32px 18px;
+  box-shadow:0 8px 24px rgba(0,0,0,.08);
+}
+.flow-card h2{
+  font-weight:700;
+}
+.flow-step{
+  display:flex;
+  gap:12px;
+  padding:14px;
+  border-radius:10px;
+  background:rgba(255,255,255,.06);
+  align-items:flex-start;
+}
+.flow-step + .flow-step{
+  margin-top:10px;
+}
+.flow-step .num{
+  flex:0 0 32px;
+  height:32px;
+  border-radius:50%;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  background:#c5a47e;
+  color:#0d2c4a;
+  font-weight:800;
+}
+.flow-step h3{
+  margin:0;
+  font-size:1.05rem;
+  font-weight:700;
+  color:#fff;
+}
+.flow-step p{
+  margin:4px 0 0 0;
+  opacity:.95;
+}
+
+/* CTA */
+.cta{
+  text-align:center;
+  margin-top:22px;
+}
+.btn-gold-modern,
+.btn-gold.btn-xl{
+  background-color:#c5a47e;
+  color:#fff;
+  padding:12px 30px;
+  border-radius:50px;
+  text-transform:uppercase;
+  font-weight:700;
+  letter-spacing:.6px;
+  display:inline-block;
+  text-decoration:none;
+  box-shadow:0 8px 20px rgba(197,164,126,.25);
+  transition:transform .2s ease, box-shadow .2s ease;
+}
+.btn-gold-modern:hover,
+.btn-gold.btn-xl:hover{
+  transform:translateY(-2px);
+  box-shadow:0 12px 26px rgba(197,164,126,.35);
+  color:#fff;
+}
+</style>
+
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-3Q66N7J22G"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-3Q66N7J22G', {
+    send_page_view: true,
+    anonymize_ip: true
+  });
+</script>
+</head>
+
+<body>
+<nav class="navbar navbar-expand-xl navbar-light fixed-top">
+  <div class="container">
+    <a class="navbar-brand lafer-brand" href="index.html">
+      LAFER INVEST
+    </a>
+
+    <button class="navbar-toggler custom-toggler" type="button"
+            data-toggle="collapse" data-target="#navbarSupportedContent"
+            aria-controls="navbarSupportedContent"
+            aria-expanded="false" aria-label="Toggle navigation">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+
+    <div class="collapse navbar-collapse" id="navbarSupportedContent">
+      <ul class="navbar-nav ml-auto">
+        <li class="nav-item dropdown has-saiba">
+          <a class="nav-link main-link" href="index.html#about-content">SOBRE NÓS</a>
+          <div class="dropdown-menu">
+            <a class="dropdown-item" href="about.html">Saiba mais</a>
+          </div>
+        </li>
+        <li class="nav-item dropdown has-saiba">
+          <a class="nav-link main-link" href="#como-funciona">COMO FUNCIONA</a>
+          <div class="dropdown-menu">
+            <a class="dropdown-item" href="enterprise.html">Para Empresas</a>
+            <a class="dropdown-item" href="doctor.html">Para Médicos</a>
+          </div>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="index.html#faq-content">PERGUNTAS FREQUENTES</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="index.html#fale-conosco">FALE CONOSCO</a>
+        </li>
+
+        <li class="nav-item">
+          <a class="nav-link" href="investor.html" title="Área do Investidor">
+            ÁREA DO INVESTIDOR
+          </a>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+
+<!-- Main Content Section -->
+<main class="secMore-content-section" id="como-funciona">
+  <div class="container">
+
+    <div class="text-center mb-4">
+      <h1 class="h1 sec-hero-title">
+        Antecipação de plantões para médicos
+      </h1>
+      <div class="gold-underline"></div>
+      <p class="lead sec-subtitle hero-highlight">
+        Em vez de esperar <strong>30, 60 dias ou mais</strong> para receber seus plantões,
+        você pode transformar esse valor em <strong>dinheiro na conta hoje</strong> —
+        sem entrar no cheque especial, cartão de crédito ou empréstimo bancário.
+        A Lafer ajuda médicos, especialmente no início de carreira,
+        a organizar o fluxo de caixa de forma simples e transparente.
+      </p>
+    </div>
+
+    <div class="row">
+      <!-- História focada em médico/plantão -->
+      <div class="col-lg-6 mb-4">
+        <div class="story-card">
+          <h2>A Dra. Marina no início da carreira</h2>
+          <p>
+            <span style="font-weight:700;color:#0d2c4a">A Dra. Marina</span> acabou de se formar e está
+            encaixando vários plantões para montar rotina, pagar aluguel,
+            cursos de atualização e organizar a vida em outra cidade.
+          </p>
+          <p>
+            Ela recebe muitos plantões em <strong>30</strong> ou <strong>60</strong> dias de prazo.
+            Na prática, ela trabalha hoje, mas o dinheiro só cai na conta
+            <strong>um ou dois meses depois</strong> — justamente quando surgem
+            gastos com moradia, transporte, alimentação, material, congressos…
+          </p>
+          <p>
+            É aí que entra a <span class="hl-gold">Lafer Invest</span>:
+            em vez de recorrer a cheque especial ou cartão, ela pode
+            <strong>antecipar parte dos plantões</strong> com um
+            custo claro e combinado de antemão.
+          </p>
+
+          <hr class="hr-soft"/>
+
+          <p><strong>Exemplo na prática:</strong></p>
+          <ul>
+            <li>Dra. Marina dá um plantão de <strong>R$ 1.000,00</strong>, com pagamento em 30 dias.</li>
+            <li>Pela antecipação, a Lafer faz um <strong>desconto de R$ 30,00*</strong>.</li>
+            <li>A Dra. Marina recebe <strong>R$ 970,00 hoje</strong>.</li>
+            <li>
+              Quando o hospital pagar os <strong>R$ 1.000,00</strong>,
+              ela acerta a operação com a Lafer via boleto ou PIX.
+            </li>
+          </ul>
+
+          <p class="mb-2">
+            <strong>Resultado:</strong> ela não fica travada esperando o dinheiro cair
+            e consegue encaixar melhor as contas do mês, investir em cursos,
+            comprar materiais e organizar a vida com mais previsibilidade.
+          </p>
+          <p class="mb-1">
+            <strong>Para quem serve:</strong> médicos em início de carreira,
+            residentes, plantonistas e profissionais que recebem uma parte
+            relevante da renda em prazos mais longos.
+          </p>
+
+          <!-- Divider + asterisco logo abaixo do “Para quem serve” -->
+          <hr class="hr-soft" style="margin-top:10px; margin-bottom:6px;"/>
+          <p class="text-muted small mb-0">
+            * Taxa média considerada. A mesma pode variar conforme
+            o prazo, o valor do plantão e a análise da operação.
+          </p>
+        </div>
+      </div>
+
+      <!-- Fluxo focado em médico/plantão -->
+      <div class="col-lg-6 mb-4">
+        <div class="flow-card">
+          <h2 class="mb-3">Como funciona, passo a passo</h2>
+
+          <div class="flow-step">
+            <div class="num">1</div>
+            <div>
+              <h3>Você faz o plantão</h3>
+              <p>
+                Você trabalha normalmente e combina com o hospital, clínica
+                ou escala o pagamento em <strong>30</strong>, <strong>45</strong> ou <strong>60</strong> dias.
+                Esse valor futuro é o seu <em>recebível</em> (aquilo que você
+                tem a receber pelo plantão).
+              </p>
+            </div>
+          </div>
+
+          <div class="flow-step">
+            <div class="num">2</div>
+            <div>
+              <h3>Envia os comprovantes para a Lafer</h3>
+              <p>
+                Você manda os dados do plantão e dos pagamentos (escala, RPA,
+                notas ou o que for utilizado) pelo <strong>WhatsApp da Lafer</strong>.
+                Nós fazemos uma análise rápida, sempre com <strong>condições claras</strong>
+                (taxa, prazo e forma de acerto).
+              </p>
+            </div>
+          </div>
+
+          <div class="flow-step">
+            <div class="num">3</div>
+            <div>
+              <h3>Antecipação: dinheiro na conta hoje</h3>
+              <p>
+                Depois de aprovada a operação, você <strong>antecipa o plantão</strong>:
+                a Lafer faz um pequeno desconto e você recebe o valor <strong>no mesmo dia útil</strong>,
+                ganhando fôlego para organizar o mês, pagar contas e investir em você.
+              </p>
+            </div>
+          </div>
+
+          <div class="flow-step">
+            <div class="num">4</div>
+            <div>
+              <h3>Acerto no dia do pagamento</h3>
+              <p>
+                Quando o hospital ou clínica pagar o plantão, você
+                <strong>acerta a operação com a Lafer</strong> via boleto ou PIX.
+                Tudo combinado previamente, sem surpresas e com
+                <strong>transparência total de custos</strong>.
+              </p>
+            </div>
+          </div>
+
+          <!-- CTA grandão pro WhatsApp da empresa -->
+          <div class="cta">
+            <a
+              href="https://wa.me/5535998252372"
+              class="btn-gold btn-xl"
+              aria-label="Falar com a Lafer pelo WhatsApp para antecipar plantões"
+              target="_blank"
+            >
+              Quero antecipar meu plantão
+            </a>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<footer>
+  <div class="container">
+    <div class="row">
+      <div class="col-md-6">
+        <h4 class="text-white text-uppercase">LAFER Invest</h4>
+        <h6 class="mb-5 text-white">Securitizadora</h6>
+
+        <div class="text-white" style="line-height:1.6; margin-top:6px; margin-bottom:16px;">
+          Avenida Coronel Jorge Vieira, 535<br/>
+          Sala 01 - Centro<br/>
+          Areado - MG<br/>
+          37140-000
+        </div>
+      </div>
+
+      <div class="col-md-6 my-auto ml-auto">
+        <div class="address-footer-holder mb-3">
+          <h6 class="text-white text-uppercase" style="font-weight:bold">CONTATOS</h6>
+        </div>
+        <div class="text-white mt-2">
+          <a href="mailto:laerte@lafersec.com.br" target="_blank">
+            <i class="fa fa-envelope" style="font-size: 1.2em; color: #ffffff; margin-right: 5px;"></i>
+            laerte@lafersec.com.br
+          </a>
+        </div>
+        <div class="text-white mt-2">
+          <a href="https://wa.me/5535998252372" target="_blank">
+            <i class="fa fa-whatsapp fa-lg" style="color: #25D366; margin-right: 5px;"></i>
+            +55 35 99825-2372
+          </a>
+        </div>
+        <div class="text-white mt-2">
+          <a href="https://www.instagram.com/laferinvest/"
+             style="display: inline-flex; align-items: center;" target="_blank">
+            <i class="fa fa-instagram"
+               style="font-size: 1.5em; color: #E4405F; margin-right: 5px; vertical-align: middle;"></i>
+            @laferinvest
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script src="js/jquery-3.4.1.min.js"></script>
+<script src="js/bootstrap.min.js"></script>
+<script>
+  var yearEl = document.getElementById('year');
+  if (yearEl) { yearEl.textContent = new Date().getFullYear(); }
+
+  $('a[href^="#"]').on("touchstart click", function(e) {
+    var href = this.getAttribute('href');
+    var isSamePageAnchor = href && href.charAt(0) === '#';
+    if (!isSamePageAnchor) return;
+    e.preventDefault();
+    var target = $(this.hash);
+    if (target.length) {
+      var offset = $('.navbar').outerHeight();
+      var extraOffset = -50;
+      $('html, body').stop(true, false).animate(
+        { scrollTop: target.offset().top - offset + extraOffset },
+        400,
+        "linear"
+      );
+    }
+  });
+
+  $(document).click(function(event) {
+    var clickover = $(event.target);
+    var navbar = $(".navbar-collapse");
+    var toggler = $(".navbar-toggler");
+    var opened = navbar.hasClass("show");
+
+    if (opened && !clickover.closest(".navbar").length) {
+      toggler.click();
+    }
+  });
+</script>
+</body>
+</html>
