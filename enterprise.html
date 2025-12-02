@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-
 <html lang="pt-br">
 <head>
 <meta charset="utf-8"/>
@@ -19,87 +18,124 @@
 <link href="css/animate.css" rel="stylesheet"/>
 <link href="css/style.css" rel="stylesheet"/>
 <link href="css/responsive.css" rel="stylesheet"/>
+
 <style>
-  
   .sec-subtitle{
-  max-width:860px;
-  margin:0 auto 28px auto;
-}
-
-/* Destaque forte pro texto principal (igual doctor.html) */
-.hero-highlight{
-  color:#0b1220 !important;             /* preto/azul bem escuro */
-  background:#ffffff;
-  padding:18px 22px;
-  border-radius:14px;
-  box-shadow:0 10px 30px rgba(0,0,0,.06);
-  border-left:4px solid #c5a47e;
-}
-
-
-.lafer-brand {
-          font-weight: 900;           /* Negrito extra forte */
-          font-size: 1.8rem;          /* Aumenta bastante o tamanho (antes devia ser ~1.25rem) */
-          letter-spacing: 1px;        /* Espaçamento leve para dar elegância */
-          color: #0d2c4a !important;  /* O Azul Lafer */
-          text-transform: uppercase;  /* Garante caixa alta */
-          text-decoration: none;      /* Remove sublinhado */
-          line-height: 1;             /* Mantém a altura da barra compacta */
-          font-family: 'Montserrat', sans-serif; /* Garante a fonte padrão do site */
-        }
-        
-        /* Ajuste fino para Mobile (para não quebrar a linha em telas pequenas) */
-        @media (max-width: 576px) {
-            .lafer-brand {
-                font-size: 1.4rem;
-            }
-        }
-
-@media (max-width: 991px){
-
-  /* === COMO FUNCIONA: subir o botão (mais espaço abaixo) === */
-  section#como-funciona .about-content-shadow{
-    padding-bottom: 64px !important;
-    text-align: center !important;
-  }
-  section#como-funciona .about-content-shadow a.btn-gold{
-    margin-top: 16px !important;
-    display: inline-block;
+    max-width:860px;
+    margin:0 auto 28px auto;
   }
 
-  /* === A LAFER INVEST: descer um pouco o botão (mais espaço acima) === */
-  section#about-content .about-content-shadow{
-    padding-bottom: 28px !important;
-    text-align: center !important;
+  /* Destaque forte pro texto principal (card branco) */
+  .hero-highlight{
+    color:#0b1220 !important;
+    background:#ffffff;
+    padding:18px 22px;
+    border-radius:14px;
+    box-shadow:0 10px 30px rgba(0,0,0,.06);
+    border-left:4px solid #c5a47e;
   }
-  section#about-content .about-content-shadow a.btn-gold{
-    margin-top: 36px !important;
-    display: inline-block;
+
+  /* === HERO ENTERPRISE: MESMA LÓGICA DO DOCTOR === */
+  .hero-enterprise-bg{
+    padding: 0;
+    background: transparent;
   }
+
+.hero-enterprise-panel{
+  position: relative;
+  background: url('img/more/2.png') center/cover no-repeat;
+  border-radius: 18px;
+  padding: 90px 28px 50px 28px;
+  min-height: 380px;
+  overflow: hidden;
+  margin: 24px auto 40px auto; /* igual ao doctor */
 }
-.story-card .hl-gold {
-  color: #d4af37;             /* dourado */
-  font-weight: 700;
-  text-decoration-thickness: 0.12em;
-}
-/* Page-specific styles for main content - scoped to avoid global conflicts */
+
+
+  .hero-enterprise-panel::before{
+    content:"";
+    position:absolute;
+    inset:0;
+    background: rgba(0,0,0,0.38); /* overlay pra leitura */
+  }
+
+  .hero-enterprise-panel .text-center{
+    position: relative;
+    z-index: 1;
+  }
+
+  /* desce só o card "Em vez de esperar..." dentro da imagem */
+  .hero-enterprise-panel .hero-highlight{
+    margin-top: 80px;
+  }
+
+  /* tira sobra extra depois do bloco título+card dentro do hero */
+  .hero-enterprise-panel .text-center.mb-4{
+    margin-bottom: 0;
+  }
+
+  .lafer-brand {
+    font-weight: 900;
+    font-size: 1.8rem;
+    letter-spacing: 1px;
+    color: #0d2c4a !important;
+    text-transform: uppercase;
+    text-decoration: none;
+    line-height: 1;
+    font-family: 'Montserrat', sans-serif;
+  }
+  @media (max-width: 576px) {
+    .lafer-brand {
+      font-size: 1.4rem;
+    }
+  }
+
+  @media (max-width: 991px){
+    section#como-funciona .about-content-shadow{
+      padding-bottom: 64px !important;
+      text-align: center !important;
+    }
+    section#como-funciona .about-content-shadow a.btn-gold{
+      margin-top: 16px !important;
+      display: inline-block;
+    }
+
+    section#about-content .about-content-shadow{
+      padding-bottom: 28px !important;
+      text-align: center !important;
+    }
+    section#about-content .about-content-shadow a.btn-gold{
+      margin-top: 36px !important;
+      display: inline-block;
+    }
+  }
+
+  .story-card .hl-gold {
+    color: #d4af37;
+    font-weight: 700;
+    text-decoration-thickness: 0.12em;
+  }
+
+  /* Page-specific styles for main content - scoped to avoid global conflicts */
 .secMore-content-section {
-    padding-top: 120px; /* account for fixed navbar */
-    padding-bottom: 80px;
-    background-color: #f8f9fa;
+  padding-top: 40px;
+  padding-bottom: 80px;
+  background-color: #f8f9fa;
 }
-.secMore-card-custom {
+
+
+  .secMore-card-custom {
     background-color: #0d2c4a;
     border-radius: 15px;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.06);
     overflow: hidden;
     transition: transform 0.3s ease, box-shadow 0.3s ease;
-}
-.secMore-card-custom:hover {
+  }
+  .secMore-card-custom:hover {
     transform: translateY(-6px);
     box-shadow: 0 20px 40px rgba(0, 0, 0, 0.12);
-}
-.secMore-btn-gold-modern {
+  }
+  .secMore-btn-gold-modern {
     background-color: #c5a47e;
     color: #fff;
     padding: 12px 30px;
@@ -110,399 +146,448 @@
     transition: all 0.3s ease;
     display: inline-block;
     text-decoration: none;
-}
-.secMore-btn-gold-modern:hover {
+  }
+  .secMore-btn-gold-modern:hover {
     background-color: #b39167;
     color: #fff;
     transform: scale(1.03);
     box-shadow: 0 8px 25px rgba(197, 164, 126, 0.35);
-}
-.secMore-font-blue{ color:#0d2c4a; }
-.secMore-bg-blue{ background-color:#0d2c4a; }
-.secMore-font-gold{ color:#c5a47e; }
-.secMore-bg-gold{ background-color:#c5a47e; }
+  }
+  .secMore-font-blue{ color:#0d2c4a; }
+  .secMore-bg-blue{ background-color:#0d2c4a; }
+  .secMore-font-gold{ color:#c5a47e; }
+  .secMore-bg-gold{ background-color:#c5a47e; }
 
-/* helper for subtle separators */
-.hr-soft {
-  height: 1px;
-  border: 0;
-  background: linear-gradient(90deg, rgba(0,0,0,0), rgba(0,0,0,.08), rgba(0,0,0,0));
-  margin: 24px 0;
-}
+  .hr-soft {
+    height: 1px;
+    border: 0;
+    background: linear-gradient(90deg, rgba(0,0,0,0), rgba(0,0,0,.08), rgba(0,0,0,0));
+    margin: 24px 0;
+  }
 
-/* keep spacing so content doesn't hide under fixed header */
-body { padding-top: 96px; }
-@media (max-width: 991px){ body { padding-top: 80px; } }
-/* Ensure visibility of menu text on non-hero pages */
-.navbar.fixed-top { background: #0d2c4a; } /* matches site palette */
-.navbar .nav-link { color: #ffffff !important; }
-.navbar .nav-link:hover { color: #c5a47e !important; }
+  body { padding-top: 96px; }
+  @media (max-width: 991px){ body { padding-top: 80px; } }
 
-/* Equal-height columns so cards terminam junto com o botão */
-.equalize .col-md-6 { display: flex; }
-.content-col { display: flex; flex-direction: column; width: 100%; }
-.partner-stack { display: flex; flex-direction: column; justify-content: space-between; width: 100%; }
+  .navbar.fixed-top { background: #0d2c4a; }
+  .navbar .nav-link { color: #ffffff !important; }
+  .navbar .nav-link:hover { color: #c5a47e !important; }
 
-/* Partner card: big photo area */
-.partner-card {
-  padding: 14px;
-}
-.partner-photo {
-  width: 100%;
-  height: 320px;              /* grande para a foto ficar bem visível */
-  object-fit: cover;
-  border-radius: 12px;
-  display: block;
-  background: transparent;
-}
-@media (min-width: 992px){
-  .partner-photo { height: 380px; } /* ainda maior no desktop */
-}
-.partner-name {
-  margin: 12px 4px 0 4px;
-  font-weight: 700;
-  color: #c5a47e;
-  letter-spacing: 0.2px;
-}
+  .equalize .col-md-6 { display: flex; }
+  .content-col { display: flex; flex-direction: column; width: 100%; }
+  .partner-stack { display: flex; flex-direction: column; justify-content: space-between; width: 100%; }
 
-/* Stack spacing - usamos space-between via partner-stack para preencher a altura */
-.partner-stack .secMore-card-custom { width: 100%; }
+  .partner-card { padding: 14px; }
+  .partner-photo {
+    width: 100%;
+    height: 320px;
+    object-fit: cover;
+    border-radius: 12px;
+    display: block;
+    background: transparent;
+  }
+  @media (min-width: 992px){
+    .partner-photo { height: 380px; }
+  }
+  .partner-name {
+    margin: 12px 4px 0 4px;
+    font-weight: 700;
+    color: #c5a47e;
+    letter-spacing: 0.2px;
+  }
 
-/* Remove default bottom margin between columns to align bottoms */
-.row.equalize { align-items: stretch; }
+  .partner-stack .secMore-card-custom { width: 100%; }
+  .row.equalize { align-items: stretch; }
 
-/* === Team block: square photos, fluid up to a higher limit, name on the right === */
-.team-item {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-.team-photo,
-.team-photo-fallback {
-  /* Fluid size with a higher cap: up to ~5cm (≈189px), but shrink on small viewports */
-  inline-size: min(32vw, 5cm, 192px);
-  block-size: auto;
-  aspect-ratio: 1 / 1;        /* perfect square */
-  object-fit: cover;
-  border-radius: 12px;
-  background: transparent;
-  flex: 0 0 auto;
-  display: block;
-}
-/* Fallback "initials" box mirrors the image box, centered text */
-.team-photo-fallback {
-  display: none;               /* shown only if image fails to load */
-  justify-content: center;
-  align-items: center;
-  font-size: clamp(18px, 6vw, 40px);
-  font-weight: 800;
-  color: #6c757d;
-}
-.team-info {
-  min-inline-size: 0;
-}
-.team-name {
-  margin: 0;
-  font-weight: 700;
-  color: #c5a47e;
-  letter-spacing: 0.2px;
-}
-/* Optional: on very small screens, allow wrap if there's no room */
-@media (max-width: 420px) {
-  .team-item { flex-wrap: wrap; }
-}
+  .team-item {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .team-photo,
+  .team-photo-fallback {
+    inline-size: min(32vw, 5cm, 192px);
+    block-size: auto;
+    aspect-ratio: 1 / 1;
+    object-fit: cover;
+    border-radius: 12px;
+    background: transparent;
+    flex: 0 0 auto;
+    display: block;
+  }
+  .team-photo-fallback {
+    display: none;
+    justify-content: center;
+    align-items: center;
+    font-size: clamp(18px, 6vw, 40px);
+    font-weight: 800;
+    color: #6c757d;
+  }
+  .team-info { min-inline-size: 0; }
+  .team-name {
+    margin: 0;
+    font-weight: 700;
+    color: #c5a47e;
+    letter-spacing: 0.2px;
+  }
+  @media (max-width: 420px) {
+    .team-item { flex-wrap: wrap; }
+  }
 
-.team-role {
-  margin-top: 4px;
-  font-size: clamp(12px, 1.9vw, 13.5px); /* smaller than name */
-  line-height: 1.25;
-  color: #6c757d; /* muted to differentiate */
-  font-weight: 500;
-}
+  .team-role {
+    margin-top: 4px;
+    font-size: clamp(14px, 2.2vw, 18px);
+    line-height: 1.25;
+    color: #ffffff;
+    font-weight: 700;
+  }
 
-.team-role {
-  margin-top: 4px;
-  font-size: clamp(14px, 2.2vw, 18px); /* maior que antes */
-  line-height: 1.25;
-  color: #ffffff; /* branco */
-  font-weight: 700; /* negrito */
-}
+  .partner-card { padding-block: 8px; }
+  .partner-card + .partner-card { margin-top: 20px; }
 
-/* === Vertical spacing between team cards, esp. on mobile === */
-.partner-card {
-  /* ensure there's breathing room around each card */
-  padding-block: 8px;
-}
-/* Add space only between consecutive cards */
-.partner-card + .partner-card {
-  margin-top: 20px;
-}
+  @media (max-width: 576px) {
+    .partner-card + .partner-card { margin-top: 24px; }
+    .team-item { gap: 14px; }
+  }
 
-/* Tighten/expand spacing rules for small viewports */
-@media (max-width: 576px) {
-  .partner-card + .partner-card { margin-top: 24px; }
-  .team-item { gap: 14px; } /* a bit more gap between photo and text */
-}
+  .partner-card {
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+  .partner-card:last-of-type {
+    border-bottom: none;
+  }
 
-/* Optional subtle divider for clarity; can be removed if undesired */
-.partner-card {
-  border-bottom: 1px solid rgba(255,255,255,0.08);
-}
-.partner-card:last-of-type {
-  border-bottom: none;
-}
+  .team-header { margin-bottom: 12px; }
+  .section-underline {
+    width: 72px;
+    height: 3px;
+    background: linear-gradient(90deg,#d4af37,#f4d03f);
+    border-radius: 2px;
+  }
 
-.team-header { 
-  margin-bottom: 12px;
-}
-.section-underline {
-  width: 72px;
-  height: 3px;
-  background: linear-gradient(90deg,#d4af37,#f4d03f);
-  border-radius: 2px;
-}
+  .partner-stack .partner-card .text-center { text-align: center; }
 
-/* === Title card for team === */
-.partner-stack .partner-card .text-center { text-align: center; }
+  .team-title-block {
+    background: transparent;
+    padding: 12px 16px 6px 16px;
+    text-align: center;
+  }
+  .team-title {
+    margin: 0;
+    text-align: center;
+    font-size: clamp(20px, 2.4vw, 28px);
+    line-height: 1.2;
+    color: #0d2c4a;
+    position: relative;
+    display: inline-block;
+    padding-bottom: 8px;
+  }
+  .team-title::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: 0;
+    width: 72px;
+    height: 3px;
+    background: #C9A227;
+    border-radius: 2px;
+  }
+  .partner-stack > .team-title-block + * {
+    margin-top: 8px;
+  }
 
-
-/* === Team title (no card) === */
-.team-title-block {background: transparent;
-  padding: 12px 16px 6px 16px;
-  text-align: center;}
-.team-title {
-  margin: 0;
-  text-align: center;
-  font-size: clamp(20px, 2.4vw, 28px);
-  line-height: 1.2;
-  color: #0d2c4a; /* azul */
-  position: relative;
-  display: inline-block;
-  padding-bottom: 8px;
-}
-.team-title::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  bottom: 0;
-  width: 72px;
-  height: 3px;
-  background: #C9A227; /* dourado */
-  border-radius: 2px;
-}
-/* Ensure the block sits visually above the cards with some spacing */
-.partner-stack > .team-title-block + * {
-  margin-top: 8px;
-}
-
-
-/* === Typography upgrade for Nossos Valores === */
-.valores-strong, .valores-strong p, .valores-strong li, .valores-strong .lead, .valores-strong .text-secondary {
-  font-weight: 600;
-  color: #0b1220;
-  line-height: 1.7;
-  letter-spacing: 0.1px;
-}
-
+  .valores-strong, .valores-strong p, .valores-strong li, .valores-strong .lead, .valores-strong .text-secondary {
+    font-weight: 600;
+    color: #0b1220;
+    line-height: 1.7;
+    letter-spacing: 0.1px;
+  }
 </style>
+
 <style>
-/* === Readability upgrades for the Jorge story === */
-.story-jorge p {
-  font-weight: 600;           /* engrossar a letra */
-  color: #0b1220;             /* linha mais escura */
-  line-height: 1.7;           /* leitura mais confortável */
-  letter-spacing: 0.1px;
-}
-.story-jorge .hl-gold {
-  color: #d4af37;             /* dourado */
-  font-weight: 700;
-  text-decoration-thickness: 0.12em;
-}
-.story-jorge .hl-gold::selection { background: rgba(212,175,55,.25); }
+  .story-jorge p {
+    font-weight: 600;
+    color: #0b1220;
+    line-height: 1.7;
+    letter-spacing: 0.1px;
+  }
+  .story-jorge .hl-gold {
+    color: #d4af37;
+    font-weight: 700;
+    text-decoration-thickness: 0.12em;
+  }
+  .story-jorge .hl-gold::selection { background: rgba(212,175,55,.25); }
 </style>
+
 <style>
-/* === Área do Cliente (desativada) === */
-.navbar .nav-link.disabled{
-  pointer-events: none;
-  opacity: .6;
-  cursor: not-allowed;
-  font-weight: 600;
-  letter-spacing: .02em;
-}
-/* Garante alinhamento do ícone com o texto */
-.navbar .nav-link.disabled .fa{
-  margin-right: .35rem;
-}
+  .navbar .nav-link.disabled{
+    pointer-events: none;
+    opacity: .6;
+    cursor: not-allowed;
+    font-weight: 600;
+    letter-spacing: .02em;
+  }
+  .navbar .nav-link.disabled .fa{
+    margin-right: .35rem;
+  }
 </style>
+
 <style>
-/* --- PATCH: Valores com título forte e descrição menor --- */
-.valores-strong .valor-item { display: inline; }
-.valores-strong .valor-title {
-  font-weight: 700;
-  color: #0d2c4a;
-}
-.valores-strong .valor-desc {
-  font-weight: 500;
-  font-size: 0.92rem;
-  color: #4b5563;
-  margin-left: .35ch;
-}
-@media (max-width: 576px){
-  .valores-strong .valor-desc { display: block; margin-left: 0; margin-top: 2px; }
-}
-</style><style>
-/* --- PATCH v2: Readability tuning for Valores --- */
-.valores-strong .valor-title {
-  font-weight: 700;
-  font-size: 1.075rem;   /* levemente maior que o corpo */
-  color: #0d2c4a;
-}
-.valores-strong .valor-desc {
-  font-weight: 500;
-  font-size: 1rem;       /* igual ao corpo do site */
-  line-height: 1.45;     /* leitura confortável */
-  color: #374151;        /* um pouco mais escuro para contraste */
-  margin-left: .35ch;
-}
-@media (max-width: 576px){
-  .valores-strong .valor-desc { display: block; margin-left: 0; margin-top: 2px; }
-}
-/* espaço entre itens para ritmo visual */
-.valores-strong ul.list-unstyled > li { margin-bottom: .45rem; }
+  .valores-strong .valor-item { display: inline; }
+  .valores-strong .valor-title {
+    font-weight: 700;
+    color: #0d2c4a;
+  }
+  .valores-strong .valor-desc {
+    font-weight: 500;
+    font-size: 0.92rem;
+    color: #4b5563;
+    margin-left: .35ch;
+  }
+  @media (max-width: 576px){
+    .valores-strong .valor-desc { display: block; margin-left: 0; margin-top: 2px; }
+  }
 </style>
+
+<style>
+  .valores-strong .valor-title {
+    font-weight: 700;
+    font-size: 1.075rem;
+    color: #0d2c4a;
+  }
+  .valores-strong .valor-desc {
+    font-weight: 500;
+    font-size: 1rem;
+    line-height: 1.45;
+    color: #374151;
+    margin-left: .35ch;
+  }
+  @media (max-width: 576px){
+    .valores-strong .valor-desc { display: block; margin-left: 0; margin-top: 2px; }
+  }
+  .valores-strong ul.list-unstyled > li { margin-bottom: .45rem; }
+</style>
+
 <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-3Q66N7J22G"></script>
 <script>
   window.dataLayer = window.dataLayer || [];
   function gtag(){dataLayer.push(arguments);}
   gtag('js', new Date());
-
-  // Config padrão + boas práticas
   gtag('config', 'G-3Q66N7J22G', {
-    send_page_view: true,   // já é o default, mas deixo explícito
-    anonymize_ip: true      // bom para LGPD/privacidade
+    send_page_view: true,
+    anonymize_ip: true
   });
 </script>
 </head>
+
 <body>
 <nav class="navbar navbar-expand-xl navbar-light fixed-top">
-<div class="container">
-<a class="navbar-brand lafer-brand" href="index.html">
-  LAFER INVEST
-</a>
+  <div class="container">
+    <a class="navbar-brand lafer-brand" href="index.html">
+      LAFER INVEST
+    </a>
 
-<button aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation" class="navbar-toggler custom-toggler" data-target="#navbarSupportedContent" data-toggle="collapse" type="button">
-<span class="navbar-toggler-icon"></span>
-</button>
-<div class="collapse navbar-collapse" id="navbarSupportedContent">
-<ul class="navbar-nav ml-auto">
-<li class="nav-item dropdown has-saiba">
-<!-- Clique aqui leva para a seção -->
-<a class="nav-link main-link" href="index.html#about-content">SOBRE NÓS</a>
-<!-- Submenu: Saiba mais (página externa) -->
-<div class="dropdown-menu">
-<a class="dropdown-item" href="about.html">Saiba mais</a>
-</div>
-</li>
-<li class="nav-item dropdown has-saiba">
-  <!-- Clique aqui leva para a seção -->
-  <a class="nav-link main-link" href="#como-funciona">COMO FUNCIONA</a>
-  <!-- Submenu: páginas externas -->
-  <div class="dropdown-menu">
-    <a class="dropdown-item" href="enterprise.html">Para Empresas</a>
-    <a class="dropdown-item" href="doctor.html">Para Médicos</a>
+    <button aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation"
+            class="navbar-toggler custom-toggler" data-target="#navbarSupportedContent" data-toggle="collapse" type="button">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+
+    <div class="collapse navbar-collapse" id="navbarSupportedContent">
+      <ul class="navbar-nav ml-auto">
+        <li class="nav-item dropdown has-saiba">
+          <a class="nav-link main-link" href="index.html#about-content">SOBRE NÓS</a>
+          <div class="dropdown-menu">
+            <a class="dropdown-item" href="about.html">Saiba mais</a>
+          </div>
+        </li>
+        <li class="nav-item dropdown has-saiba">
+          <a class="nav-link main-link" href="#como-funciona">COMO FUNCIONA</a>
+          <div class="dropdown-menu">
+            <a class="dropdown-item" href="enterprise.html">Para Empresas</a>
+            <a class="dropdown-item" href="doctor.html">Para Médicos</a>
+          </div>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="index.html#faq-content">PERGUNTAS FREQUENTES</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="index.html#fale-conosco">FALE CONOSCO</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="investor.html" title="Área do Investidor">ÁREA DO INVESTIDOR</a>
+        </li>
+      </ul>
+    </div>
   </div>
-</li>
-<li class="nav-item">
-<a class="nav-link" href="index.html#faq-content">PERGUNTAS FREQUENTES</a>
-</li>
-<li class="nav-item">
-<a class="nav-link" href="index.html#fale-conosco">FALE CONOSCO</a>
-</li>
-
-<li class="nav-item">
-<a class="nav-link" href="investor.html" title="Área do Investidor"> ÁREA DO INVESTIDOR
-</a>
-</li>
-</ul>
-
-</div>
-</div>
 </nav>
+
+<!-- HERO COM FUNDO (MESMA LÓGICA DO DOCTOR) -->
+<section class="hero-enterprise-bg">
+  <div class="container">
+    <div class="hero-enterprise-panel">
+      <div class="text-center mb-4">
+        <h1 class="h1 sec-hero-title">Como funciona a securitização</h1>
+        <div class="gold-underline"></div>
+        <p class="lead sec-subtitle hero-highlight">
+          Em vez de esperar 30, 60 ou 90 dias para receber, sua empresa vende o direito de receber
+          — e transforma vendas a prazo em <strong>capital de giro imediato</strong>. A Lafer compra esse direito creditório com
+          <strong>análise ágil</strong> e <strong>custos transparentes</strong>.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
 <!-- Main Content Section -->
-<main class="secMore-content-section">
+<main class="secMore-content-section" id="como-funciona">
   <!-- estilos locais, escopados ao main -->
   <style>
     /* =============== SCOPED TO MAIN ONLY =============== */
     .sec-hero-title{
-      color:#0d2c4a;margin-bottom:12px;font-weight:700;letter-spacing:.2px
+      color:#f8f9fa; /* título claro sobre o fundo escuro, igual doctor */
+      margin-bottom:12px;
+      font-weight:700;
+      letter-spacing:.2px;
     }
     .sec-subtitle{max-width:860px;margin:0 auto 28px auto}
-    .gold-underline{width:96px;height:3px;margin:0 auto 18px auto;background:linear-gradient(90deg,#d4af37,#f4d03f);border-radius:2px}
+    .gold-underline{
+      width:96px;
+      height:3px;
+      margin:0 auto 18px auto;
+      background:linear-gradient(90deg,#d4af37,#f4d03f);
+      border-radius:2px;
+    }
 
-    /* Story card */
-    .story-card{background:#fff;border-radius:14px;padding:22px 22px 8px 22px;box-shadow:0 8px 24px rgba(0,0,0,.06)}
-    .story-card h2{color:#0d2c4a;font-size:1.25rem;font-weight:700;margin-bottom:10px}
-    .story-card p{color:#0b1220;line-height:1.7;font-weight:600;letter-spacing:.1px}
+    .story-card{
+      background:#fff;
+      border-radius:14px;
+      padding:22px 22px 8px 22px;
+      box-shadow:0 8px 24px rgba(0,0,0,.06);
+    }
+    .story-card h2{
+      color:#0d2c4a;
+      font-size:1.25rem;
+      font-weight:700;
+      margin-bottom:10px;
+    }
+    .story-card p{
+      color:#0b1220;
+      line-height:1.7;
+      font-weight:600;
+      letter-spacing:.1px;
+    }
 
-    /* Fluxo */
-.flow-card{
-  background:#0d2c4a;
-  color:#fff;
-  border-radius:14px;
-  padding:18px 18px 32px 18px; /* ↑ aumente o bottom padding aqui */
-  box-shadow:0 8px 24px rgba(0,0,0,.08)
-}
-
-    .flow-step{display:flex;gap:12px;padding:14px;border-radius:10px;background:rgba(255,255,255,.06);align-items:flex-start}
+    .flow-card{
+      background:#0d2c4a;
+      color:#fff;
+      border-radius:14px;
+      padding:18px 18px 32px 18px;
+      box-shadow:0 8px 24px rgba(0,0,0,.08);
+    }
+    .flow-step{
+      display:flex;
+      gap:12px;
+      padding:14px;
+      border-radius:10px;
+      background:rgba(255,255,255,.06);
+      align-items:flex-start;
+    }
     .flow-step + .flow-step{margin-top:10px}
-    .flow-step .num{flex:0 0 32px;height:32px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;background:#c5a47e;color:#0d2c4a;font-weight:800}
-    .flow-step h3{margin:0;font-size:1.05rem;font-weight:700;color:#fff}
-    .flow-step p{margin:4px 0 0 0;opacity:.95}
+    .flow-step .num{
+      flex:0 0 32px;
+      height:32px;
+      border-radius:50%;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      background:#c5a47e;
+      color:#0d2c4a;
+      font-weight:800;
+    }
+    .flow-step h3{
+      margin:0;
+      font-size:1.05rem;
+      font-weight:700;
+      color:#fff;
+    }
+    .flow-step p{
+      margin:4px 0 0 0;
+      opacity:.95;
+    }
 
-    /* Exemplo e calculadora */
-    .calc-card{background:#fff;border-radius:14px;padding:18px;box-shadow:0 8px 24px rgba(0,0,0,.06)}
-    .calc-card h2{color:#0d2c4a;font-size:1.2rem;font-weight:700;margin-bottom:10px}
+    .calc-card{
+      background:#fff;
+      border-radius:14px;
+      padding:18px;
+      box-shadow:0 8px 24px rgba(0,0,0,.06);
+    }
+    .calc-card h2{
+      color:#0d2c4a;
+      font-size:1.2rem;
+      font-weight:700;
+      margin-bottom:10px;
+    }
     .calc small.muted{color:#6b7280}
     .calc .form-control{height:44px}
     .calc .hint{font-size:.9rem;color:#374151}
-    .result-box{background:#f8f9fb;border:1px dashed rgba(13,44,74,.25);border-radius:10px;padding:14px}
+    .result-box{
+      background:#f8f9fb;
+      border:1px dashed rgba(13,44,74,.25);
+      border-radius:10px;
+      padding:14px;
+    }
     .result-box .val{font-weight:800}
-    .kpi{display:flex;gap:14px;flex-wrap:wrap}
-    .kpi .item{flex:1 1 180px;background:#0d2c4a;color:#fff;border-radius:12px;padding:12px}
+    .kpi{
+      display:flex;
+      gap:14px;
+      flex-wrap:wrap;
+    }
+    .kpi .item{
+      flex:1 1 180px;
+      background:#0d2c4a;
+      color:#fff;
+      border-radius:12px;
+      padding:12px;
+    }
     .kpi .item .k{font-size:.85rem;opacity:.9}
     .kpi .item .v{font-size:1.1rem;font-weight:800}
 
-    /* CTA */
     .cta{text-align:center;margin-top:22px}
     .btn-gold-modern{
-      background-color:#c5a47e;color:#fff;padding:12px 30px;border-radius:50px;
-      text-transform:uppercase;font-weight:700;letter-spacing:.6px;display:inline-block;text-decoration:none;
-      box-shadow:0 8px 20px rgba(197,164,126,.25);transition:transform .2s ease, box-shadow .2s ease
+      background-color:#c5a47e;
+      color:#fff;
+      padding:12px 30px;
+      border-radius:50px;
+      text-transform:uppercase;
+      font-weight:700;
+      letter-spacing:.6px;
+      display:inline-block;
+      text-decoration:none;
+      box-shadow:0 8px 20px rgba(197,164,126,.25);
+      transition:transform .2s ease, box-shadow .2s ease;
     }
-    .btn-gold-modern:hover{transform:translateY(-2px);box-shadow:0 12px 26px rgba(197,164,126,.35);color:#fff}
+    .btn-gold-modern:hover{
+      transform:translateY(-2px);
+      box-shadow:0 12px 26px rgba(197,164,126,.35);
+      color:#fff;
+    }
 
-    /* Helpers */
-    .hr-soft{height:1px;border:0;background:linear-gradient(90deg,rgba(0,0,0,0),rgba(0,0,0,.08),rgba(0,0,0,0));margin:18px 0}
-    @media (max-width: 991px){ .kpi{gap:10px} }
+    .hr-soft{
+      height:1px;
+      border:0;
+      background:linear-gradient(90deg,rgba(0,0,0,0),rgba(0,0,0,.08),rgba(0,0,0,0));
+      margin:18px 0;
+    }
+
+    @media (max-width: 991px){
+      .kpi{gap:10px}
+    }
   </style>
 
   <div class="container">
-    <div class="text-center mb-4">
-      <h1 class="h1 sec-hero-title">Como funciona a securitização (na prática)</h1>
-      <div class="gold-underline"></div>
-<p class="lead sec-subtitle hero-highlight">
-  Em vez de esperar 30, 60 ou 90 dias para receber, sua empresa vende o direito de receber
-  — e transforma vendas a prazo em <strong>capital de giro imediato</strong>. A Lafer compra esse direito creditório com
-  <strong>análise ágil</strong> e <strong>custos transparentes</strong>.
-</p>
-
-    </div>
-
     <div class="row">
       <!-- História -->
-      <!-- História (exemplo do dia a dia com empresa conhecida pelo povão) -->
       <div class="col-lg-6 mb-4">
         <div class="story-card">
           <h2>História: a Fábrica da Ana e a Rede de Supermercados de Bruno</h2>
@@ -524,9 +609,7 @@ body { padding-top: 96px; }
         </div>
       </div>
 
-
       <!-- Fluxo -->
-      <!-- Fluxo (corrigido para a história da Ana e do Bruno) -->
       <div class="col-lg-6 mb-4">
         <div class="flow-card">
           <h2 class="mb-3" style="font-weight:700">Fluxo da operação</h2>
@@ -535,7 +618,10 @@ body { padding-top: 96px; }
             <div class="num">1</div>
             <div>
               <h3>Pedido a prazo (90 dias)</h3>
-              <p>Ana vende um lote de <strong>pão de queijo</strong> para a <strong>rede de supermercados do Bruno</strong>. Surge o <em>direito creditório</em> (recebível) com vencimento em 90 dias.</p>
+              <p>
+                Ana vende um lote de <strong>pão de queijo</strong> para a <strong>rede de supermercados do Bruno</strong>.
+                Surge o <em>direito creditório</em> (recebível) com vencimento em 90 dias.
+              </p>
             </div>
           </div>
 
@@ -543,7 +629,10 @@ body { padding-top: 96px; }
             <div class="num">2</div>
             <div>
               <h3>Análise ágil da Lafer</h3>
-              <p>Checagem de documentos, lastro da venda e risco do sacado (a rede do Bruno). Termos e custos claros, com prazo de resposta curto.</p>
+              <p>
+                Checagem de documentos, lastro da venda e risco do sacado (a rede do Bruno).
+                Termos e custos claros, com prazo de resposta curto.
+              </p>
             </div>
           </div>
 
@@ -551,7 +640,11 @@ body { padding-top: 96px; }
             <div class="num">3</div>
             <div>
               <h3>Compra do recebível (antecipação)</h3>
-              <p>Ana <strong>cede o direito de receber</strong> e recebe <strong>à vista</strong> da Lafer. Com o caixa, compra os insumos que faltavam: <strong>queijo meia-cura</strong> e <strong>filme para embalagem</strong>, mantendo a produção.</p>
+              <p>
+                Ana <strong>cede o direito de receber</strong> e recebe <strong>à vista</strong> da Lafer.
+                Com o caixa, compra os insumos que faltavam: <strong>queijo meia-cura</strong> e <strong>filme para embalagem</strong>,
+                mantendo a produção.
+              </p>
             </div>
           </div>
 
@@ -559,100 +652,105 @@ body { padding-top: 96px; }
             <div class="num">4</div>
             <div>
               <h3>Pagamento no vencimento</h3>
-              <p>No prazo combinado, a <strong>rede do Bruno paga a Lafer</strong>. A Ana já garantiu os insumos e seguiu entregando para o supermercado.</p>
+              <p>
+                No prazo combinado, a <strong>rede do Bruno paga a Lafer</strong>.
+                A Ana já garantiu os insumos e seguiu entregando para o supermercado.
+              </p>
             </div>
           </div>
 
-        <!-- CTA (use exatamente o mesmo estilo dos botões "Entenda mais") -->
-        <div class="cta">
-          <a
-            href="https://wa.me/5535998252372"
-            class="btn-gold btn-xl"
-            aria-label="Falar com a Lafer pelo WhatsApp para simular a antecipação de recebíveis"
-          >Quero simular com a Lafer</a>
-        </div>
+          <div class="cta">
+            <a
+              href="https://wa.me/5535998252372"
+              class="btn-gold btn-xl"
+              aria-label="Falar com a Lafer pelo WhatsApp para simular a antecipação de recebíveis"
+            >
+              Quero simular com a Lafer
+            </a>
+          </div>
 
         </div>
       </div>
     </div>
   </div>
 </main>
-<!-- Scripts -->
+
 <script src="js/jquery-3.4.1.min.js"></script>
 <script src="js/bootstrap.min.js"></script>
 <script>
-        // Set current year in footer (guard in case footer exists on this page)
-        var yearEl = document.getElementById('year');
-        if (yearEl) { yearEl.textContent = new Date().getFullYear(); }
+  var yearEl = document.getElementById('year');
+  if (yearEl) { yearEl.textContent = new Date().getFullYear(); }
 
-        // Smooth scroll for anchor links
-        $('a[href^="#"]').on("touchstart click", function(e) {
-            var isSamePageAnchor = this.getAttribute('href') && this.getAttribute('href').charAt(0) === '#';
-            if (!isSamePageAnchor) return; // allow normal navigation to index.html#...
-            e.preventDefault();
-            var target = $(this.hash);
-            if (target.length) {
-                var offset = $('.navbar').outerHeight();
-                var extraOffset = -50;
-                $('html, body').stop(true, false).animate(
-                    { scrollTop: target.offset().top - offset + extraOffset },
-                    400,
-                    "linear"
-                );
-            }
-        });
-        
-        // Close mobile menu on click outside
-        $(document).click(function(event) {
-            var clickover = $(event.target);
-            var navbar = $(".navbar-collapse");
-            var toggler = $(".navbar-toggler");
-            var opened = navbar.hasClass("show");
+  $('a[href^="#"]').on("touchstart click", function(e) {
+    var isSamePageAnchor = this.getAttribute('href') && this.getAttribute('href').charAt(0) === '#';
+    if (!isSamePageAnchor) return;
+    e.preventDefault();
+    var target = $(this.hash);
+    if (target.length) {
+      var offset = $('.navbar').outerHeight();
+      var extraOffset = -50;
+      $('html, body').stop(true, false).animate(
+        { scrollTop: target.offset().top - offset + extraOffset },
+        400,
+        "linear"
+      );
+    }
+  });
 
-            if (opened && !clickover.closest(".navbar").length) {
-                toggler.click();
-            }
-        });
-    </script>
+  $(document).click(function(event) {
+    var clickover = $(event.target);
+    var navbar = $(".navbar-collapse");
+    var toggler = $(".navbar-toggler");
+    var opened = navbar.hasClass("show");
+
+    if (opened && !clickover.closest(".navbar").length) {
+      toggler.click();
+    }
+  });
+</script>
+
 <footer>
-<div class="container">
-<div class="row">
-<div class="col-md-6">
-<h4 class="text-white text-uppercase">LAFER Invest</h4>
-<h6 class="mb-5 text-white">Securitizadora</h6>
+  <div class="container">
+    <div class="row">
+      <div class="col-md-6">
+        <h4 class="text-white text-uppercase">LAFER Invest</h4>
+        <h6 class="mb-5 text-white">Securitizadora</h6>
 
-        <!-- Endereço embaixo com quebras de linha -->
-<div class="text-white" style="line-height:1.6; margin-top:6px; margin-bottom:16px;">
-  Avenida Coronel Jorge Vieira, 535<br/>
-  Centro<br/>
-  Areado - MG<br/>
-  37140-000
-</div>
+        <div class="text-white" style="line-height:1.6; margin-top:6px; margin-bottom:16px;">
+          Avenida Coronel Jorge Vieira, 535<br/>
+          Centro<br/>
+          Areado - MG<br/>
+          37140-000
+        </div>
+      </div>
 
-</div>
-<div class="col-md-6 my-auto ml-auto">
-<div class="address-footer-holder mb-3">
-<h6 class="text-white text-uppercase" style="font-weight:bold">CONTATOS</h6>
-</div>
-<div class="text-white mt-2">
-<a href="mailto:laerte@lafersec.com.br" target="_blank">
-<i class="fa fa-envelope" style="font-size: 1.2em; color: #ffffff; margin-right: 5px;"></i> laerte@lafersec.com.br
-                            </a>
-</div>
-<div class="text-white mt-2">
-<a href="https://wa.me/5535998252372" target="_blank">
-<i class="fa fa-whatsapp fa-lg" style="color: #25D366; margin-right: 5px;"></i> +55 35 99825-2372
-                            </a>
-</div>
-<div class="text-white mt-2">
-<a href="https://www.instagram.com/laferinvest/" style="display: inline-flex; align-items: center;" target="_blank">
-<i class="fa fa-instagram" style="font-size: 1.5em; color: #E4405F; margin-right: 5px; vertical-align: middle;"></i>
-                                @laferinvest
-                            </a>
-</div>
-</div>
-</div>
-</div>
+      <div class="col-md-6 my-auto ml-auto">
+        <div class="address-footer-holder mb-3">
+          <h6 class="text-white text-uppercase" style="font-weight:bold">CONTATOS</h6>
+        </div>
+        <div class="text-white mt-2">
+          <a href="mailto:laerte@lafersec.com.br" target="_blank">
+            <i class="fa fa-envelope" style="font-size: 1.2em; color: #ffffff; margin-right: 5px;"></i>
+            laerte@lafersec.com.br
+          </a>
+        </div>
+        <div class="text-white mt-2">
+          <a href="https://wa.me/5535998252372" target="_blank">
+            <i class="fa fa-whatsapp fa-lg" style="color: #25D366; margin-right: 5px;"></i>
+            +55 35 99825-2372
+          </a>
+        </div>
+        <div class="text-white mt-2">
+          <a href="https://www.instagram.com/laferinvest/"
+             style="display: inline-flex; align-items: center;" target="_blank">
+            <i class="fa fa-instagram"
+               style="font-size: 1.5em; color: #E4405F; margin-right: 5px; vertical-align: middle;"></i>
+            @laferinvest
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
 </footer>
 </body>
 </html>
