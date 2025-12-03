@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
@@ -64,7 +63,7 @@
 
 /* Page-specific styles for main content - scoped to avoid global conflicts */
 .lafermore-content-section {
-    padding-top: 120px; /* account for fixed navbar */
+    padding-top: 40px; /* alinhado com a página de médicos */
     padding-bottom: 80px;
     background-color: #f8f9fa;
 }
@@ -449,6 +448,70 @@ body { padding-top: 96px; }
 
 .valores-strong ul.list-unstyled > li { margin-bottom: .45rem; }
 </style>
+
+<!-- === NOVO: HERO COPIADO DA PÁGINA DE MÉDICOS, COM 2.png === -->
+<style>
+.sec-hero-title{
+  color:#f8f9fa;
+  margin-bottom:12px;
+  font-weight:700;
+  letter-spacing:.2px;
+}
+
+.hero-doctor-bg{
+  padding: 0;
+  background: transparent;
+}
+
+.hero-doctor-panel{
+  position: relative;
+  background: url('img/more/3.png') center/cover no-repeat;
+  border-radius: 18px;
+  padding: 90px 28px 50px 28px;
+  min-height: 380px;
+  overflow: hidden;
+  margin: 24px auto 40px auto;
+}
+
+.hero-doctor-panel .hero-highlight{
+  margin-top: 80px;
+}
+
+.hero-doctor-panel::before{
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.38);
+}
+
+.hero-doctor-panel .text-center{
+  position: relative;
+  z-index: 1;
+}
+
+.sec-subtitle{
+  max-width: 860px;
+  margin: 0 auto 28px auto;
+}
+
+.hero-highlight{
+  color:#0b1220 !important;
+  background:#ffffff;
+  padding:18px 22px;
+  border-radius:14px;
+  box-shadow:0 10px 30px rgba(0,0,0,.06);
+  border-left:4px solid #c5a47e;
+}
+
+.gold-underline{
+  width:96px;
+  height:3px;
+  margin:0 auto 18px auto;
+  background:linear-gradient(90deg,#d4af37,#f4d03f);
+  border-radius:2px;
+}
+</style>
+
 <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-3Q66N7J22G"></script>
 <script>
@@ -506,16 +569,28 @@ body { padding-top: 96px; }
 </div>
 </nav>
 
+<!-- NOVA PRIMEIRA SEÇÃO (clone do hero de médicos, com texto do ABOUT) -->
+<section class="hero-doctor-bg">
+  <div class="container">
+    <div class="hero-doctor-panel">
+      <div class="text-center mb-4">
+        <h1 class="h1 sec-hero-title">
+          Entenda Mais Sobre a Lafer Invest
+        </h1>
+        <div class="gold-underline"></div>
+        <p class="lead sec-subtitle hero-highlight">
+          Descubra como nossa expertise em securitização pode ser o motor para o <strong>crescimento
+          e a estabilidade financeira</strong> do seu negócio.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
 <main class="lafermore-content-section">
 <div class="container">
-<div class="text-center mb-5">
-<h1 class="h1 lafermore-font-blue mb-3">Entenda Mais Sobre a Lafer Invest</h1>
-<p class="lead text-muted mx-auto" style="max-width: 720px;">
-                    Descubra como nossa expertise em securitização pode ser o motor para o crescimento
-                    e a estabilidade financeira do seu negócio.
-                </p>
-<div class="mx-auto" style="width:96px;height:3px;background:linear-gradient(90deg,#d4af37,#f4d03f);border-radius:2px;"></div>
-</div>
+<!-- removido o antigo bloco de título, já que agora está no hero -->
+
 <div class="row equalize">
   
 <div class="col-md-6 mb-4 mb-md-0">
@@ -614,7 +689,7 @@ body { padding-top: 96px; }
 <section class="mb-4" id="historia-jorge">
 <h2 class="h3 lafermore-font-blue mb-3">Jorge e o Banco do Pau-Brasil</h2>
 <div class="story-jorge">
-<p class="mb-3">Jorge tem uma empresa e precisava converter vendas a prazo em capital de giro imediato. Então, ele foi ao Banco do Pau-Brasil, assinou um empréstimo e logo começou a ser cobrado por taxas não combinadas e juros altíssimos. Ao pedir explicações e correções, ouviu que “só na agência”. Perdeu horas entre trânsito, senha e espera para uma reunião que poderia ter sido uma ligação — e voltou à operação com menos caixa e menos tempo.</p>
+<p class="mb-3">Jorge tem uma empresa e precisava converter vendas a prazo em capital de giro imediato. Então, ele foi ao Banco do Pau-Brasil, assinou um empréstimo e logo começou a ser cobrado por taxas não combinadas e juros altíssimos. Ao pedir explicações e correções, ouviu que “só na agência”. Perdeu horas entre trânsito, senha e espera para uma reunião que poderia ter sido uma ligação, e ainda voltou à operação com menos caixa e menos tempo.</p>
 <p class="mb-0">Um belo dia, Jorge descobriu a Lafer Invest: uma forma de obter capital de giro que realmente usa <span class="hl-gold">tecnologia</span> para <span class="hl-gold">automatizar operações</span> e tornar tudo mais <span class="hl-gold">rápido e simples</span>, <span class="hl-gold">sem taxas misteriosas</span> e com uma <span class="hl-gold">velocidade que superou todas as suas expectativas</span>.</p>
 </div>
 <hr class="hr-soft"/>
