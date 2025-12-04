@@ -21,6 +21,59 @@
 <link rel="stylesheet" href="css/responsive.css"/>
 
 <style>
+
+  /* --- ESTILOS DOS BOTÕES --- */
+  
+  .btn-gold-pulse, 
+  .btn-gold-modern, 
+  .btn-gold.btn-xl {
+    background: linear-gradient(45deg, #d4af37, #eac159, #d4af37);
+    background-size: 200% auto;
+    color: #0d2c4a !important; 
+    
+    padding: 12px 30px;      /* Altura fina (original) */
+    font-size: 1.25rem;      /* Fonte GRANDE (~20px) */
+    
+    border-radius: 50px;
+    text-transform: uppercase;
+    font-weight: 800;       
+    letter-spacing: 0.5px;
+    
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    
+    text-decoration: none;
+    box-shadow: 0 4px 15px rgba(212, 175, 55, 0.5);
+    transition: all 0.3s ease;
+    border: none;
+    text-align: center;
+    white-space: normal;
+    line-height: 1.2;
+  }
+
+  .btn-gold-pulse {
+    gap: 10px; 
+    animation: pulse-gold 2s infinite; 
+  }
+
+  .btn-gold-pulse:hover, 
+  .btn-gold-modern:hover, 
+  .btn-gold.btn-xl:hover {
+    background-position: right center;
+    transform: scale(1.05);
+    box-shadow: 0 6px 20px rgba(212, 175, 55, 0.7);
+    color: #0d2c4a !important;
+    text-decoration: none;
+  }
+
+  @keyframes pulse-gold {
+    0% { box-shadow: 0 0 0 0 rgba(212, 175, 55, 0.7); }
+    70% { box-shadow: 0 0 0 10px rgba(212, 175, 55, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(212, 175, 55, 0); }
+  }
+
+
 .lafer-brand {
   font-weight: 900;
   font-size: 1.8rem;
@@ -63,9 +116,9 @@
   text-decoration-thickness: 0.12em;
 }
 
-/* Page-specific styles for main content - scoped to avoid global conflicts */
+/* Page-specific styles for main content */
 .secMore-content-section {
-  padding-top: 40px; /* account for fixed navbar */
+  padding-top: 40px; 
   padding-bottom: 80px;
   background-color: #f8f9fa;
 }
@@ -80,24 +133,7 @@
   transform: translateY(-6px);
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.12);
 }
-.secMore-btn-gold-modern {
-  background-color: #c5a47e;
-  color: #fff;
-  padding: 12px 30px;
-  border-radius: 50px;
-  text-transform: uppercase;
-  font-weight: 600;
-  letter-spacing: 1px;
-  transition: all 0.3s ease;
-  display: inline-block;
-  text-decoration: none;
-}
-.secMore-btn-gold-modern:hover {
-  background-color: #b39167;
-  color: #fff;
-  transform: scale(1.03);
-  box-shadow: 0 8px 25px rgba(197, 164, 126, 0.35);
-}
+
 .secMore-font-blue{ color:#0d2c4a; }
 .secMore-bg-blue{ background-color:#0d2c4a; }
 .secMore-font-gold{ color:#c5a47e; }
@@ -110,16 +146,13 @@
   margin: 24px 0;
 }
 
-/* keep spacing so content doesn't hide under fixed header */
 body { padding-top: 96px; }
 @media (max-width: 991px){ body { padding-top: 80px; } }
 
-/* Ensure visibility of menu text on non-hero pages */
 .navbar.fixed-top { background: #0d2c4a; }
 .navbar .nav-link { color: #ffffff !important; }
 .navbar .nav-link:hover { color: #c5a47e !important; }
 
-/* Equal-height columns */
 .equalize .col-md-6 { display: flex; }
 .content-col { display: flex; flex-direction: column; width: 100%; }
 .partner-stack { display: flex; flex-direction: column; justify-content: space-between; width: 100%; }
@@ -244,7 +277,6 @@ body { padding-top: 96px; }
   margin-top: 8px;
 }
 
-/* === Typography upgrade for Nossos Valores === */
 .valores-strong, .valores-strong p, .valores-strong li,
 .valores-strong .lead, .valores-strong .text-secondary {
   font-weight: 600;
@@ -253,7 +285,6 @@ body { padding-top: 96px; }
   letter-spacing: 0.1px;
 }
 
-/* Valores título + descrição */
 .valores-strong .valor-item { display: inline; }
 .valores-strong .valor-title {
   font-weight: 700;
@@ -276,7 +307,6 @@ body { padding-top: 96px; }
 }
 .valores-strong ul.list-unstyled > li { margin-bottom: .45rem; }
 
-/* Readability upgrades for story */
 .story-jorge p {
   font-weight: 600;
   color: #0b1220;
@@ -292,7 +322,6 @@ body { padding-top: 96px; }
   background: rgba(212,175,55,.25);
 }
 
-/* Área do Cliente (desativada) */
 .navbar .nav-link.disabled{
   pointer-events: none;
   opacity: .6;
@@ -304,38 +333,32 @@ body { padding-top: 96px; }
   margin-right: .35rem;
 }
 
-/* --- SCOPED AO MAIN: versão médicos --- */
 .sec-hero-title{
-  color:#f8f9fa;   /* cor clara para ficar legível sobre a imagem */
+  color:#f8f9fa;
   margin-bottom:12px;
   font-weight:700;
   letter-spacing:.2px;
 }
 
-/* Container de topo da página de médicos (apenas espaçamento) */
 .hero-doctor-bg{
-  padding: 0;             /* sem faixas extras acima/abaixo */
-  background: transparent;/* usa o fundo normal da página */
+  padding: 0;
+  background: transparent;
 }
 
-
-/* Painel com imagem de fundo, limitado ao width do .container */
 .hero-doctor-panel{
   position: relative;
   background: url('img/more/1.png') center/cover no-repeat;
   border-radius: 18px;
   padding: 90px 28px 50px 28px;
-  min-height: 380px;       /* aumenta um pouco a altura do bloco */
+  min-height: 380px;
   overflow: hidden;
-  margin: 24px auto 40px auto;  /* espaço em cima e embaixo, dentro da largura do container */
+  margin: 24px auto 40px auto;
 }
 
-/* Descer só o card "Em vez de esperar..." dentro do hero com imagem */
 .hero-doctor-panel .hero-highlight{
-  margin-top: 80px;   /* testa com 32px; se quiser mais para baixo, aumenta esse valor */
+  margin-top: 80px;
 }
 
-/* Overlay leve para melhorar contraste com o fundo */
 .hero-doctor-panel::before{
   content: "";
   position: absolute;
@@ -343,27 +366,28 @@ body { padding-top: 96px; }
   background: rgba(0,0,0,0.38);
 }
 
-/* Conteúdo por cima da imagem */
 .hero-doctor-panel .text-center{
   position: relative;
   z-index: 1;
 }
-
-
 
 .sec-subtitle{
   max-width:860px;
   margin:0 auto 28px auto;
 }
 
-/* Destaque forte pro texto principal */
+/* --- AQUI ESTÁ A ALTERAÇÃO PEDIDA --- */
 .hero-highlight{
-  color:#0b1220 !important;             /* preto/azul bem escuro */
+  color:#0b1220 !important;
   background:#ffffff;
   padding:18px 22px;
   border-radius:14px;
   box-shadow:0 10px 30px rgba(0,0,0,.06);
   border-left:4px solid #c5a47e;
+  
+  /* Aumentos de tamanho e espessura */
+  font-size: 1.35rem; 
+  font-weight: 700;   
 }
 
 .gold-underline{
@@ -377,8 +401,11 @@ body { padding-top: 96px; }
 .story-card{
   background:#fff;
   border-radius:14px;
-  padding:22px 22px 12px 22px;
+  padding:22px 22px 32px 22px; 
   box-shadow:0 8px 24px rgba(0,0,0,.06);
+  display: flex; 
+  flex-direction: column;
+  height: 100%;
 }
 .story-card h2{
   color:#0d2c4a;
@@ -400,13 +427,13 @@ body { padding-top: 96px; }
   margin-bottom:4px;
 }
 
-/* Fluxo */
 .flow-card{
   background:#0d2c4a;
   color:#fff;
   border-radius:14px;
   padding:18px 18px 32px 18px;
   box-shadow:0 8px 24px rgba(0,0,0,.08);
+  height: 100%; 
 }
 .flow-card h2{
   font-weight:700;
@@ -444,34 +471,11 @@ body { padding-top: 96px; }
   opacity:.95;
 }
 
-/* CTA */
 .cta{
   text-align:center;
   margin-top:22px;
 }
-.btn-gold-modern,
-.btn-gold.btn-xl{
-  background-color:#c5a47e;
-  color:#fff;
-  padding:12px 30px;
-  border-radius:50px;
-  text-transform:uppercase;
-  font-weight:700;
-  letter-spacing:.6px;
-  display:inline-block;
-  text-decoration:none;
-  box-shadow:0 8px 20px rgba(197,164,126,.25);
-  transition:transform .2s ease, box-shadow .2s ease;
-}
-.btn-gold-modern:hover,
-.btn-gold.btn-xl:hover{
-  transform:translateY(-2px);
-  box-shadow:0 12px 26px rgba(197,164,126,.35);
-  color:#fff;
-}
 
-
-/* === HERO COM FUNDO === */
 .hero-doctor {
   position: relative;
   width: 100%;
@@ -484,17 +488,15 @@ body { padding-top: 96px; }
   text-align: center;
 }
 
-/* Overlay para melhorar contraste */
 .hero-doctor::before {
   content: "";
   position: absolute;
   inset: 0;
-  background: rgba(0,0,0,0.35);  /* Escurece levemente a imagem */
+  background: rgba(0,0,0,0.35);
   backdrop-filter: blur(1px);
   border-radius: 0;
 }
 
-/* Conteúdo por cima */
 .hero-doctor-content {
   position: relative;
   z-index: 5;
@@ -519,7 +521,6 @@ body { padding-top: 96px; }
   margin-bottom: 0;
 }
 
-/* Espaço para não colidir com navbar fixa */
 body {
   padding-top: 96px;
 }
@@ -530,7 +531,6 @@ body {
 
 </style>
 
-<!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-3Q66N7J22G"></script>
 <script>
   window.dataLayer = window.dataLayer || [];
@@ -594,15 +594,13 @@ body {
     <div class="hero-doctor-panel">
       <div class="text-center mb-4">
         <h1 class="h1 sec-hero-title">
-          Antecipação de plantões para médicos
+          Seu plantão acabou hoje. Por que esperar 60 dias para receber?
         </h1>
         <div class="gold-underline"></div>
         <p class="lead sec-subtitle hero-highlight">
-          Em vez de esperar <strong>30, 60 dias ou mais</strong> para receber seus plantões,
-          você pode transformar esse valor em <strong>dinheiro na conta hoje</strong>
-          sem entrar no cheque especial, cartão de crédito ou empréstimo bancário.
-          A Lafer ajuda médicos, especialmente no início de carreira,
-          a organizar o fluxo de caixa de forma simples e transparente.
+          Transforme suas escalas a receber em dinheiro na conta em até 24h. 
+          Sem burocracia bancária, sem pedir favor e sem entrar no cheque especial. 
+          O dinheiro é seu, nós apenas encurtamos o tempo.
         </p>
       </div>
     </div>
@@ -610,79 +608,79 @@ body {
 </section>
 
 
-<!-- Main Content Section -->
 <main class="secMore-content-section" id="como-funciona">
   <div class="container">
-    <div class="row">
-      <!-- História focada em médico/plantão -->
+    <div class="row equalize">
       <div class="col-lg-6 mb-4">
         <div class="story-card">
-          <h2>A Dra. Marina no início da carreira</h2>
+          <h2>Dra. Marina: dinheiro "preso" vs. contas chegando</h2>
           <p>
-            <span style="font-weight:700;color:#0d2c4a">A Dra. Marina</span> acabou de se formar e está
-            encaixando vários plantões para montar rotina, pagar aluguel,
-            cursos de atualização e organizar a vida em outra cidade.
+            <span style="font-weight:700;color:#0d2c4a">A Dra. Marina</span> tem R$ 10.000,00 
+            para receber de plantões já realizados, mas a fatura do cartão e o congresso 
+            precisam ser pagos <strong>hoje</strong>.
           </p>
           <p>
-            Ela recebe muitos plantões em <strong>30</strong> ou <strong>60</strong> dias de prazo.
-            Na prática, ela trabalha hoje, mas o dinheiro só cai na conta
-            <strong>um ou dois meses depois</strong>, justamente quando surgem
-            gastos com moradia, transporte, alimentação, material, congressos…
+            O dinheiro é dela, mas o hospital só paga em <strong>60 dias</strong>. 
+            Se ela usar o Cheque Especial ou parcelar a fatura, vai pagar juros abusivos 
+            que devoram o lucro do plantão.
           </p>
           <p>
-            É aí que entra a <span class="hl-gold">Lafer Invest</span>:
-            em vez de recorrer a cheque especial ou cartão, ela pode
-            <strong>antecipar parte dos plantões</strong> com um
-            custo claro e combinado de antemão.
+            A solução inteligente da <span class="hl-gold">Lafer Invest</span>: 
+            ela antecipa o valor que já é dela. O custo é uma 
+            <strong>taxa única e clara</strong>, muito menor que os juros do banco.
           </p>
 
           <hr class="hr-soft"/>
 
-          <p><strong>Exemplo na prática:</strong></p>
+          <p><strong>Exemplo Prático:</strong></p>
           <ul>
-            <li>Dra. Marina dá um plantão de <strong>R$ 1.000,00</strong>, com pagamento em 30 dias.</li>
-            <li>Pela antecipação, a Lafer faz um <strong>desconto de R$ 30,00*</strong>.</li>
-            <li>A Dra. Marina recebe <strong>R$ 970,00 hoje</strong>.</li>
+            <li>Dra. Marina tem um plantão de <strong>R$ 1.000,00</strong> a receber em 30 dias.</li>
+            <li>Para ter o dinheiro <strong>hoje</strong>, a Lafer cobra uma taxa única (ex: R$ 30,00*).</li>
+            <li>Ela recebe <strong>R$ 970,00 à vista</strong> e paga as contas sem atraso.</li>
             <li>
-              Quando o hospital pagar os <strong>R$ 1.000,00</strong>,
-              ela acerta a operação com a Lafer via boleto ou PIX.
+              Quando o hospital pagar, ela apenas repassa o valor original à Lafer. 
             </li>
           </ul>
 
           <p class="mb-2">
-            <strong>Resultado:</strong> ela não fica travada esperando o dinheiro cair
-            e consegue encaixar melhor as contas do mês, investir em cursos,
-            comprar materiais e organizar a vida com mais previsibilidade.
+            <strong>Resultado:</strong> Marina parou de pagar juros bancários e tem 
+            dinheiro na mão para aproveitar oportunidades e viver com tranquilidade, 
+            sem a ansiedade de esperar meses para ver a cor do dinheiro.
           </p>
           <p class="mb-1">
-            <strong>Para quem serve:</strong> médicos em início de carreira,
-            residentes, plantonistas e profissionais que recebem uma parte
-            relevante da renda em prazos mais longos.
+            <strong>Para quem serve:</strong> Residentes, plantonistas e especialistas 
+            que querem liberdade financeira e não aceitam deixar o dinheiro parado.
           </p>
 
-          <!-- Divider + asterisco logo abaixo do “Para quem serve” -->
+          <div style="flex-grow:1;"></div>
+
+<div class="text-center mt-4 mb-3">
+  <a href="https://wa.me/5535998252372" 
+     class="btn-gold-pulse" 
+     target="_blank">
+     <i class="fa fa-whatsapp" style="font-size:1.3em;"></i>
+     Quero receber hoje
+  </a>
+</div>
+
           <hr class="hr-soft" style="margin-top:10px; margin-bottom:6px;"/>
           <p class="text-muted small mb-0">
-            * Taxa média considerada. A mesma pode variar conforme
-            o prazo, o valor do plantão e a análise da operação.
+            * Taxa média para fins ilustrativos. Varia conforme prazo e análise.
           </p>
         </div>
       </div>
 
-      <!-- Fluxo focado em médico/plantão -->
       <div class="col-lg-6 mb-4">
         <div class="flow-card">
-          <h2 class="mb-3">Como funciona, passo a passo</h2>
+          <h2 class="mb-3">Dinheiro na mão em 4 passos simples</h2>
 
           <div class="flow-step">
             <div class="num">1</div>
             <div>
               <h3>Você faz o plantão</h3>
               <p>
-                Você trabalha normalmente e combina com o hospital, clínica
-                ou escala o pagamento em <strong>30</strong>, <strong>45</strong> ou <strong>60</strong> dias.
-                Esse valor futuro é o seu <em>recebível</em> (aquilo que você
-                tem a receber pelo plantão).
+                Você cumpriu sua escala. O dinheiro é seu por direito, 
+                mesmo que o hospital só pague daqui a meses. Esse é o seu ativo.
               </p>
             </div>
           </div>
@@ -690,12 +688,11 @@ body {
           <div class="flow-step">
             <div class="num">2</div>
             <div>
-              <h3>Envia os comprovantes para a Lafer</h3>
+              <h3>Envia foto no WhatsApp</h3>
               <p>
-                Você manda os dados do plantão e dos pagamentos (escala, RPA,
-                notas ou o que for utilizado) pelo <strong>WhatsApp da Lafer</strong>.
-                Nós fazemos uma análise rápida, sempre com <strong>condições claras</strong>
-                (taxa, prazo e forma de acerto).
+                Zero burocracia. Basta mandar uma foto da escala ou RPA 
+                pelo <strong>WhatsApp da Lafer</strong>. Sem gerentes, sem filas 
+                e sem papelada física.
               </p>
             </div>
           </div>
@@ -703,11 +700,10 @@ body {
           <div class="flow-step">
             <div class="num">3</div>
             <div>
-              <h3>Antecipação: dinheiro na conta hoje</h3>
+              <h3>Pix na conta em instantes</h3>
               <p>
-                Depois de aprovada a operação, você <strong>antecipa o plantão</strong>:
-                a Lafer faz um pequeno desconto e você recebe o valor <strong>no mesmo dia útil</strong>,
-                ganhando fôlego para organizar o mês, pagar contas e investir em você.
+                Aprovou? O dinheiro cai na sua conta <strong>no mesmo dia</strong>. 
+                Você ganha poder de compra à vista e resolve sua vida financeira imediatamente.
               </p>
             </div>
           </div>
@@ -715,17 +711,14 @@ body {
           <div class="flow-step">
             <div class="num">4</div>
             <div>
-              <h3>Acerto no dia do pagamento</h3>
+              <h3>Acerto com Privacidade Total</h3>
               <p>
-                Quando o hospital ou clínica pagar o plantão, você
-                <strong>acerta a operação com a Lafer</strong> via boleto ou PIX.
-                Tudo combinado previamente, sem surpresas e com
-                <strong>transparência total de custos</strong>.
+                Você recebe do hospital na sua conta normalmente e depois acerta com a Lafer via Pix ou boleto. 
+                <strong>A relação é 100% entre você e a Lafer.</strong> O hospital não precisa ser envolvido.
               </p>
             </div>
           </div>
 
-          <!-- CTA grandão pro WhatsApp da empresa -->
           <div class="cta">
             <a
               href="https://wa.me/5535998252372"
@@ -733,7 +726,7 @@ body {
               aria-label="Falar com a Lafer pelo WhatsApp para antecipar plantões"
               target="_blank"
             >
-              Quero antecipar meu plantão
+              Simular antecipação no WhatsApp
             </a>
           </div>
 

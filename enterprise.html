@@ -2,76 +2,69 @@
 <html lang="pt-br">
 <head>
 <meta charset="utf-8"/>
-<meta content="IE=edge" http-equiv="X-UA-Compatible"/>
-<meta content="width=device-width, initial-scale=1" name="viewport"/>
-<link href="favicon.png" rel="icon" type="image/png"/>
-<title>Lafer Invest - Securitizadora</title>
-<link href="css/bootstrap-reboot.min.css" rel="stylesheet"/>
-<link href="css/bootstrap-grid.min.css" rel="stylesheet"/>
-<link href="css/bootstrap.min.css" rel="stylesheet"/>
-<link href="plugins/slick/slick.css" rel="stylesheet"/>
-<link href="plugins/slick/slick-theme.css" rel="stylesheet"/>
-<link href="plugins/nivoslider/nivo-slider.css" rel="stylesheet"/>
-<link href="plugins/lity/lity.min.css" rel="stylesheet"/>
-<link href="https://fonts.googleapis.com/css?family=Montserrat:200,300,400,600&amp;display=swap" rel="stylesheet"/>
-<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet"/>
-<link href="css/animate.css" rel="stylesheet"/>
-<link href="css/style.css" rel="stylesheet"/>
-<link href="css/responsive.css" rel="stylesheet"/>
+<meta http-equiv="X-UA-Compatible" content="IE=edge"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="icon" type="image/png" href="favicon.png"/>
+<title>Lafer Invest - Securitizadora Empresarial</title>
+
+<link rel="stylesheet" href="css/bootstrap-reboot.min.css"/>
+<link rel="stylesheet" href="css/bootstrap-grid.min.css"/>
+<link rel="stylesheet" href="css/bootstrap.min.css"/>
+<link rel="stylesheet" href="plugins/slick/slick.css"/>
+<link rel="stylesheet" href="plugins/slick/slick-theme.css"/>
+<link rel="stylesheet" href="plugins/nivoslider/nivo-slider.css"/>
+<link rel="stylesheet" href="plugins/lity/lity.min.css"/>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Montserrat:200,300,400,600&amp;display=swap"/>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css"/>
+<link rel="stylesheet" href="css/animate.css"/>
+<link rel="stylesheet" href="css/style.css"/>
+<link rel="stylesheet" href="css/responsive.css"/>
 
 <style>
-  .sec-subtitle{
-    max-width:860px;
-    margin:0 auto 28px auto;
+  /* --- REUTILIZANDO ESTILOS DA PÁGINA DOCTOR PARA MANTER A IDENTIDADE --- */
+  
+  .btn-gold-pulse, 
+  .btn-gold-modern, 
+  .btn-gold.btn-xl {
+    background: linear-gradient(45deg, #d4af37, #eac159, #d4af37);
+    background-size: 200% auto;
+    color: #0d2c4a !important; 
+    padding: 12px 30px;
+    font-size: 1.25rem;
+    border-radius: 50px;
+    text-transform: uppercase;
+    font-weight: 800;       
+    letter-spacing: 0.5px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    box-shadow: 0 4px 15px rgba(212, 175, 55, 0.5);
+    transition: all 0.3s ease;
+    border: none;
+    text-align: center;
+    white-space: normal;
+    line-height: 1.2;
   }
 
-  /* Destaque forte pro texto principal (card branco) */
-  .hero-highlight{
-    color:#0b1220 !important;
-    background:#ffffff;
-    padding:18px 22px;
-    border-radius:14px;
-    box-shadow:0 10px 30px rgba(0,0,0,.06);
-    border-left:4px solid #c5a47e;
+  .btn-gold-pulse {
+    gap: 10px; 
+    animation: pulse-gold 2s infinite; 
   }
 
-  /* === HERO ENTERPRISE: MESMA LÓGICA DO DOCTOR === */
-  .hero-enterprise-bg{
-    padding: 0;
-    background: transparent;
+  .btn-gold-pulse:hover, 
+  .btn-gold-modern:hover, 
+  .btn-gold.btn-xl:hover {
+    background-position: right center;
+    transform: scale(1.05);
+    box-shadow: 0 6px 20px rgba(212, 175, 55, 0.7);
+    color: #0d2c4a !important;
   }
 
-.hero-enterprise-panel{
-  position: relative;
-  background: url('img/more/2.png') center/cover no-repeat;
-  border-radius: 18px;
-  padding: 90px 28px 50px 28px;
-  min-height: 380px;
-  overflow: hidden;
-  margin: 24px auto 40px auto; /* igual ao doctor */
-}
-
-
-  .hero-enterprise-panel::before{
-    content:"";
-    position:absolute;
-    inset:0;
-    background: rgba(0,0,0,0.38); /* overlay pra leitura */
-  }
-
-  .hero-enterprise-panel .text-center{
-    position: relative;
-    z-index: 1;
-  }
-
-  /* desce só o card "Em vez de esperar..." dentro da imagem */
-  .hero-enterprise-panel .hero-highlight{
-    margin-top: 80px;
-  }
-
-  /* tira sobra extra depois do bloco título+card dentro do hero */
-  .hero-enterprise-panel .text-center.mb-4{
-    margin-bottom: 0;
+  @keyframes pulse-gold {
+    0% { box-shadow: 0 0 0 0 rgba(212, 175, 55, 0.7); }
+    70% { box-shadow: 0 0 0 10px rgba(212, 175, 55, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(212, 175, 55, 0); }
   }
 
   .lafer-brand {
@@ -84,80 +77,14 @@
     line-height: 1;
     font-family: 'Montserrat', sans-serif;
   }
-  @media (max-width: 576px) {
-    .lafer-brand {
-      font-size: 1.4rem;
-    }
-  }
+  @media (max-width: 576px) { .lafer-brand { font-size: 1.4rem; } }
 
-  @media (max-width: 991px){
-    section#como-funciona .about-content-shadow{
-      padding-bottom: 64px !important;
-      text-align: center !important;
-    }
-    section#como-funciona .about-content-shadow a.btn-gold{
-      margin-top: 16px !important;
-      display: inline-block;
-    }
-
-    section#about-content .about-content-shadow{
-      padding-bottom: 28px !important;
-      text-align: center !important;
-    }
-    section#about-content .about-content-shadow a.btn-gold{
-      margin-top: 36px !important;
-      display: inline-block;
-    }
+  .secMore-content-section {
+    padding-top: 40px; 
+    padding-bottom: 80px;
+    background-color: #f8f9fa;
   }
-
-  .story-card .hl-gold {
-    color: #d4af37;
-    font-weight: 700;
-    text-decoration-thickness: 0.12em;
-  }
-
-  /* Page-specific styles for main content - scoped to avoid global conflicts */
-.secMore-content-section {
-  padding-top: 40px;
-  padding-bottom: 80px;
-  background-color: #f8f9fa;
-}
-
-
-  .secMore-card-custom {
-    background-color: #0d2c4a;
-    border-radius: 15px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.06);
-    overflow: hidden;
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
-  }
-  .secMore-card-custom:hover {
-    transform: translateY(-6px);
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.12);
-  }
-  .secMore-btn-gold-modern {
-    background-color: #c5a47e;
-    color: #fff;
-    padding: 12px 30px;
-    border-radius: 50px;
-    text-transform: uppercase;
-    font-weight: 600;
-    letter-spacing: 1px;
-    transition: all 0.3s ease;
-    display: inline-block;
-    text-decoration: none;
-  }
-  .secMore-btn-gold-modern:hover {
-    background-color: #b39167;
-    color: #fff;
-    transform: scale(1.03);
-    box-shadow: 0 8px 25px rgba(197, 164, 126, 0.35);
-  }
-  .secMore-font-blue{ color:#0d2c4a; }
-  .secMore-bg-blue{ background-color:#0d2c4a; }
-  .secMore-font-gold{ color:#c5a47e; }
-  .secMore-bg-gold{ background-color:#c5a47e; }
-
+  
   .hr-soft {
     height: 1px;
     border: 0;
@@ -172,203 +99,149 @@
   .navbar .nav-link { color: #ffffff !important; }
   .navbar .nav-link:hover { color: #c5a47e !important; }
 
-  .equalize .col-md-6 { display: flex; }
-  .content-col { display: flex; flex-direction: column; width: 100%; }
-  .partner-stack { display: flex; flex-direction: column; justify-content: space-between; width: 100%; }
-
-  .partner-card { padding: 14px; }
-  .partner-photo {
-    width: 100%;
-    height: 320px;
-    object-fit: cover;
-    border-radius: 12px;
-    display: block;
+  /* HERO ESPECÍFICO PARA EMPRESAS */
+  .hero-enterprise-bg {
+    padding: 0;
     background: transparent;
   }
-  @media (min-width: 992px){
-    .partner-photo { height: 380px; }
+
+  .hero-enterprise-panel {
+    position: relative;
+    background: url('img/more/2.png') center/cover no-repeat; /* Mantendo a imagem da fábrica */
+    border-radius: 18px;
+    padding: 90px 28px 50px 28px;
+    min-height: 380px;
+    overflow: hidden;
+    margin: 24px auto 40px auto;
   }
-  .partner-name {
-    margin: 12px 4px 0 4px;
+
+  .hero-enterprise-panel::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.45); /* Um pouco mais escuro para leitura */
+  }
+
+  .hero-enterprise-panel .text-center {
+    position: relative;
+    z-index: 1;
+  }
+
+  .hero-highlight {
+    color: #0b1220 !important;
+    background: #ffffff;
+    padding: 18px 22px;
+    border-radius: 14px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.06);
+    border-left: 4px solid #c5a47e;
+    font-size: 1.35rem; 
+    font-weight: 700;   
+    margin-top: 60px;
+  }
+
+  .sec-hero-title {
+    color: #f8f9fa;
+    margin-bottom: 12px;
     font-weight: 700;
-    color: #c5a47e;
-    letter-spacing: 0.2px;
+    letter-spacing: .2px;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.5);
   }
 
-  .partner-stack .secMore-card-custom { width: 100%; }
-  .row.equalize { align-items: stretch; }
-
-  .team-item {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-  }
-  .team-photo,
-  .team-photo-fallback {
-    inline-size: min(32vw, 5cm, 192px);
-    block-size: auto;
-    aspect-ratio: 1 / 1;
-    object-fit: cover;
-    border-radius: 12px;
-    background: transparent;
-    flex: 0 0 auto;
-    display: block;
-  }
-  .team-photo-fallback {
-    display: none;
-    justify-content: center;
-    align-items: center;
-    font-size: clamp(18px, 6vw, 40px);
-    font-weight: 800;
-    color: #6c757d;
-  }
-  .team-info { min-inline-size: 0; }
-  .team-name {
-    margin: 0;
-    font-weight: 700;
-    color: #c5a47e;
-    letter-spacing: 0.2px;
-  }
-  @media (max-width: 420px) {
-    .team-item { flex-wrap: wrap; }
-  }
-
-  .team-role {
-    margin-top: 4px;
-    font-size: clamp(14px, 2.2vw, 18px);
-    line-height: 1.25;
-    color: #ffffff;
-    font-weight: 700;
-  }
-
-  .partner-card { padding-block: 8px; }
-  .partner-card + .partner-card { margin-top: 20px; }
-
-  @media (max-width: 576px) {
-    .partner-card + .partner-card { margin-top: 24px; }
-    .team-item { gap: 14px; }
-  }
-
-  .partner-card {
-    border-bottom: 1px solid rgba(255,255,255,0.08);
-  }
-  .partner-card:last-of-type {
-    border-bottom: none;
-  }
-
-  .team-header { margin-bottom: 12px; }
-  .section-underline {
-    width: 72px;
+  .gold-underline {
+    width: 96px;
     height: 3px;
+    margin: 0 auto 18px auto;
     background: linear-gradient(90deg,#d4af37,#f4d03f);
     border-radius: 2px;
   }
 
-  .partner-stack .partner-card .text-center { text-align: center; }
-
-  .team-title-block {
-    background: transparent;
-    padding: 12px 16px 6px 16px;
-    text-align: center;
+  /* CARDS DE CONTEÚDO IDENTICOS AO DOCTOR */
+  .story-card {
+    background: #fff;
+    border-radius: 14px;
+    padding: 22px 22px 32px 22px; 
+    box-shadow: 0 8px 24px rgba(0,0,0,.06);
+    display: flex; 
+    flex-direction: column;
+    height: 100%;
   }
-  .team-title {
-    margin: 0;
-    text-align: center;
-    font-size: clamp(20px, 2.4vw, 28px);
-    line-height: 1.2;
+  .story-card h2 {
     color: #0d2c4a;
-    position: relative;
-    display: inline-block;
-    padding-bottom: 8px;
+    font-size: 1.25rem;
+    font-weight: 700;
+    margin-bottom: 10px;
   }
-  .team-title::after {
-    content: "";
-    position: absolute;
-    left: 50%;
-    transform: translateX(-50%);
-    bottom: 0;
-    width: 72px;
-    height: 3px;
-    background: #C9A227;
-    border-radius: 2px;
-  }
-  .partner-stack > .team-title-block + * {
-    margin-top: 8px;
-  }
-
-  .valores-strong, .valores-strong p, .valores-strong li, .valores-strong .lead, .valores-strong .text-secondary {
-    font-weight: 600;
+  .story-card p {
     color: #0b1220;
     line-height: 1.7;
-    letter-spacing: 0.1px;
+    font-weight: 600;
+    letter-spacing: .1px;
   }
-</style>
-
-<style>
-  .story-jorge p {
+  .story-card ul {
+    padding-left: 18px;
+    margin-bottom: 10px;
+  }
+  .story-card ul li {
+    margin-bottom: 4px;
     font-weight: 600;
     color: #0b1220;
-    line-height: 1.7;
-    letter-spacing: 0.1px;
   }
-  .story-jorge .hl-gold {
+  .story-card .hl-gold {
     color: #d4af37;
     font-weight: 700;
-    text-decoration-thickness: 0.12em;
   }
-  .story-jorge .hl-gold::selection { background: rgba(212,175,55,.25); }
-</style>
 
-<style>
-  .navbar .nav-link.disabled{
-    pointer-events: none;
-    opacity: .6;
-    cursor: not-allowed;
-    font-weight: 600;
-    letter-spacing: .02em;
+  .flow-card {
+    background: #0d2c4a;
+    color: #fff;
+    border-radius: 14px;
+    padding: 18px 18px 32px 18px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.08);
+    height: 100%; 
   }
-  .navbar .nav-link.disabled .fa{
-    margin-right: .35rem;
+  .flow-card h2 { font-weight: 700; }
+  
+  .flow-step {
+    display: flex;
+    gap: 12px;
+    padding: 14px;
+    border-radius: 10px;
+    background: rgba(255,255,255,.06);
+    align-items: flex-start;
   }
-</style>
-
-<style>
-  .valores-strong .valor-item { display: inline; }
-  .valores-strong .valor-title {
-    font-weight: 700;
+  .flow-step + .flow-step { margin-top: 10px; }
+  
+  .flow-step .num {
+    flex: 0 0 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #c5a47e;
     color: #0d2c4a;
+    font-weight: 800;
   }
-  .valores-strong .valor-desc {
-    font-weight: 500;
-    font-size: 0.92rem;
-    color: #4b5563;
-    margin-left: .35ch;
-  }
-  @media (max-width: 576px){
-    .valores-strong .valor-desc { display: block; margin-left: 0; margin-top: 2px; }
-  }
-</style>
-
-<style>
-  .valores-strong .valor-title {
+  .flow-step h3 {
+    margin: 0;
+    font-size: 1.05rem;
     font-weight: 700;
-    font-size: 1.075rem;
-    color: #0d2c4a;
+    color: #fff;
   }
-  .valores-strong .valor-desc {
-    font-weight: 500;
-    font-size: 1rem;
-    line-height: 1.45;
-    color: #374151;
-    margin-left: .35ch;
+  .flow-step p {
+    margin: 4px 0 0 0;
+    opacity: .95;
   }
-  @media (max-width: 576px){
-    .valores-strong .valor-desc { display: block; margin-left: 0; margin-top: 2px; }
+
+  .cta {
+    text-align: center;
+    margin-top: 22px;
   }
-  .valores-strong ul.list-unstyled > li { margin-bottom: .45rem; }
+  
+  .row.equalize { align-items: stretch; }
+
 </style>
 
-<!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-3Q66N7J22G"></script>
 <script>
   window.dataLayer = window.dataLayer || [];
@@ -388,8 +261,10 @@
       LAFER INVEST
     </a>
 
-    <button aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation"
-            class="navbar-toggler custom-toggler" data-target="#navbarSupportedContent" data-toggle="collapse" type="button">
+    <button class="navbar-toggler custom-toggler" type="button"
+            data-toggle="collapse" data-target="#navbarSupportedContent"
+            aria-controls="navbarSupportedContent"
+            aria-expanded="false" aria-label="Toggle navigation">
       <span class="navbar-toggler-icon"></span>
     </button>
 
@@ -414,213 +289,104 @@
         <li class="nav-item">
           <a class="nav-link" href="index.html#fale-conosco">FALE CONOSCO</a>
         </li>
+
         <li class="nav-item">
-          <a class="nav-link" href="investor.html" title="Área do Investidor">ÁREA DO INVESTIDOR</a>
+          <a class="nav-link" href="investor.html" title="Área do Investidor">
+            ÁREA DO INVESTIDOR
+          </a>
         </li>
       </ul>
     </div>
   </div>
 </nav>
 
-<!-- HERO COM FUNDO (MESMA LÓGICA DO DOCTOR) -->
 <section class="hero-enterprise-bg">
   <div class="container">
     <div class="hero-enterprise-panel">
       <div class="text-center mb-4">
-        <h1 class="h1 sec-hero-title">Como funciona a securitização</h1>
+        <h1 class="h1 sec-hero-title">
+          Sua empresa vendeu, entregou e faturou. Por que esperar 90 dias para receber?
+        </h1>
         <div class="gold-underline"></div>
         <p class="lead sec-subtitle hero-highlight">
-          Em vez de esperar 30, 60 ou 90 dias para receber, sua empresa vende o direito de receber
-          e transforma vendas a prazo em <strong>capital de giro imediato</strong>. A Lafer compra esse direito creditório com
-          <strong>análise ágil</strong> e <strong>custos transparentes</strong>.
+          Transforme suas vendas a prazo em capital de giro em 24h. 
+          Sem criar dívidas bancárias, sem burocracia e sem travar seu limite de crédito.
+          Venda o prazo, receba à vista.
         </p>
       </div>
     </div>
   </div>
 </section>
 
-<!-- Main Content Section -->
 <main class="secMore-content-section" id="como-funciona">
-  <!-- estilos locais, escopados ao main -->
-  <style>
-    /* =============== SCOPED TO MAIN ONLY =============== */
-    .sec-hero-title{
-      color:#f8f9fa; /* título claro sobre o fundo escuro, igual doctor */
-      margin-bottom:12px;
-      font-weight:700;
-      letter-spacing:.2px;
-    }
-    .sec-subtitle{max-width:860px;margin:0 auto 28px auto}
-    .gold-underline{
-      width:96px;
-      height:3px;
-      margin:0 auto 18px auto;
-      background:linear-gradient(90deg,#d4af37,#f4d03f);
-      border-radius:2px;
-    }
-
-    .story-card{
-      background:#fff;
-      border-radius:14px;
-      padding:22px 22px 8px 22px;
-      box-shadow:0 8px 24px rgba(0,0,0,.06);
-    }
-    .story-card h2{
-      color:#0d2c4a;
-      font-size:1.25rem;
-      font-weight:700;
-      margin-bottom:10px;
-    }
-    .story-card p{
-      color:#0b1220;
-      line-height:1.7;
-      font-weight:600;
-      letter-spacing:.1px;
-    }
-
-    .flow-card{
-      background:#0d2c4a;
-      color:#fff;
-      border-radius:14px;
-      padding:18px 18px 32px 18px;
-      box-shadow:0 8px 24px rgba(0,0,0,.08);
-    }
-    .flow-step{
-      display:flex;
-      gap:12px;
-      padding:14px;
-      border-radius:10px;
-      background:rgba(255,255,255,.06);
-      align-items:flex-start;
-    }
-    .flow-step + .flow-step{margin-top:10px}
-    .flow-step .num{
-      flex:0 0 32px;
-      height:32px;
-      border-radius:50%;
-      display:inline-flex;
-      align-items:center;
-      justify-content:center;
-      background:#c5a47e;
-      color:#0d2c4a;
-      font-weight:800;
-    }
-    .flow-step h3{
-      margin:0;
-      font-size:1.05rem;
-      font-weight:700;
-      color:#fff;
-    }
-    .flow-step p{
-      margin:4px 0 0 0;
-      opacity:.95;
-    }
-
-    .calc-card{
-      background:#fff;
-      border-radius:14px;
-      padding:18px;
-      box-shadow:0 8px 24px rgba(0,0,0,.06);
-    }
-    .calc-card h2{
-      color:#0d2c4a;
-      font-size:1.2rem;
-      font-weight:700;
-      margin-bottom:10px;
-    }
-    .calc small.muted{color:#6b7280}
-    .calc .form-control{height:44px}
-    .calc .hint{font-size:.9rem;color:#374151}
-    .result-box{
-      background:#f8f9fb;
-      border:1px dashed rgba(13,44,74,.25);
-      border-radius:10px;
-      padding:14px;
-    }
-    .result-box .val{font-weight:800}
-    .kpi{
-      display:flex;
-      gap:14px;
-      flex-wrap:wrap;
-    }
-    .kpi .item{
-      flex:1 1 180px;
-      background:#0d2c4a;
-      color:#fff;
-      border-radius:12px;
-      padding:12px;
-    }
-    .kpi .item .k{font-size:.85rem;opacity:.9}
-    .kpi .item .v{font-size:1.1rem;font-weight:800}
-
-    .cta{text-align:center;margin-top:22px}
-    .btn-gold-modern{
-      background-color:#c5a47e;
-      color:#fff;
-      padding:12px 30px;
-      border-radius:50px;
-      text-transform:uppercase;
-      font-weight:700;
-      letter-spacing:.6px;
-      display:inline-block;
-      text-decoration:none;
-      box-shadow:0 8px 20px rgba(197,164,126,.25);
-      transition:transform .2s ease, box-shadow .2s ease;
-    }
-    .btn-gold-modern:hover{
-      transform:translateY(-2px);
-      box-shadow:0 12px 26px rgba(197,164,126,.35);
-      color:#fff;
-    }
-
-    .hr-soft{
-      height:1px;
-      border:0;
-      background:linear-gradient(90deg,rgba(0,0,0,0),rgba(0,0,0,.08),rgba(0,0,0,0));
-      margin:18px 0;
-    }
-
-    @media (max-width: 991px){
-      .kpi{gap:10px}
-    }
-  </style>
-
   <div class="container">
-    <div class="row">
-      <!-- História -->
+    <div class="row equalize">
+      
       <div class="col-lg-6 mb-4">
         <div class="story-card">
-          <h2>História: a Fábrica da Ana e a Rede de Supermercados de Bruno</h2>
+          <h2>O Paradoxo do Crescimento: Vendas em Alta, Caixa Zerado</h2>
           <p>
-            <span style="font-weight:700;color:#0d2c4a">Uma mineira chamada Ana</span> tem uma <strong>fábrica de pão de queijo</strong>.
-            Ela vende um lote grande para a <strong>rede de supermercados de Bruno</strong> (pedido a <strong>90 dias</strong>).
-            A fábrica da Ana está indo bem, mas ela percebeu que dois insumos importantíssimos haviam acabado:
-            <strong>queijo meia-cura</strong> e <strong>filme para embalagem</strong>.
+            <span style="font-weight:700;color:#0d2c4a">A Fábrica da Ana</span> acabou de fechar um pedido enorme com uma grande rede de varejo. Ótima notícia, certo?
+            Nem tanto. A rede só paga em <strong>90 dias</strong>.
           </p>
           <p>
-            É aí que entra a <span class="hl-gold">Lafer</span>:
-            ao invés de tomar um empréstimo com o banco para comprar os insumos, Ana <strong>cede o direito de receber</strong> essa venda a prazo.
-            A Lafer compra o recebível; a Ana recebe hoje, compra o queijo e as embalagens e mantém a linha rodando.
-            No vencimento, a rede do Bruno paga diretamente para a Lafer.
+            O problema é que os fornecedores de matéria-prima e a folha de pagamento vencem <strong>hoje</strong>. 
+            Se Ana recorrer ao empréstimo bancário, os juros compostos vão devorar todo o lucro da operação.
           </p>
-          <hr class="hr-soft">
-          <p class="mb-2"><strong>Benefício:</strong> capital de giro imediato para garantir os insumos críticos sem parar a produção.</p>
-          <p class="mb-0"><strong>Para quem serve:</strong> indústrias em geral que vendem a prazo e precisam antecipar recebíveis para financiar insumos e capital de giro.</p>
+          <p>
+            A solução inteligente da <span class="hl-gold">Lafer Invest</span>: 
+            Ana não pede empréstimo. Ela <strong>vende o recebível</strong> (a nota fiscal). 
+            O dinheiro que entraria só daqui a 3 meses entra hoje no caixa.
+          </p>
+
+          <hr class="hr-soft"/>
+
+          <p><strong>Como funciona na prática:</strong></p>
+          <ul>
+            <li>Ana tem uma nota de <strong>R$ 50.000,00</strong> para receber em 60 dias.</li>
+            <li>Para comprar insumos à vista (com desconto), ela antecipa na Lafer.</li>
+            <li>Ela recebe o valor <strong>hoje</strong> (descontada uma taxa justa) e gira a produção.</li>
+            <li>
+              A Lafer aguarda o prazo e recebe direto do cliente da Ana.
+            </li>
+          </ul>
+
+          <p class="mb-2">
+            <strong>Resultado:</strong> Ana parou de pagar juros bancários e ganhou <strong>poder de negociação</strong> com seus fornecedores, pois agora tem dinheiro na mão para comprar à vista.
+          </p>
+          <p class="mb-1">
+            <strong>Para quem serve:</strong> Indústrias, Distribuidores e Prestadores de Serviço B2B que querem crescer sem ficarem reféns do calendário de pagamento dos clientes.
+          </p>
+
+          <div style="flex-grow:1;"></div>
+
+          <div class="text-center mt-4 mb-3">
+            <a href="https://wa.me/5535998252372?text=Ol%C3%A1!%20Gostaria%20de%20mais%20informa%C3%A7%C3%B5es%20sobre%20as%20opera%C3%A7%C3%B5es%20e%20taxas%20da%20Lafer%20Invest." 
+              class="btn-gold-pulse" 
+              target="_blank">
+              <i class="fa fa-whatsapp" style="font-size:1.3em;"></i>
+              Quero capital de giro hoje
+            </a>
+          </div>
+
+          <hr class="hr-soft" style="margin-top:10px; margin-bottom:6px;"/>
+          <p class="text-muted small mb-0">
+            * Análise de crédito rápida e taxas personalizadas conforme o risco do sacado.
+          </p>
         </div>
       </div>
 
-      <!-- Fluxo -->
       <div class="col-lg-6 mb-4">
         <div class="flow-card">
-          <h2 class="mb-3" style="font-weight:700">Fluxo da operação</h2>
+          <h2 class="mb-3">Dinheiro na conta em 4 passos</h2>
 
           <div class="flow-step">
             <div class="num">1</div>
             <div>
-              <h3>Pedido a prazo (90 dias)</h3>
+              <h3>Você realiza a venda</h3>
               <p>
-                Ana vende um lote de <strong>pão de queijo</strong> para a <strong>rede de supermercados do Bruno</strong>.
-                Surge o <em>direito creditório</em> (recebível) com vencimento em 90 dias.
+                Sua empresa vendeu produtos ou serviços a prazo. 
+                A Nota Fiscal foi emitida e a mercadoria entregue. Esse "contas a receber" é o seu ativo.
               </p>
             </div>
           </div>
@@ -628,10 +394,10 @@
           <div class="flow-step">
             <div class="num">2</div>
             <div>
-              <h3>Análise ágil da Lafer</h3>
+              <h3>Envia a NF para a Lafer</h3>
               <p>
-                Checagem de documentos, lastro da venda e risco do sacado (a rede do Bruno).
-                Termos e custos claros, com prazo de resposta curto.
+                Tudo digital. Você envia os arquivos (XML/NFe) para nossa equipe. 
+                Sem papelada física, sem gerentes de banco e sem filas.
               </p>
             </div>
           </div>
@@ -639,11 +405,10 @@
           <div class="flow-step">
             <div class="num">3</div>
             <div>
-              <h3>Compra do recebível (antecipação)</h3>
+              <h3>Dinheiro à vista no caixa</h3>
               <p>
-                Ana <strong>cede o direito de receber</strong> e recebe <strong>à vista</strong> da Lafer.
-                Com o caixa, compra os insumos que faltavam: <strong>queijo meia-cura</strong> e <strong>filme para embalagem</strong>,
-                mantendo a produção.
+                Aprovou? O valor cai na conta da sua empresa via Pix ou TED no <strong>mesmo dia</strong>. 
+                Seu fluxo de caixa volta a respirar imediatamente.
               </p>
             </div>
           </div>
@@ -651,63 +416,31 @@
           <div class="flow-step">
             <div class="num">4</div>
             <div>
-              <h3>Pagamento no vencimento</h3>
+              <h3>Seu cliente paga a Lafer</h3>
               <p>
-                No prazo combinado, a <strong>rede do Bruno paga a Lafer</strong>.
-                A Ana já garantiu os insumos e seguiu entregando para o supermercado.
+                No vencimento original da fatura, seu cliente paga o boleto que agora é da Lafer. 
+                Sua empresa não contraiu dívida, apenas adiantou o que já era seu.
               </p>
             </div>
           </div>
 
           <div class="cta">
             <a
-              href="https://wa.me/5535998252372"
+              href="https://wa.me/5535998252372?text=Ol%C3%A1!%20Gostaria%20de%20mais%20informa%C3%A7%C3%B5es%20sobre%20as%20opera%C3%A7%C3%B5es%20e%20taxas%20da%20Lafer%20Invest"
               class="btn-gold btn-xl"
-              aria-label="Falar com a Lafer pelo WhatsApp para simular a antecipação de recebíveis"
+              aria-label="Falar com a Lafer pelo WhatsApp para antecipar notas fiscais"
+              target="_blank"
             >
-              Quero simular com a Lafer
+              Simular Antecipação no WhatsApp
             </a>
           </div>
 
         </div>
       </div>
     </div>
+
   </div>
 </main>
-
-<script src="js/jquery-3.4.1.min.js"></script>
-<script src="js/bootstrap.min.js"></script>
-<script>
-  var yearEl = document.getElementById('year');
-  if (yearEl) { yearEl.textContent = new Date().getFullYear(); }
-
-  $('a[href^="#"]').on("touchstart click", function(e) {
-    var isSamePageAnchor = this.getAttribute('href') && this.getAttribute('href').charAt(0) === '#';
-    if (!isSamePageAnchor) return;
-    e.preventDefault();
-    var target = $(this.hash);
-    if (target.length) {
-      var offset = $('.navbar').outerHeight();
-      var extraOffset = -50;
-      $('html, body').stop(true, false).animate(
-        { scrollTop: target.offset().top - offset + extraOffset },
-        400,
-        "linear"
-      );
-    }
-  });
-
-  $(document).click(function(event) {
-    var clickover = $(event.target);
-    var navbar = $(".navbar-collapse");
-    var toggler = $(".navbar-toggler");
-    var opened = navbar.hasClass("show");
-
-    if (opened && !clickover.closest(".navbar").length) {
-      toggler.click();
-    }
-  });
-</script>
 
 <footer>
   <div class="container">
@@ -752,5 +485,40 @@
     </div>
   </div>
 </footer>
+
+<script src="js/jquery-3.4.1.min.js"></script>
+<script src="js/bootstrap.min.js"></script>
+<script>
+  var yearEl = document.getElementById('year');
+  if (yearEl) { yearEl.textContent = new Date().getFullYear(); }
+
+  $('a[href^="#"]').on("touchstart click", function(e) {
+    var href = this.getAttribute('href');
+    var isSamePageAnchor = href && href.charAt(0) === '#';
+    if (!isSamePageAnchor) return;
+    e.preventDefault();
+    var target = $(this.hash);
+    if (target.length) {
+      var offset = $('.navbar').outerHeight();
+      var extraOffset = -50;
+      $('html, body').stop(true, false).animate(
+        { scrollTop: target.offset().top - offset + extraOffset },
+        400,
+        "linear"
+      );
+    }
+  });
+
+  $(document).click(function(event) {
+    var clickover = $(event.target);
+    var navbar = $(".navbar-collapse");
+    var toggler = $(".navbar-toggler");
+    var opened = navbar.hasClass("show");
+
+    if (opened && !clickover.closest(".navbar").length) {
+      toggler.click();
+    }
+  });
+</script>
 </body>
 </html>
