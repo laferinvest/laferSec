@@ -65,10 +65,7 @@
             display: inline-block;
         }
         }
-        </style>
-<style>
-/* === MENU SAIBA MAIS: Desktop hover + Mobile empilhado === */
-/* DESKTOP: dropdown no hover */
+
 @media (min-width: 992px){
   .navbar .dropdown.has-saiba:hover > .dropdown-menu{
     display: block;
@@ -110,6 +107,51 @@
     opacity: .8;
   }
 }
+
+  .btn-gold-pulse, 
+  .btn-gold-modern, 
+  .btn-gold.btn-xl {
+    background: linear-gradient(45deg, #d4af37, #eac159, #d4af37);
+    background-size: 200% auto;
+    color: #0d2c4a !important; 
+    padding: 12px 30px;
+    font-size: 1.05rem;
+    border-radius: 50px;
+    text-transform: uppercase;
+    font-weight: 800;       
+    letter-spacing: 0.5px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    box-shadow: 0 4px 15px rgba(212, 175, 55, 0.5);
+    transition: all 0.3s ease;
+    border: none;
+    text-align: center;
+    white-space: normal;
+    line-height: 1.2;
+  }
+
+  .btn-gold-pulse {
+    gap: 10px; 
+    animation: pulse-gold 2s infinite; 
+  }
+
+  .btn-gold-pulse:hover, 
+  .btn-gold-modern:hover, 
+  .btn-gold.btn-xl:hover {
+    background-position: right center;
+    transform: scale(1.05);
+    box-shadow: 0 6px 20px rgba(212, 175, 55, 0.7);
+    color: #0d2c4a !important;
+  }
+
+  @keyframes pulse-gold {
+    0% { box-shadow: 0 0 0 0 rgba(212, 175, 55, 0.7); }
+    70% { box-shadow: 0 0 0 10px rgba(212, 175, 55, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(212, 175, 55, 0); }
+  }
+  
 </style>
 <style>
 /* === Área do Cliente (desativada) === */
@@ -174,8 +216,15 @@
 <a class="nav-link" href="#faq-content">PERGUNTAS FREQUENTES</a>
 </li>
 <li class="nav-item">
-<a class="nav-link" href="#fale-conosco">FALE CONOSCO</a>
+  <a class="nav-link" 
+     href="https://wa.me/5535998252372?text=Ol%C3%A1!%20Gostaria%20de%20mais%20informa%C3%A7%C3%B5es%20sobre%20as%20opera%C3%A7%C3%B5es%20e%20taxas%20da%20Lafer%20Invest" 
+     target="_blank">
+    <i class="fa fa-whatsapp" 
+      style="color:#25D366; margin-right:6px; font-size:1.8em; position:relative; top:3px;"></i>
+    FALE CONOSCO
+  </a>
 </li>
+
 
 <li class="nav-item">
 <a class="nav-link" href="investor.html" title="Área do Investidor"> ÁREA DO INVESTIDOR
