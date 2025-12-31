@@ -18,24 +18,32 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
 })(window,document,'script','dataLayer','GTM-K2QRH89T');</script>
 <!-- End Google Tag Manager -->
-<meta charset="utf-8"/>
-<meta http-equiv="X-UA-Compatible" content="IE=edge"/>
-<meta name="viewport" content="width=device-width, initial-scale=1"/>
 <link rel="icon" type="image/png" href="favicon.png"/>
 <title>Lafer Invest - Securitizadora Empresarial</title>
 
-<link rel="stylesheet" href="css/bootstrap-reboot.min.css"/>
-<link rel="stylesheet" href="css/bootstrap-grid.min.css"/>
+<!-- Performance: preconnect for critical third-party origins -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+<link rel="preconnect" href="https://www.googletagmanager.com" crossorigin>
+
+<!-- Critical CSS (keep render-blocking to paint the hero correctly) -->
 <link rel="stylesheet" href="css/bootstrap.min.css"/>
-<link rel="stylesheet" href="plugins/slick/slick.css"/>
-<link rel="stylesheet" href="plugins/slick/slick-theme.css"/>
-<link rel="stylesheet" href="plugins/nivoslider/nivo-slider.css"/>
-<link rel="stylesheet" href="plugins/lity/lity.min.css"/>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Montserrat:200,300,400,600&amp;display=swap"/>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css"/>
-<link rel="stylesheet" href="css/animate.css"/>
 <link rel="stylesheet" href="css/style.css"/>
-<link rel="stylesheet" href="css/responsive.css"/>
+
+<!-- Fonts (Montserrat already uses display=swap) -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Montserrat:200,300,400,600&amp;display=swap"/>
+
+<!-- Non-critical CSS: load without blocking first render -->
+<link rel="preload" href="css/responsive.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+<noscript><link rel="stylesheet" href="css/responsive.css"/></noscript>
+
+<link rel="preload" href="css/animate.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+<noscript><link rel="stylesheet" href="css/animate.css"/></noscript>
+
+<link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'" crossorigin>
+<noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css"/></noscript>
+
 
 <style>
 /* --- ESTILOS DA TABELA COMPARATIVA (NOVO) --- */
@@ -647,39 +655,6 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     </div>
   </div>
 </footer>
-
-<script>
-  var yearEl = document.getElementById('year');
-  if (yearEl) { yearEl.textContent = new Date().getFullYear(); }
-
-  $('a[href^="#"]').on("touchstart click", function(e) {
-    var href = this.getAttribute('href');
-    var isSamePageAnchor = href && href.charAt(0) === '#';
-    if (!isSamePageAnchor) return;
-    e.preventDefault();
-    var target = $(this.hash);
-    if (target.length) {
-      var offset = $('.navbar').outerHeight();
-      var extraOffset = -50;
-      $('html, body').stop(true, false).animate(
-        { scrollTop: target.offset().top - offset + extraOffset },
-        400,
-        "linear"
-      );
-    }
-  });
-
-  $(document).click(function(event) {
-    var clickover = $(event.target);
-    var navbar = $(".navbar-collapse");
-    var toggler = $(".navbar-toggler");
-    var opened = navbar.hasClass("show");
-
-    if (opened && !clickover.closest(".navbar").length) {
-      toggler.click();
-    }
-  });
-</script>
 
 <script>
   // Garante que o código só rode após o carregamento completo da página e do jQuery
