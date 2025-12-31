@@ -1,0 +1,192 @@
+
+/* === FAQ Readability Overrides (2025-08-01) === */
+:root{
+  --faq-bg: #0c183b;            /* matches --lafer-blue */
+  --faq-accent: #c8a24b;        /* gold */
+  --faq-text: #ffffff;
+  --faq-muted: rgba(255,255,255,.8);
+  --faq-border: rgba(255,255,255,.15);
+}
+
+#faq-content .about-content-shadow{
+  /* ensure correct foreground in the FAQ card */
+  color: var(--faq-text) !important;
+}
+
+/* Container rhythm */
+#faq-content .accordion{
+  margin-top: .25rem;
+}
+
+/* Each item block */
+#faq-content .accordion-item{
+  border: 1px solid var(--faq-border);
+  border-radius: 10px;
+  background: rgba(12,24,59,.85);
+  overflow: hidden;
+  margin-bottom: 14px;
+  box-shadow: 0 6px 18px rgba(0,0,0,.18);
+}
+
+/* Question button */
+#faq-content .accordion-item .faq-q{
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  padding: 16px 18px;
+  line-height: 1.35;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--faq-text);
+  background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(0,0,0,.06));
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  outline: none;
+}
+
+#faq-content .accordion-item .faq-q .kicker{
+  flex: 0 0 auto;
+  width: .5rem;
+  height: 1.15rem;
+  border-radius: 2px;
+  background: linear-gradient(180deg, var(--faq-accent), #e6c77e);
+  box-shadow: 0 0 0 1px rgba(0,0,0,.15) inset;
+}
+
+/* Icon */
+#faq-content .accordion-item .faq-q .icon{
+  margin-left: auto;
+  font-family: "FontAwesome";
+  content: "\f067";
+}
+#faq-content .accordion-item .faq-q::after{
+  margin-left: auto;
+  font-family: "FontAwesome";
+  content: "\f067"; /* plus */
+  color: var(--faq-accent);
+  font-weight: 400;
+}
+#faq-content .accordion-item.active .faq-q::after{
+  content: "\f068"; /* minus */
+}
+
+/* Focus styles for keyboard users */
+#faq-content .accordion-item .faq-q:focus-visible{
+  outline: 3px solid #b38b42;
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+/* Answer content */
+#faq-content .accordion-item .faq-a{
+  display: none;
+  padding: 10px 18px 18px;
+  font-size: 1.05rem;
+  line-height: 1.7;
+  color: var(--faq-muted);
+  max-width: 75ch;
+}
+#faq-content .accordion-item.active .faq-a{
+  display: block;
+}
+
+/* Make lists more readable inside answers */
+#faq-content .accordion-item .faq-a ul{
+  padding-left: 1.1rem;
+  margin-bottom: .5rem;
+}
+#faq-content .accordion-item .faq-a li{
+  margin: .15rem 0 .35rem;
+}
+
+/* Improve contrast for links inside answers */
+#faq-content .accordion-item .faq-a a{
+  color: #ffe29d;
+  text-decoration: underline;
+}
+#faq-content .accordion-item .faq-a a:hover{
+  color: #fff2c6;
+}
+
+/* Mobile refinement */
+@media (max-width: 575.98px){
+  #faq-content .accordion-item .faq-q{
+    font-size: 1rem;
+    padding: 14px 14px;
+  }
+  #faq-content .accordion-item .faq-a{
+    font-size: 1rem;
+    padding: 8px 14px 14px;
+  }
+}
+
+/* === Patch 2025-08-01: Improve ONLY the FAQ answers (.faq-a) === */
+#faq-content .accordion-item .faq-a{
+  display:block;                 /* keep open/close driven by .active, but allow transitions */
+  max-height:0;                  /* collapsed by default */
+  overflow:hidden;
+  padding:0 20px;                /* collapse padding when closed */
+  background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(0,0,0,.10));
+  border-top:1px solid var(--faq-border);
+  border-left:4px solid var(--faq-accent);
+  box-shadow: inset 0 8px 16px rgba(0,0,0,.12);
+  font-size:1.06rem;
+  line-height:1.75;
+  color:var(--faq-muted);
+  transition: max-height .35s ease, padding .25s ease, opacity .25s ease;
+  opacity:.0;
+}
+#faq-content .accordion-item.active .faq-a{
+  padding:16px 20px 18px;
+  max-height: 1200px;            /* large enough for most answers */
+  opacity:1;
+}
+
+#faq-content .accordion-item .faq-a p{ 
+  margin: 0 0 .8rem;
+}
+
+#faq-content .accordion-item .faq-a ul,
+#faq-content .accordion-item .faq-a ol{
+  margin: .4rem 0 .8rem 1.15rem;
+}
+
+#faq-content .accordion-item .faq-a li{
+  margin: .2rem 0 .35rem;
+}
+
+#faq-content .accordion-item .faq-a strong,
+#faq-content .accordion-item .faq-a b{ 
+  color:#fff; 
+}
+
+#faq-content .accordion-item .faq-a a{
+  text-underline-offset: 2px;
+  text-decoration-thickness: .08em;
+}
+
+#faq-content .accordion-item .faq-a blockquote{
+  margin:.8rem 0;
+  padding:.6rem .9rem;
+  background: rgba(0,0,0,.18);
+  border-left:3px solid var(--faq-accent);
+  border-radius:6px;
+  color: #f8f8f8;
+}
+
+#faq-content .accordion-item .faq-a code{
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: .95em;
+  background: rgba(0,0,0,.3);
+  padding:.08rem .35rem;
+  border-radius:4px;
+}
+
+@media (max-width:575.98px){
+  #faq-content .accordion-item .faq-a{
+    font-size:1.02rem;
+    line-height:1.65;
+  }
+}
