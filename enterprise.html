@@ -2,7 +2,13 @@
 <html lang="pt-br">
 <head>
 
-<meta name="description" content="Antecipação de recebíveis para empresas B2B. Superior a Factoring: Conheça a securitizadora e receba à vista suas vendas a prazo com a Lafer Invest. Taxas competitivas e isenção de IOF.">
+  <meta charset="utf-8"/>
+    <meta http-equiv="X-UA-Compatible" content="IE=edge"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    
+    <link rel="preload" as="image" href="img/more/2.webp" fetchpriority="high">
+
+    <meta name="description" content="Antecipação de recebíveis para empresas B2B. Superior a Factoring: Conheça a securitizadora e receba à vista suas vendas a prazo com a Lafer Invest. Taxas competitivas e isenção de IOF.">
 
 
     <!-- Google Tag Manager -->
@@ -109,7 +115,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
   }
   /* --- REUTILIZANDO ESTILOS DA PÁGINA DOCTOR PARA MANTER A IDENTIDADE --- */
     .hero-highlight .hl-gold{
-    color: #d4af37;       /* dourado do tema */
+    color: #b8972f;       /* dourado do tema */
     font-weight: 800;     /* dá o “punch” */
   }
   .btn-gold-pulse, 
@@ -276,7 +282,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
     color: #0b1220;
   }
   .story-card .hl-gold {
-    color: #d4af37;
+    color: #b8972f;
     font-weight: 700;
   }
 
@@ -601,8 +607,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
   <div class="container">
     <div class="row">
       <div class="col-md-6">
-        <h4 class="text-white text-uppercase">LAFER Invest</h4>
-        <h6 class="mb-5 text-white">Securitizadora</h6>
+      <p style="font-size: 1.2rem; font-weight: bold; color: white; text-transform: uppercase; margin-bottom: 5px;">LAFER Invest</p>
+      <p style="color: white; margin-bottom: 20px;">Securitizadora</p>
 
  <div class="text-white" style="line-height:1.6; margin-top:6px; margin-bottom:16px;">
   Avenida Coronel Jorge Vieira, 535<br/>
@@ -676,34 +682,45 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 </script>
 
 <script>
-  // Script para Substituição Dinâmica de Título (DTR)
-  document.addEventListener("DOMContentLoaded", function() {
-    
-    // 1. Pega os parâmetros da URL
-    const urlParams = new URLSearchParams(window.location.search);
-    const servico = urlParams.get('servico'); // Procura por ?servico=...
-    
-    // 2. Identifica o título na página
-    const titulo = document.getElementById('titulo-principal');
+  // Garante que o código só rode após o carregamento completo da página e do jQuery
+  window.addEventListener('DOMContentLoaded', function() {
+    if (window.jQuery) {
+      var yearEl = document.getElementById('year');
+      if (yearEl) { yearEl.textContent = new Date().getFullYear(); }
 
-    // 3. Verifica o que veio na URL e troca o texto
+      const urlParams = new URLSearchParams(window.location.search);
+      const servico = urlParams.get('servico'); 
+      const titulo = document.getElementById('titulo-principal');
+
     if (servico && titulo) {
       
-      // Converte para minúsculo para evitar erros se escrever "Factoring" ou "factoring"
       const termo = servico.toLowerCase();
 
       if (termo === 'factoring') {
-        titulo.innerText = "Procurando Factoring? A Securitização é mais ágil e isenta de IOF.";
+        // Usa innerHTML para manter o destaque em dourado e negrito
+        titulo.innerHTML = "Procurando <strong>Factoring</strong>? A Securitização é mais ágil e <span style='color:#b8972f'>isenta de IOF</span>.";
       } 
       else if (termo === 'securitizadora') {
-        titulo.innerText = "Fluxo de caixa travado? A Securitizadora que transforma suas notas fiscais em dinheiro hoje.";
+        titulo.innerHTML = "Fluxo de caixa travado? A <strong>Securitizadora</strong> que transforma suas notas fiscais em <span style='color:#b8972f'>dinheiro hoje</span>.";
       }
       else if (termo === 'fomento') {
         titulo.innerText = "Fomento Mercantil rápido e sem burocracia bancária.";
       }
-      // Se não vier nenhum desses, ele mantém o texto original do HTML
     }
-  });
+    // 3. Script de Scroll Suave
+          $('a[href^="#"]').on("touchstart click", function(e) {
+            var href = this.getAttribute('href');
+            if (href && href.charAt(0) === '#') {
+              e.preventDefault();
+              var target = $(this.hash);
+              if (target.length) {
+                var offset = $('.navbar').outerHeight();
+                $('html, body').stop().animate({ scrollTop: target.offset().top - offset - 50 }, 400);
+              }
+            }
+          });
+        }
+      });
 </script>
 
 <script src="js/jquery-3.4.1.min.js" defer></script>
