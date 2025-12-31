@@ -9,24 +9,28 @@
   <link rel="icon" type="image/png" href="favicon.png"/>
   <title>Lafer Invest - Securitizadora Empresarial</title>
 
-  <script>
-  // Script para adiar o carregamento do GTM (Performance Hack)
+<script>
+  window.dataLayer = window.dataLayer || []; // garante que existe desde o início
+
   function loadGTM() {
     if (window.gtmLoaded) return;
     window.gtmLoaded = true;
-    (function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
-    new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
-    j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
-    'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
-    })(window,document,'script','dataLayer','GTM-K2QRH89T');
+
+    window.dataLayer.push({'gtm.start': new Date().getTime(), event:'gtm.js'});
+
+    var f = document.getElementsByTagName('script')[0];
+    var j = document.createElement('script');
+    j.async = true;
+    j.src = 'https://www.googletagmanager.com/gtm.js?id=GTM-K2QRH89T';
+    f.parentNode.insertBefore(j, f);
   }
 
-  // Carrega ao interagir ou após 3.5 segundos
-  window.addEventListener('scroll', loadGTM, {once:true});
+  window.addEventListener('scroll', loadGTM, {once:true, passive:true});
   window.addEventListener('mousemove', loadGTM, {once:true});
   window.addEventListener('touchstart', loadGTM, {once:true});
-  setTimeout(loadGTM, 3500);
+  setTimeout(loadGTM, 3000);
 </script>
+
 
   
   <link rel="preconnect" href="https://fonts.googleapis.com">
