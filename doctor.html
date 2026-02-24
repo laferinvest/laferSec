@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','dataLayer','GTM-K2QRH89T');</script>
+<!-- End Google Tag Manager -->
+<meta charset="utf-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=edge"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="icon" type="image/png" href="favicon.png"/>
+<title>Lafer Invest - Securitizadora</title>
+
+<link rel="stylesheet" href="css/bootstrap.used.min.css"/>
+<link rel="stylesheet" href="plugins/slick/slick.css"/>
+<link rel="stylesheet" href="plugins/slick/slick-theme.css"/>
+<link rel="stylesheet" href="plugins/nivoslider/nivo-slider.css"/>
+<link rel="stylesheet" href="plugins/lity/lity.min.css"/>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Montserrat:200,300,400,600&amp;display=swap"/>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css"/>
+<link rel="stylesheet" href="css/animate.css"/>
+<link rel="stylesheet" href="css/style.css"/>
+<link rel="stylesheet" href="css/responsive.css"/>
+
+<style>
+
+  /* --- ESTILOS DOS BOTÕES --- */
+  
+  .btn-gold-pulse, 
+  .btn-gold-modern, 
+  .btn-gold.btn-xl {
+    background: linear-gradient(45deg, #d4af37, #eac159, #d4af37);
+    background-size: 200% auto;
+    color: #0d2c4a !important; 
+    
+    padding: 12px 30px;      /* Altura fina (original) */
+    font-size: 1.25rem;      /* Fonte GRANDE (~20px) */
+    
+    border-radius: 50px;
+    text-transform: uppercase;
+    font-weight: 800;       
+    letter-spacing: 0.5px;
+    
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    
+    text-decoration: none;
+    box-shadow: 0 4px 15px rgba(212, 175, 55, 0.5);
+    transition: all 0.3s ease;
+    border: none;
+    text-align: center;
+    white-space: normal;
+    line-height: 1.2;
+  }
+
+  .btn-gold-pulse {
+    gap: 10px; 
+    animation: pulse-gold 2s infinite; 
+  }
+
+  .btn-gold-pulse:hover, 
+  .btn-gold-modern:hover, 
+  .btn-gold.btn-xl:hover {
+    background-position: right center;
+    transform: scale(1.05);
+    box-shadow: 0 6px 20px rgba(212, 175, 55, 0.7);
+    color: #0d2c4a !important;
+    text-decoration: none;
+  }
+
+  @keyframes pulse-gold {
+    0% { box-shadow: 0 0 0 0 rgba(212, 175, 55, 0.7); }
+    70% { box-shadow: 0 0 0 10px rgba(212, 175, 55, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(212, 175, 55, 0); }
+  }
+
+
+.lafer-brand {
+  font-weight: 900;
+  font-size: 1.8rem;
+  letter-spacing: 1px;
+  color: #0d2c4a !important;
+  text-transform: uppercase;
+  text-decoration: none;
+  line-height: 1;
+  font-family: 'Montserrat', sans-serif;
+}
+@media (max-width: 576px) {
+  .lafer-brand {
+    font-size: 1.4rem;
+  }
+}
+
+@media (max-width: 991px){
+  section#como-funciona .about-content-shadow{
+    padding-bottom: 64px !important;
+    text-align: center !important;
+  }
+  section#como-funciona .about-content-shadow a.btn-gold{
+    margin-top: 16px !important;
+    display: inline-block;
+  }
+
+  section#about-content .about-content-shadow{
+    padding-bottom: 28px !important;
+    text-align: center !important;
+  }
+  section#about-content .about-content-shadow a.btn-gold{
+    margin-top: 36px !important;
+    display: inline-block;
+  }
+}
+
+.story-card .hl-gold {
+  color: #d4af37;
+  font-weight: 700;
+  text-decoration-thickness: 0.12em;
+}
+
+/* Page-specific styles for main content */
+.secMore-content-section {
+  padding-top: 40px; 
+  padding-bottom: 80px;
+  background-color: #f8f9fa;
+}
+.secMore-card-custom {
+  background-color: #0d2c4a;
+  border-radius: 15px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+.secMore-card-custom:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.12);
+}
+
+.secMore-font-blue{ color:#0d2c4a; }
+.secMore-bg-blue{ background-color:#0d2c4a; }
+.secMore-font-gold{ color:#c5a47e; }
+.secMore-bg-gold{ background-color:#c5a47e; }
+
+.hr-soft {
+  height: 1px;
+  border: 0;
+  background: linear-gradient(90deg, rgba(0,0,0,0), rgba(0,0,0,.08), rgba(0,0,0,0));
+  margin: 24px 0;
+}
+
+body { padding-top: 96px; }
+@media (max-width: 991px){ body { padding-top: 80px; } }
+
+.navbar.fixed-top { background: #0d2c4a; }
+.navbar .nav-link { color: #ffffff !important; }
+.navbar .nav-link:hover { color: #c5a47e !important; }
+
+.equalize .col-md-6 { display: flex; }
+.content-col { display: flex; flex-direction: column; width: 100%; }
+.partner-stack { display: flex; flex-direction: column; justify-content: space-between; width: 100%; }
+
+.partner-card { padding: 14px; }
+.partner-photo {
+  width: 100%;
+  height: 320px;
+  object-fit: cover;
+  border-radius: 12px;
+  display: block;
+  background: transparent;
+}
+@media (min-width: 992px){
+  .partner-photo { height: 380px; }
+}
+.partner-name {
+  margin: 12px 4px 0 4px;
+  font-weight: 700;
+  color: #c5a47e;
+  letter-spacing: 0.2px;
+}
+
+.partner-stack .secMore-card-custom { width: 100%; }
+.row.equalize { align-items: stretch; }
+
+.team-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.team-photo,
+.team-photo-fallback {
+  inline-size: min(32vw, 5cm, 192px);
+  block-size: auto;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  border-radius: 12px;
+  background: transparent;
+  flex: 0 0 auto;
+  display: block;
+}
+.team-photo-fallback {
+  display: none;
+  justify-content: center;
+  align-items: center;
+  font-size: clamp(18px, 6vw, 40px);
+  font-weight: 800;
+  color: #6c757d;
+}
+.team-info { min-inline-size: 0; }
+.team-name {
+  margin: 0;
+  font-weight: 700;
+  color: #c5a47e;
+  letter-spacing: 0.2px;
+}
+@media (max-width: 420px) {
+  .team-item { flex-wrap: wrap; }
+}
+
+.team-role {
+  margin-top: 4px;
+  font-size: clamp(14px, 2.2vw, 18px);
+  line-height: 1.25;
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.partner-card { padding-block: 8px; }
+.partner-card + .partner-card { margin-top: 20px; }
+
+@media (max-width: 576px) {
+  .partner-card + .partner-card { margin-top: 24px; }
+  .team-item { gap: 14px; }
+}
+
+.partner-card {
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.partner-card:last-of-type {
+  border-bottom: none;
+}
+
+.team-header { margin-bottom: 12px; }
+.section-underline {
+  width: 72px;
+  height: 3px;
+  background: linear-gradient(90deg,#d4af37,#f4d03f);
+  border-radius: 2px;
+}
+
+.partner-stack .partner-card .text-center { text-align: center; }
+
+.team-title-block {
+  background: transparent;
+  padding: 12px 16px 6px 16px;
+  text-align: center;
+}
+.team-title {
+  margin: 0;
+  text-align: center;
+  font-size: clamp(20px, 2.4vw, 28px);
+  line-height: 1.2;
+  color: #0d2c4a;
+  position: relative;
+  display: inline-block;
+  padding-bottom: 8px;
+}
+.team-title::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 0;
+  width: 72px;
+  height: 3px;
+  background: #C9A227;
+  border-radius: 2px;
+}
+.partner-stack > .team-title-block + * {
+  margin-top: 8px;
+}
+
+.valores-strong, .valores-strong p, .valores-strong li,
+.valores-strong .lead, .valores-strong .text-secondary {
+  font-weight: 600;
+  color: #0b1220;
+  line-height: 1.7;
+  letter-spacing: 0.1px;
+}
+
+.valores-strong .valor-item { display: inline; }
+.valores-strong .valor-title {
+  font-weight: 700;
+  font-size: 1.075rem;
+  color: #0d2c4a;
+}
+.valores-strong .valor-desc {
+  font-weight: 500;
+  font-size: 1rem;
+  line-height: 1.45;
+  color: #374151;
+  margin-left: .35ch;
+}
+@media (max-width: 576px){
+  .valores-strong .valor-desc {
+    display: block;
+    margin-left: 0;
+    margin-top: 2px;
+  }
+}
+.valores-strong ul.list-unstyled > li { margin-bottom: .45rem; }
+
+.story-jorge p {
+  font-weight: 600;
+  color: #0b1220;
+  line-height: 1.7;
+  letter-spacing: 0.1px;
+}
+.story-jorge .hl-gold {
+  color: #d4af37;
+  font-weight: 700;
+  text-decoration-thickness: 0.12em;
+}
+.story-jorge .hl-gold::selection {
+  background: rgba(212,175,55,.25);
+}
+
+.navbar .nav-link.disabled{
+  pointer-events: none;
+  opacity: .6;
+  cursor: not-allowed;
+  font-weight: 600;
+  letter-spacing: .02em;
+}
+.navbar .nav-link.disabled .fa{
+  margin-right: .35rem;
+}
+
+.sec-hero-title{
+  color:#f8f9fa;
+  margin-bottom:12px;
+  font-weight:700;
+  letter-spacing:.2px;
+}
+
+.hero-doctor-bg{
+  padding: 0;
+  background: transparent;
+}
+
+.hero-doctor-panel{
+  position: relative;
+  background: url('img/more/1.webp') center/cover no-repeat;
+  border-radius: 18px;
+  padding: 90px 28px 50px 28px;
+  min-height: 380px;
+  overflow: hidden;
+  margin: 24px auto 40px auto;
+}
+
+.hero-doctor-panel .hero-highlight{
+  margin-top: 80px;
+}
+
+.hero-doctor-panel::before{
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.38);
+}
+
+.hero-doctor-panel .text-center{
+  position: relative;
+  z-index: 1;
+}
+
+.sec-subtitle{
+  max-width:860px;
+  margin:0 auto 28px auto;
+}
+
+/* --- AQUI ESTÁ A ALTERAÇÃO PEDIDA --- */
+.hero-highlight{
+  color:#0b1220 !important;
+  background:#ffffff;
+  padding:18px 22px;
+  border-radius:14px;
+  box-shadow:0 10px 30px rgba(0,0,0,.06);
+  border-left:4px solid #c5a47e;
+  
+  /* Aumentos de tamanho e espessura */
+  font-size: 1.35rem; 
+  font-weight: 700;   
+}
+
+.gold-underline{
+  width:96px;
+  height:3px;
+  margin:0 auto 18px auto;
+  background:linear-gradient(90deg,#d4af37,#f4d03f);
+  border-radius:2px;
+}
+
+.story-card{
+  background:#fff;
+  border-radius:14px;
+  padding:22px 22px 32px 22px; 
+  box-shadow:0 8px 24px rgba(0,0,0,.06);
+  display: flex; 
+  flex-direction: column;
+  height: 100%;
+}
+.story-card h2{
+  color:#0d2c4a;
+  font-size:1.25rem;
+  font-weight:700;
+  margin-bottom:10px;
+}
+.story-card p{
+  color:#0b1220;
+  line-height:1.7;
+  font-weight:600;
+  letter-spacing:.1px;
+}
+.story-card ul{
+  padding-left:18px;
+  margin-bottom:10px;
+}
+.story-card ul li{
+  margin-bottom:4px;
+}
+
+.flow-card{
+  background:#0d2c4a;
+  color:#fff;
+  border-radius:14px;
+  padding:18px 18px 32px 18px;
+  box-shadow:0 8px 24px rgba(0,0,0,.08);
+  height: 100%; 
+}
+.flow-card h2{
+  font-weight:700;
+}
+.flow-step{
+  display:flex;
+  gap:12px;
+  padding:14px;
+  border-radius:10px;
+  background:rgba(255,255,255,.06);
+  align-items:flex-start;
+}
+.flow-step + .flow-step{
+  margin-top:10px;
+}
+.flow-step .num{
+  flex:0 0 32px;
+  height:32px;
+  border-radius:50%;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  background:#c5a47e;
+  color:#0d2c4a;
+  font-weight:800;
+}
+.flow-step h3{
+  margin:0;
+  font-size:1.05rem;
+  font-weight:700;
+  color:#fff;
+}
+.flow-step p{
+  margin:4px 0 0 0;
+  opacity:.95;
+}
+
+.cta{
+  text-align:center;
+  margin-top:22px;
+}
+
+.hero-doctor {
+  position: relative;
+  width: 100%;
+  min-height: 420px;
+  padding: 120px 20px 100px 20px;
+  background: url('img/more/1.png') center/cover no-repeat;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.hero-doctor::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.35);
+  backdrop-filter: blur(1px);
+  border-radius: 0;
+}
+
+.hero-doctor-content {
+  position: relative;
+  z-index: 5;
+  max-width: 900px;
+}
+
+.hero-doctor h1 {
+  color: #ffffff;
+  font-weight: 800;
+  font-size: clamp(26px, 5vw, 42px);
+  text-shadow: 0 2px 6px rgba(0,0,0,.4);
+  margin-bottom: 20px;
+}
+
+.hero-doctor p {
+  color: #f1f1f1;
+  font-size: clamp(16px, 2.4vw, 20px);
+  font-weight: 600;
+  line-height: 1.55;
+  padding: 0 12px;
+  text-shadow: 0 1px 4px rgba(0,0,0,.4);
+  margin-bottom: 0;
+}
+
+body {
+  padding-top: 96px;
+}
+@media (max-width: 991px){
+  body { padding-top: 80px; }
+}
+
+</style>
+</head>
+
+<body>
+  <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-K2QRH89T"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<nav class="navbar navbar-expand-xl navbar-light fixed-top">
+  <div class="container">
+    <a class="navbar-brand lafer-brand" href="index.html">
+      LAFER INVEST
+    </a>
+
+    <button class="navbar-toggler custom-toggler" type="button"
+            data-toggle="collapse" data-target="#navbarSupportedContent"
+            aria-controls="navbarSupportedContent"
+            aria-expanded="false" aria-label="Toggle navigation">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+
+    <div class="collapse navbar-collapse" id="navbarSupportedContent">
+      <ul class="navbar-nav ml-auto">
+        <li class="nav-item dropdown has-saiba">
+          <a class="nav-link main-link" href="index.html#about-content">SOBRE NÓS</a>
+          <div class="dropdown-menu">
+            <a class="dropdown-item" href="about.html">Saiba mais</a>
+          </div>
+        </li>
+        <li class="nav-item dropdown has-saiba">
+          <a class="nav-link main-link" href="#como-funciona">COMO FUNCIONA</a>
+          <div class="dropdown-menu">
+            <a class="dropdown-item" href="enterprise.html">Para Empresas</a>
+            <a class="dropdown-item" href="doctor.html">Para Médicos</a>
+          </div>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="index.html#faq-content">PERGUNTAS FREQUENTES</a>
+        </li>
+<li class="nav-item">
+  <a class="nav-link" 
+     href="https://wa.me/5535997735926?text=Ol%C3%A1%20Daniel%21%20Gostaria%20de%20mais%20informa%C3%A7%C3%B5es%20sobre%20as%20opera%C3%A7%C3%B5es%20e%20taxas%20da%20Lafer%20Invest"
+     target="_blank">
+    <i class="fa fa-whatsapp" 
+      style="color:#25D366; margin-right:6px; font-size:1.8em; position:relative; top:3px;"></i>
+    FALE CONOSCO
+  </a>
+</li>
+
+        <li class="nav-item">
+          <a class="nav-link" href="investor.html" title="Área do Investidor">
+            ÁREA DO INVESTIDOR
+          </a>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+
+<section class="hero-doctor-bg">
+  <div class="container">
+    <div class="hero-doctor-panel">
+      <div class="text-center mb-4">
+        <h1 class="h1 sec-hero-title">
+          Seu plantão acabou hoje. Por que esperar 60 dias para receber?
+        </h1>
+        <div class="gold-underline"></div>
+        <p class="lead sec-subtitle hero-highlight">
+          Transforme suas escalas a receber em dinheiro na conta em até 24h. 
+          Sem burocracia bancária, sem pedir favor e sem entrar no cheque especial. 
+          O dinheiro é seu, nós apenas encurtamos o tempo.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<main class="secMore-content-section" id="como-funciona">
+  <div class="container">
+    <div class="row equalize">
+      <div class="col-lg-6 mb-4">
+        <div class="story-card">
+          <h2>Dra. Marina: dinheiro "preso" vs. contas chegando</h2>
+          <p>
+            <span style="font-weight:700;color:#0d2c4a">A Dra. Marina</span> tem R$ 10.000,00 
+            para receber de plantões já realizados, mas a fatura do cartão e o congresso 
+            precisam ser pagos <strong>hoje</strong>.
+          </p>
+          <p>
+            O dinheiro é dela, mas o hospital só paga em <strong>60 dias</strong>. 
+            Se ela usar o Cheque Especial ou parcelar a fatura, vai pagar juros abusivos 
+            que devoram o lucro do plantão.
+          </p>
+          <p>
+            A solução inteligente da <span class="hl-gold">Lafer Invest</span>: 
+            ela antecipa o valor que já é dela. O custo é uma 
+            <strong>taxa única e clara</strong>, muito menor que os juros do banco.
+          </p>
+
+          <hr class="hr-soft"/>
+
+          <p><strong>Exemplo Prático:</strong></p>
+          <ul>
+            <li>Dra. Marina tem um plantão de <strong>R$ 1.000,00</strong> a receber em 30 dias.</li>
+            <li>Para ter o dinheiro <strong>hoje</strong>, a Lafer cobra uma taxa única (ex: R$ 30,00*).</li>
+            <li>Ela recebe <strong>R$ 970,00 à vista</strong> e paga as contas sem atraso.</li>
+            <li>
+              Quando o hospital pagar, ela apenas repassa o valor original à Lafer. 
+            </li>
+          </ul>
+
+          <p class="mb-2">
+            <strong>Resultado:</strong> Marina parou de pagar juros bancários e tem 
+            dinheiro na mão para aproveitar oportunidades e viver com tranquilidade, 
+            sem a ansiedade de esperar meses para ver a cor do dinheiro.
+          </p>
+          <p class="mb-1">
+            <strong>Para quem serve:</strong> Residentes, plantonistas e especialistas 
+            que querem liberdade financeira e não aceitam deixar o dinheiro parado.
+          </p>
+
+          <div style="flex-grow:1;"></div>
+
+<div class="text-center mt-4 mb-3">
+  <a href="https://wa.me/5535997735926?text=Ol%C3%A1%20Daniel%21%20Gostaria%20de%20mais%20informa%C3%A7%C3%B5es%20sobre%20as%20opera%C3%A7%C3%B5es%20e%20taxas%20da%20Lafer%20Invest" 
+     class="btn-gold-pulse" 
+     target="_blank">
+     <i class="fa fa-whatsapp" style="font-size:1.3em;"></i>
+     Quero receber hoje
+  </a>
+</div>
+
+          <hr class="hr-soft" style="margin-top:10px; margin-bottom:6px;"/>
+          <p class="text-muted small mb-0">
+            * Taxa média para fins ilustrativos. Varia conforme prazo e análise.
+          </p>
+        </div>
+      </div>
+
+      <div class="col-lg-6 mb-4">
+        <div class="flow-card">
+          <h2 class="mb-3">Como funciona em 4 passos simples</h2>
+
+          <div class="flow-step">
+            <div class="num">1</div>
+            <div>
+              <h3>Você faz o plantão</h3>
+              <p>
+                Você cumpriu sua escala. O dinheiro é seu por direito, 
+                mesmo que o hospital só pague daqui a meses. Esse é o seu ativo.
+              </p>
+            </div>
+          </div>
+
+          <div class="flow-step">
+            <div class="num">2</div>
+            <div>
+              <h3>Envia foto no WhatsApp</h3>
+              <p>
+                Zero burocracia. Basta mandar uma foto da escala ou RPA 
+                pelo <strong>WhatsApp da Lafer</strong>. Sem gerentes, sem filas 
+                e sem papelada física.
+              </p>
+            </div>
+          </div>
+
+          <div class="flow-step">
+            <div class="num">3</div>
+            <div>
+              <h3>Pix na conta em instantes</h3>
+              <p>
+                Aprovou? O dinheiro cai na sua conta <strong>no mesmo dia</strong>. 
+                Você ganha poder de compra à vista e resolve sua vida financeira imediatamente.
+              </p>
+            </div>
+          </div>
+
+          <div class="flow-step">
+            <div class="num">4</div>
+            <div>
+              <h3>Acerto com Privacidade Total</h3>
+              <p>
+                Você recebe do hospital na sua conta normalmente e depois acerta com a Lafer via Pix ou boleto. 
+                <strong>A relação é 100% entre você e a Lafer.</strong> O hospital não precisa ser envolvido.
+              </p>
+            </div>
+          </div>
+
+          <div class="cta">
+            <a
+              href="https://wa.me/5535997735926?text=Ol%C3%A1%20Daniel%21%20Gostaria%20de%20mais%20informa%C3%A7%C3%B5es%20sobre%20as%20opera%C3%A7%C3%B5es%20e%20taxas%20da%20Lafer%20Invest"
+              class="btn-gold btn-xl"
+              aria-label="Falar com a Lafer pelo WhatsApp para antecipar plantões"
+              target="_blank"
+            >
+              Simular antecipação no WhatsApp
+            </a>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<footer>
+  <div class="container">
+    <div class="row">
+      <div class="col-md-6">
+        <h4 class="text-white text-uppercase">LAFER Invest</h4>
+        <h6 class="mb-5 text-white">Securitizadora</h6>
+
+        <div class="text-white" style="line-height:1.6; margin-top:6px; margin-bottom:16px;">
+          Avenida Coronel Jorge Vieira, 535<br/>
+          Centro<br/>
+          Areado - MG<br/>
+          37140-000
+        </div>
+      </div>
+
+      <div class="col-md-6 my-auto ml-auto">
+        <div class="address-footer-holder mb-3">
+          <h6 class="text-white text-uppercase" style="font-weight:bold">CONTATOS</h6>
+        </div>
+        <div class="text-white mt-2">
+          <a href="mailto:laerte@lafersec.com.br" target="_blank">
+            <i class="fa fa-envelope" style="font-size: 1.2em; color: #ffffff; margin-right: 5px;"></i>
+            laerte@lafersec.com.br
+          </a>
+        </div>
+        <div class="text-white mt-2">
+          <a href="https://wa.me/5535997735926?text=Ol%C3%A1%20Daniel%21%20Gostaria%20de%20mais%20informa%C3%A7%C3%B5es%20sobre%20as%20opera%C3%A7%C3%B5es%20e%20taxas%20da%20Lafer%20Invest" target="_blank">
+            <i class="fa fa-whatsapp fa-lg" style="color: #25D366; margin-right: 5px;"></i>
+            +55 35 99773-5926
+          </a>
+        </div>
+        <div class="text-white mt-2">
+          <a href="https://www.instagram.com/laferinvest/"
+             style="display: inline-flex; align-items: center;" target="_blank">
+            <i class="fa fa-instagram"
+               style="font-size: 1.5em; color: #E4405F; margin-right: 5px; vertical-align: middle;"></i>
+            @laferinvest
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script src="js/jquery-3.4.1.min.js"></script>
+<script src="js/bootstrap.min.js"></script>
+<script>
+  var yearEl = document.getElementById('year');
+  if (yearEl) { yearEl.textContent = new Date().getFullYear(); }
+
+  $('a[href^="#"]').on("touchstart click", function(e) {
+    var href = this.getAttribute('href');
+    var isSamePageAnchor = href && href.charAt(0) === '#';
+    if (!isSamePageAnchor) return;
+    e.preventDefault();
+    var target = $(this.hash);
+    if (target.length) {
+      var offset = $('.navbar').outerHeight();
+      var extraOffset = -50;
+      $('html, body').stop(true, false).animate(
+        { scrollTop: target.offset().top - offset + extraOffset },
+        400,
+        "linear"
+      );
+    }
+  });
+
+  $(document).click(function(event) {
+    var clickover = $(event.target);
+    var navbar = $(".navbar-collapse");
+    var toggler = $(".navbar-toggler");
+    var opened = navbar.hasClass("show");
+
+    if (opened && !clickover.closest(".navbar").length) {
+      toggler.click();
+    }
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+
+<html lang="pt-br">
+<head>
+
+  <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','dataLayer','GTM-K2QRH89T');</script>
+<!-- End Google Tag Manager -->
+
+<meta charset="utf-8"/>
+<meta content="IE=edge" http-equiv="X-UA-Compatible"/>
+<meta content="width=device-width, initial-scale=1" name="viewport"/>
+<link href="favicon.png" rel="icon" type="image/png"/>
+<title>Lafer Invest - Securitizadora</title>
+
+<link href="css/bootstrap.used.min.css" rel="stylesheet"/>
+<link href="plugins/slick/slick.css" rel="stylesheet"/>
+<link href="plugins/slick/slick-theme.css" rel="stylesheet"/>
+<link href="plugins/nivoslider/nivo-slider.css" rel="stylesheet"/>
+<link href="plugins/lity/lity.min.css" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css?family=Montserrat:200,300,400,600&amp;display=swap" rel="stylesheet"/>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet"/>
+<link href="css/animate.css" rel="stylesheet"/>
+<link href="css/style.css" rel="stylesheet"/>
+<link href="css/responsive.css" rel="stylesheet"/>
+<style>
+
+.lafer-brand {
+          font-weight: 900;           /* Negrito extra forte */
+          font-size: 1.8rem;          /* Aumenta bastante o tamanho (antes devia ser ~1.25rem) */
+          letter-spacing: 1px;        /* Espaçamento leve para dar elegância */
+          color: #0d2c4a !important;  /* O Azul Lafer */
+          text-transform: uppercase;  /* Garante caixa alta */
+          text-decoration: none;      /* Remove sublinhado */
+          line-height: 1;             /* Mantém a altura da barra compacta */
+          font-family: 'Montserrat', sans-serif; /* Garante a fonte padrão do site */
+        }
+        
+        /* Ajuste fino para Mobile (para não quebrar a linha em telas pequenas) */
+        @media (max-width: 576px) {
+            .lafer-brand {
+                font-size: 1.4rem;
+            }
+        }
+
+        @media (max-width: 991px){
+
+        /* === COMO FUNCIONA: subir o botão (mais espaço abaixo) === */
+        section#como-funciona .about-content-shadow{
+            /* aumenta o “respiro” no fundo do card para levantar o CTA */
+            padding-bottom: 64px !important;
+            text-align: center !important;
+        }
+        section#como-funciona .about-content-shadow a.btn-gold{
+            /* espaço após o texto; menor que o bottom para o botão ficar mais alto */
+            margin-top: 16px !important;
+            display: inline-block;
+        }
+
+        /* === A LAFER INVEST: descer um pouco o botão (mais espaço acima) === */
+        section#about-content .about-content-shadow{
+            /* mantém um respiro padrão no fundo */
+            padding-bottom: 28px !important;
+            text-align: center !important;
+        }
+        section#about-content .about-content-shadow a.btn-gold{
+            /* aumenta o espaço acima para o botão descer visualmente */
+            margin-top: 36px !important;
+            display: inline-block;
+        }
+        }
+
+@media (min-width: 992px){
+  .navbar .dropdown.has-saiba:hover > .dropdown-menu{
+    display: block;
+  }
+  .navbar .dropdown-menu{
+    margin-top: 0;
+    border-radius: 8px;
+    border: 0;
+    box-shadow: 0 10px 25px rgba(0,0,0,.12);
+  }
+  .navbar .dropdown-item{
+    font-weight: 600;
+  }
+}
+
+/* MOBILE: mostrar "Saiba mais" logo abaixo do item pai */
+@media (max-width: 991.98px){
+  .navbar .dropdown.has-saiba > .dropdown-menu{
+    display: block;          /* sempre visível quando o menu está aberto */
+    position: static;
+    float: none;
+    width: 100%;
+    padding: 0;
+    margin: 0.15rem 0 0.35rem 0;
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+  }
+  .navbar .dropdown.has-saiba > .dropdown-menu .dropdown-item{
+    display: block;
+    padding: .25rem 1rem .45rem 1.75rem;
+    font-size: .95rem;
+    font-weight: 600;
+    opacity: .95;
+  }
+  .navbar .dropdown.has-saiba > .dropdown-menu .dropdown-item::before{
+    content: "↳ ";
+    margin-right: .15rem;
+    opacity: .8;
+  }
+}
+
+  .btn-gold-pulse, 
+  .btn-gold-modern, 
+  .btn-gold.btn-xl {
+    background: linear-gradient(45deg, #d4af37, #eac159, #d4af37);
+    background-size: 200% auto;
+    color: #0d2c4a !important; 
+    padding: 12px 30px;
+    font-size: 1.05rem;
+    border-radius: 50px;
+    text-transform: uppercase;
+    font-weight: 800;       
+    letter-spacing: 0.5px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    box-shadow: 0 4px 15px rgba(212, 175, 55, 0.5);
+    transition: all 0.3s ease;
+    border: none;
+    text-align: center;
+    white-space: normal;
+    line-height: 1.2;
+  }
+
+  .btn-gold-pulse {
+    gap: 10px; 
+    animation: pulse-gold 2s infinite; 
+  }
+
+  .btn-gold-pulse:hover, 
+  .btn-gold-modern:hover, 
+  .btn-gold.btn-xl:hover {
+    background-position: right center;
+    transform: scale(1.05);
+    box-shadow: 0 6px 20px rgba(212, 175, 55, 0.7);
+    color: #0d2c4a !important;
+  }
+
+  @keyframes pulse-gold {
+    0% { box-shadow: 0 0 0 0 rgba(212, 175, 55, 0.7); }
+    70% { box-shadow: 0 0 0 10px rgba(212, 175, 55, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(212, 175, 55, 0); }
+  }
+  
+</style>
+<style>
+/* === Área do Cliente (desativada) === */
+.navbar .nav-link.disabled{
+  pointer-events: none;
+  opacity: .6;
+  cursor: not-allowed;
+  font-weight: 600;
+  letter-spacing: .02em;
+}
+/* Garante alinhamento do ícone com o texto */
+.navbar .nav-link.disabled .fa{
+  margin-right: .35rem;
+}
+</style>
+</head>
+<body>
+<!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-K2QRH89T"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<nav class="navbar navbar-expand-xl navbar-light fixed-top">
+<div class="container">
+<a class="navbar-brand lafer-brand" href="index.html">
+  LAFER INVEST
+</a>
+
+<button aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation" class="navbar-toggler custom-toggler" data-target="#navbarSupportedContent" data-toggle="collapse" type="button">
+<span class="navbar-toggler-icon"></span>
+</button>
+<div class="collapse navbar-collapse" id="navbarSupportedContent">
+<ul class="navbar-nav ml-auto">
+<li class="nav-item dropdown has-saiba">
+<!-- Clique aqui leva para a seção -->
+<a class="nav-link main-link" href="#about-content">SOBRE NÓS</a>
+<!-- Submenu: Saiba mais (página externa) -->
+<div class="dropdown-menu">
+<a class="dropdown-item" href="about.html">Saiba mais</a>
+</div>
+</li>
+<li class="nav-item dropdown has-saiba">
+  <!-- Clique aqui leva para a seção -->
+  <a class="nav-link main-link" href="#como-funciona">COMO FUNCIONA</a>
+  <!-- Submenu: páginas externas -->
+  <div class="dropdown-menu">
+    <a class="dropdown-item" href="enterprise.html">Para Empresas</a>
+    <a class="dropdown-item" href="doctor.html">Para Médicos</a>
+  </div>
+</li>
+
+<li class="nav-item">
+<a class="nav-link" href="#faq-content">PERGUNTAS FREQUENTES</a>
+</li>
+<li class="nav-item">
+  <a class="nav-link" 
+     href="https://wa.me/5535997735926?text=Ol%C3%A1%20Daniel%21%20Gostaria%20de%20mais%20informa%C3%A7%C3%B5es%20sobre%20as%20opera%C3%A7%C3%B5es%20e%20taxas%20da%20Lafer%20Invest"
+     target="_blank">
+    <i class="fa fa-whatsapp" 
+      style="color:#25D366; margin-right:6px; font-size:1.8em; position:relative; top:3px;"></i>
+    FALE CONOSCO
+  </a>
+</li>
+
+
+<li class="nav-item">
+<a class="nav-link" href="investor.html" title="Área do Investidor"> ÁREA DO INVESTIDOR
+</a>
+</li>
+</ul>
+</div>
+</div>
+</nav>
+<section class="d-block" id="banner">
+<div class="slider-wrapper theme-default">
+<div class="nivoSlider" id="slider">
+<img class="img-fluid" src="img/slider/lafer4mod2.webp" title="#htmlcaption0">
+<img class="img-fluid" src="img/slider/lafer8mod2.webp" title="#htmlcaption1"/>
+<img class="img-fluid" src="img/slider/lafer7mod2.JPG" title="#htmlcaption2"/>
+</img></div>
+<div class="nivo-html-caption animated bounceIn" id="htmlcaption0">
+<div class="h2 font-gold font-thin caption">Somos a LAFER INVEST.</div>
+<div class="divider-slider"></div>
+<div class="h4 text-white font-thin caption mb-5">
+                        Transformamos seus recebíveis em oportunidade de crescimento. <br/>
+</div>
+<a class="btn-style1 mt-5" href="#about-content">SAIBA MAIS</a>
+</div>
+<div class="nivo-html-caption animated bounceIn" id="htmlcaption1">
+<div class="h2 font-gold font-thin caption">Impulsionamos a sua empresa. </div>
+<div class="divider-slider"></div>
+<div class="h4 text-white font-thin caption mb-5">
+                        Fornecemos capital de giro imediato sempre que necessário. <br/>
+</div>
+<a class="btn-style1 mt-5" href="#como-funciona">SAIBA MAIS</a>
+</div>
+<div class="nivo-html-caption animated bounceIn" id="htmlcaption2">
+<div class="h2 font-gold font-thin caption">Seu recurso aprovado em poucos minutos. </div>
+<div class="divider-slider"></div>
+<div class="h4 text-white font-thin caption mb-5">
+                        Rápido e descomplicado. <br/>
+</div>
+<a class="btn-style1 mt-5" href="#fale-conosco">ENTRE EM CONTATO</a>
+</div>
+</div>
+</section>
+<section class="mb-5" id="about-content">
+<div class="container-fluid">
+<div class="row">
+<div class="col-md-4 my-auto text-center">
+<h1 class="font-dark-gold detail-title">A LAFER INVEST</h1>
+</div>
+<div class="col-md-8">
+<div class="col-md-12">
+<div class="about-content-shadow font-blue">
+<div class="h5 font-thin mb-5">
+<p>
+                                        A <strong>LAFER INVEST</strong> atua na <strong>securitização e antecipação de recebíveis</strong>,
+                                        convertendo <strong>direitos creditórios, como duplicatas e cheques,</strong>
+                                        em <strong>capital imediato</strong> para a sua empresa.
+                                    </p>
+<p>
+                                        Com <strong>análise ágil</strong>, <strong>custos transparentes</strong> e
+                                        <strong>operações sob medida</strong>, você <strong>mantém o capital de giro</strong>,
+                                        <strong>acelera pedidos</strong> e <strong>continua produzindo</strong> sem esperar
+                                        o pagamento integral dos clientes.
+                                    </p>
+</div>
+<div class="h5 font-thin mb-0">
+<b class="gold-title-sm">O que sua empresa ganha com a LAFER INVEST?</b>
+<br/>
+<br/>
+<ul>
+<li><strong>Maior agilidade</strong> no crédito que bancos</li>
+<li><strong>Taxas abaixo</strong> dos FIDC tradicionais</li>
+<li><strong>Transparência</strong> nas taxas praticadas</li>
+<li>Operações feitas para o fluxo da <strong>sua empresa</strong></li>
+</ul>
+<div class="mb-4" style="
+                                            background: rgba(255, 255, 255, 0.95);
+                                            border-radius: 15px;
+                                            padding: 25px;
+                                            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+                                            margin-top: 3rem;          /* 48 px */
+                                            margin-bottom: 1.5rem;     /* 24 px – mesmo valor do .mb-4 */
+                                        ">
+<h4 class="text-center mb-4" style="
+                                            color: #2c3e50;
+                                            font-weight: 600;
+                                            position: relative;
+                                        ">
+                                            Comparativo de Soluções
+                                            <div style="
+                                                width: 60px;
+                                                height: 3px;
+                                                background: linear-gradient(90deg, #d4af37, #f4d03f);
+                                                margin: 8px auto;
+                                                border-radius: 2px;
+                                            "></div>
+</h4>
+<div class="table-responsive">
+<table class="table table-bordered" style="
+                                                border-radius: 10px;
+                                                overflow: hidden;
+                                                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+                                                margin-bottom: 0;
+                                            ">
+<thead style="background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%); color: white;">
+<tr>
+<th style="border: none; padding: 15px; font-weight: 400;">Características</th>
+<th style="
+                                                            border: none; 
+                                                            padding: 15px; 
+                                                            text-align: center; 
+                                                            background: linear-gradient(135deg, #d4af37 0%, #f4d03f 100%);
+                                                            color: #2c3e50 !important;
+                                                            font-weight: 600;
+                                                            position: relative;
+                                                        ">
+                                                            LAFER INVEST ⭐
+                                                        </th>
+<th style="border: none; padding: 15px; text-align: center;">Bancos Tradicionais</th>
+<th style="border: none; padding: 15px; text-align: center;">FIDC Convencionais</th>
+</tr>
+</thead>
+<tbody>
+<tr style="transition: all 0.3s ease;">
+<td style="background-color: #f8f9fa; font-weight: 500; color: #2c3e50;">Tempo de Análise</td>
+<td style="
+                                                            text-align: center; 
+                                                            background: linear-gradient(135deg, rgba(212, 175, 55, 0.1) 0%, rgba(244, 208, 63, 0.1) 100%);
+                                                            color: #27ae60;
+                                                            font-weight: 600;
+                                                        ">✓ 24 horas</td>
+<td style="text-align: center; color: #e74c3c;">✗ 2-4 semanas</td>
+<td style="text-align: center; color: #f39c12;">~ 1-2 semanas</td>
+</tr>
+<tr style="transition: all 0.3s ease;">
+<td style="background-color: #f8f9fa; font-weight: 500; color: #2c3e50;">Taxas Competitivos</td>
+<td style="
+                                                            text-align: center; 
+                                                            background: linear-gradient(135deg, rgba(212, 175, 55, 0.1) 0%, rgba(244, 208, 63, 0.1) 100%);
+                                                            color: #27ae60;
+                                                            font-weight: 600;
+                                                        ">✓ Sim</td>
+<td style="text-align: center; color: #e74c3c;">✗ Não</td>
+<td style="text-align: center; color: #f39c12;">~ Variável</td>
+</tr>
+<tr style="transition: all 0.3s ease;">
+<td style="background-color: #f8f9fa; font-weight: 500; color: #2c3e50;">Transparência nas Taxas</td>
+<td style="
+                                                            text-align: center; 
+                                                            background: linear-gradient(135deg, rgba(212, 175, 55, 0.1) 0%, rgba(244, 208, 63, 0.1) 100%);
+                                                            color: #27ae60;
+                                                            font-weight: 600;
+                                                        ">✓ Total</td>
+<td style="text-align: center; color: #e74c3c;">✗ Limitada</td>
+<td style="text-align: center; color: #f39c12;">~ Parcial</td>
+</tr>
+<tr style="transition: all 0.3s ease;">
+<td style="background-color: #f8f9fa; font-weight: 500; color: #2c3e50;">Flexibilidade</td>
+<td style="
+                                                            text-align: center; 
+                                                            background: linear-gradient(135deg, rgba(212, 175, 55, 0.1) 0%, rgba(244, 208, 63, 0.1) 100%);
+                                                            color: #27ae60;
+                                                            font-weight: 600;
+                                                        ">✓ Alta</td>
+<td style="text-align: center; color: #e74c3c;">✗ Baixa</td>
+<td style="text-align: center; color: #e74c3c;">✗ Baixa</td>
+</tr>
+<tr style="transition: all 0.3s ease;">
+<td style="background-color: #f8f9fa; font-weight: 500; color: #2c3e50;">Atendimento Personalizado</td>
+<td style="
+                                                            text-align: center; 
+                                                            background: linear-gradient(135deg, rgba(212, 175, 55, 0.1) 0%, rgba(244, 208, 63, 0.1) 100%);
+                                                            color: #27ae60;
+                                                            font-weight: 600;
+                                                        ">✓ Sempre</td>
+<td style="text-align: center; color: #f39c12;">~ Às vezes</td>
+<td style="text-align: center; color: #f39c12;">~ Às vezes</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div class="mt-1 mt-lg-5 text-center text-lg-left">
+<a aria-label="Entenda mais sobre os benefícios da LAFER INVEST" class="btn-gold" href="about.html">
+                                        Entenda mais
+                                      </a>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<section class="mb-5" id="como-funciona">
+<div class="container-fluid">
+<div class="row">
+<div class="col-md-8">
+<div class="col-md-12">
+<div class="about-content-shadow font-blue">
+<div class="h5 font-thin mb-0">
+<div class="row justify-content-center">
+<div class="col-12 col-lg-4 mb-3 text-center">
+<img class="img-fluid mb-3" src="img/faq/1_2.png" style="max-width:60px;"/>
+<p class="h5 font-thin mb-3"><strong>1</strong></p>
+<p><strong>Envie seus recebíveis</strong> (duplicatas, faturas, contratos).</p>
+</div>
+<div class="col-12 col-lg-4 mb-3 text-center">
+<img class="img-fluid mb-3" src="img/faq/2_2.png" style="max-width:60px;"/>
+<p class="h5 font-thin mb-3"><strong>2</strong></p>
+<p><strong>Analisamos e estruturamos</strong> a operação de antecipação.</p>
+</div>
+<div class="col-12 col-lg-4 mb-3 text-center">
+<img class="img-fluid mb-3" src="img/faq/3_2.png" style="max-width:60px;"/>
+<p class="h5 font-thin mb-3"><strong>3</strong></p>
+<p>Você recebe <strong>capital</strong> e
+                                                <strong>mantém as operações</strong> sem interrupção.</p>
+</div>
+</div>
+<div class="mt-1 mt-lg-5 text-center text-lg-right">
+<a aria-label="Entenda mais sobre como funciona o processo" class="btn-gold" href="enterprise.html">
+                                        Entenda mais
+                                    </a>
+</div>
+</div>
+</div>
+</div>
+</div><div class="col-md-4 my-auto text-center">
+<h1 class="font-dark-gold detail-title">COMO FUNCIONA</h1>
+</div>
+</div>
+</div>
+</section>
+<section class="mb-5" id="faq-content">
+<div class="container-fluid">
+<div class="row">
+<div class="col-md-4 my-auto text-center">
+<h1 class="font-dark-gold detail-title">PERGUNTAS FREQUENTES</h1>
+</div>
+<div class="col-md-8">
+<div class="col-md-12">
+<div class="about-content-shadow font-blue">
+<div class="accordion">
+<div class="accordion-item">
+<button class="h5 font-thin font-blue">
+                                            O que é uma securitizadora?
+                                        </button>
+<div class="content">
+<p>
+                                        É a empresa que transforma <strong>recebíveis</strong> (duplicatas, cheques) em <strong>dinheiro à vista</strong>.
+                                        Ela <strong>compra</strong> esses créditos, <strong>agrupa</strong> numa operação e <strong>vende</strong> para investidores.
+                                        A empresa recebe a antecipação dos recebíveis; os pagamentos futuros dos clientes passam a ser quitados na estrutura da securitizadora.
+                                        </p>
+</div>
+</div>
+<div class="accordion-item">
+<button class="h5 font-thin font-blue">Quais as nossas soluções?</button>
+<div class="content">
+<p>Trabalhamos com antecipação de recebíveis, como:</p>
+<ul>
+<li>Duplicata mercantil</li>
+<li>Cheques</li>
+</ul>
+</div>
+</div>
+<div class="accordion-item">
+<button class="h5 font-thin font-blue">O que é um adiantamento de recebíveis?</button>
+<div class="content">
+<p>
+                                                É quando uma empresa <strong>antecipa</strong> o dinheiro de vendas já feitas à prazo,
+                                                <strong>cedendo esses créditos</strong> a uma securitizadora por um <strong>desconto (taxa)</strong>.
+                                                A empresa recebe à vista; no vencimento, o cliente paga para a securitizadora que comprou o recebível.
+                                            </p>
+<p>Com essa alternativa financeira, a empresa pode:</p>
+<ul>
+<li>Adquirir matéria-prima essencial para a produção</li>
+<li>Investir em novas máquinas e equipamentos</li>
+<li>Aprimorar a infraestrutura</li>
+<li>Desenvolver novos produtos</li>
+<li>Ampliar estratégias de marketing</li>
+<li>Melhorar a gestão financeira, garantindo maior previsibilidade e segurança</li>
+</ul>
+<p>
+                                                Com essa antecipação de recebíveis, a empresa garante uma maior competitividade no mercado.
+                                            </p>
+</div>
+</div>
+<div class="accordion-item">
+<button class="h5 font-thin font-blue">
+                                            Como entrar em contato para solicitar o seu crédito?
+                                        </button>
+<div class="content">
+<p style="margin:0">O contato pode ser feito através da seção <a class="nav-link" href="#fale-conosco" style="display:inline !important; text-decoration:underline; padding:0 !important; margin:0 !important;">Fale Conosco</a>, do nosso e-mail, telefone ou WhatsApp.</p>
+</div>
+</div>
+<div class="accordion-item">
+<button class="h5 font-thin font-blue">
+                                            É possível investir em uma securitizadora?
+                                        </button>
+<div class="content">
+<p>
+<strong>Sim!</strong> É possível investir em securitizadoras com retornos potencialmente acima da <strong>Selic</strong>, algo valorizado pelos investidores.
+                                            Muitas estruturam operações por meio do <strong>Termo de Securitização de Recebíveis</strong>, <strong>lastreando debêntures</strong> em recebíveis específicos.
+                                            </p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<section class="mb-5" id="fale-conosco">
+<div class="container-fluid">
+<div class="row">
+<div class="col-md-4 my-auto text-center order-1 order-md-2">
+<h1 class="font-dark-gold detail-title">FALE CONOSCO</h1>
+</div>
+<div class="col-md-8 order-2 order-md-1">
+<div class="about-content-shadow font-blue" style="width: 95%; margin: 0 auto;">
+<div class="row">
+<div class="col-md-6 contact-info">
+<h4 class="mb-4 text-dark">Entre em contato</h4>
+<div class="text-dark">
+<a href="mailto:laerte@lafersec.com.br" target="_blank">
+<i class="fa fa-envelope" style="font-size: 1.2em; color: #000; margin-right: 5px;"></i>
+                                            laerte@lafersec.com.br
+                                        </a>
+</div>
+<div class="text-dark mt-2">
+<a href="https://wa.me/5535997735926?text=Ol%C3%A1%20Daniel%21%20Gostaria%20de%20mais%20informa%C3%A7%C3%B5es%20sobre%20as%20opera%C3%A7%C3%B5es%20e%20taxas%20da%20Lafer%20Invest" target="_blank">
+<i class="fa fa-whatsapp" style="font-size: 1.5em; color: #25D366; margin-right: 5px;"></i>
+                                            +55 35 99773-5926
+                                        </a>
+</div>
+<div class="text-dark mt-2 mb-4">
+<a href="https://www.instagram.com/laferinvest/" style="display: inline-flex; align-items: center;" target="_blank">
+<i class="fa fa-instagram" style="font-size: 1.5em; color: #E4405F; margin-right: 5px;"></i>
+                                            @laferinvest
+                                        </a>
+</div>
+</div>
+<div class="col-md-6">
+<form id="contact-form">
+<div class="form-group">
+<label for="name">Nome</label>
+<input class="form-control" id="name" name="user_name" placeholder="Seu nome" required="" type="text"/>
+</div>
+<div class="form-group">
+<label for="email">E-mail</label>
+<input class="form-control" id="email" name="user_email" placeholder="Seu e-mail" required="" type="email"/>
+</div>
+<div class="form-group">
+<label for="message">Mensagem</label>
+<textarea class="form-control" id="message" name="message" placeholder="Escreva sua mensagem" required="" rows="4"></textarea>
+</div>
+<button class="btn btn-dark w-100" type="submit">Enviar</button>
+</form>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<footer>
+<div class="container">
+<div class="row">
+<div class="col-md-6">
+<h4 class="text-white text-uppercase">LAFER Invest</h4>
+<h6 class="mb-5 text-white">Securitizadora</h6>
+
+        <!-- Endereço embaixo com quebras de linha -->
+<div class="text-white" style="line-height:1.6; margin-top:6px; margin-bottom:16px;">
+  Avenida Coronel Jorge Vieira, 535<br/>
+  Centro<br/>
+  Areado - MG<br/>
+  37140-000
+</div>
+
+</div>
+<div class="col-md-6 my-auto ml-auto">
+<div class="address-footer-holder mb-3">
+<h6 class="text-white text-uppercase" style="font-weight:bold">CONTATOS</h6>
+</div>
+<div class="text-white mt-2">
+<a href="mailto:laerte@lafersec.com.br" target="_blank">
+<i class="fa fa-envelope" style="font-size: 1.2em; color: #ffffff; margin-right: 5px;"></i> laerte@lafersec.com.br
+                            </a>
+</div>
+<div class="text-white mt-2">
+<a href="https://wa.me/5535997735926?text=Ol%C3%A1%20Daniel%21%20Gostaria%20de%20mais%20informa%C3%A7%C3%B5es%20sobre%20as%20opera%C3%A7%C3%B5es%20e%20taxas%20da%20Lafer%20Invest" target="_blank">
+<i class="fa fa-whatsapp fa-lg" style="color: #25D366; margin-right: 5px;"></i> +55 35 99773-5926
+                            </a>
+</div>
+<div class="text-white mt-2">
+<a href="https://www.instagram.com/laferinvest/" style="display: inline-flex; align-items: center;" target="_blank">
+<i class="fa fa-instagram" style="font-size: 1.5em; color: #E4405F; margin-right: 5px; vertical-align: middle;"></i>
+                                @laferinvest
+                            </a>
+</div>
+</div>
+</div>
+</div>
+</footer>
+<script src="js/jquery-3.4.1.min.js"></script>
+<script src="js/bootstrap.min.js"></script>
+<script src="plugins/slick/slick.js"></script>
+<script src="plugins/lity/lity.min.js"></script>
+<script src="plugins/nivoslider/jquery.nivo.slider.js"></script>
+<script src="js/script.js"></script>
+<script>
+            $('a[href^="#"]').on("touchstart click", function(e) {
+                e.preventDefault();
+                var target = $(this.hash);
+                if (target.length) {
+                    var offset = $('.navbar').outerHeight();
+                    var extraOffset = -50; // adjust this value as needed
+                    $('html, body').stop(true, false).animate(
+                        { scrollTop: target.offset().top - offset + extraOffset },
+                        400,
+                        "linear"
+                    );
+                }
+            });
+        </script>
+<script>
+            document.querySelectorAll('.accordion-item button').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    let item = btn.parentNode;
+                    document.querySelectorAll('.accordion-item').forEach(i => {
+                        if (i !== item) i.classList.remove('active');
+                    });
+                    item.classList.toggle('active');
+                });
+            });
+        </script>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js" type="text/javascript"></script>
+<script>
+  // Initialize EmailJS com sua Public Key
+  emailjs.init("jTNhBYzdqj2ifDG_l");
+
+  document.getElementById("contact-form").addEventListener("submit", function(e) {
+    e.preventDefault();
+
+    emailjs.send("service_4a0cmef", "template_m7d3pre", {
+      user_name: document.getElementById("name").value,
+      user_email: document.getElementById("email").value,
+      message: document.getElementById("message").value
+    }).then(() => {
+      // 👉 Evento GA4 de lead enviado
+      if (typeof gtag === 'function') {
+        gtag('event', 'contact_form_submitted', {
+          event_category: 'lead',
+          event_label: 'fale-conosco'
+        });
+      }
+
+      alert("Email enviado com sucesso!");
+      document.getElementById("contact-form").reset();
+    }).catch(error => console.error("Erro ao enviar email:", error));
+  });
+</script>
+<script>
+            $(document).click(function(event) {
+                var clickover = $(event.target);
+                var navbar = $(".navbar-collapse");
+                var toggler = $(".navbar-toggler");
+                var opened = navbar.hasClass("show");
+
+                if (opened && !clickover.closest(".navbar").length) {
+                    toggler.click();  // Triggers the bootstrap toggle event
+                }
+            });
+        </script>
+<script>
+        (function(){
+            // No mobile (<992px): 1º toque abre submenu; 2º toque navega para a seção
+            var breakpoint = 992;
+
+            // Clique no rótulo principal
+            $('.navbar .dropdown.has-saiba > a.main-link').on('click', function(e){
+            var $li = $(this).closest('.dropdown.has-saiba');
+
+            if (window.innerWidth < breakpoint){
+                if (!$li.hasClass('show')) {
+                // Primeiro toque: apenas abre o submenu
+                e.preventDefault();
+                $li.addClass('show');
+                } else {
+                // Segundo toque: deixa navegar normalmente para a âncora
+                // e fecha o menu colapsável
+                $('.navbar-collapse').collapse('hide');
+                }
+            }
+            // No desktop: comportamento normal (navegar para a seção)
+            });
+
+            // Fechar submenu ao tocar fora
+            $(document).on('click', function(e){
+            if (!$(e.target).closest('.navbar .dropdown.has-saiba').length){
+                $('.navbar .dropdown.has-saiba').removeClass('show');
+            }
+            });
+
+            // Fechar submenu após clicar em "Saiba mais" (navega para outra página)
+            $('.navbar .dropdown.has-saiba .dropdown-item').on('click', function(){
+            $('.navbar .dropdown.has-saiba').removeClass('show');
+            $('.navbar-collapse').collapse('hide');
+            });
+
+            // Opcional: ao redimensionar, garanta estado limpo
+            $(window).on('resize', function(){
+            if (window.innerWidth >= breakpoint){
+                $('.navbar .dropdown.has-saiba').removeClass('show');
+            }
+            });
+        })();
+        </script>
+<script>
+/* === MENU SAIBA MAIS: fechar colapso ao clicar === */
+(function(){
+  // Fecha o menu colapsado ao clicar em qualquer link dentro dele
+  document.addEventListener('click', function(e){
+    var target = e.target;
+    // Sobe até um <a>
+    while (target && target.tagName && target.tagName.toLowerCase() !== 'a'){
+      target = target.parentNode;
+    }
+    if (!target) return;
+    var navCollapse = document.querySelector('.navbar-collapse.show');
+    if (!navCollapse) return;
+    if (navCollapse.contains(target)){
+      // Usa o Bootstrap se existir, senão só remove a classe 'show'
+      if (typeof jQuery !== 'undefined' && typeof jQuery(navCollapse).collapse === 'function'){
+        jQuery(navCollapse).collapse('hide');
+      } else {
+        navCollapse.classList.remove('show');
+      }
+    }
+  }, false);
+})();
+</script></body>
+</html>
