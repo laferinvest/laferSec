@@ -252,7 +252,34 @@ function EvolutionCharts({ rows, dateFilter, setDateFilter, setBorderoFilter, se
   const pathD4 = points4.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
   const areaD4 = points4.length > 1 ? `${pathD4} L ${points4[points4.length - 1].x} ${svgHeight - paddingBottom} L ${points4[0].x} ${svgHeight - paddingBottom} Z` : "";
 
+  // NOVA LÓGICA: Determina dinamicamente se um ponto está selecionado (suporta arrasto em tempo real)
+  const isPointSelected = (p, i, type) => {
+    if (dragState.isDragging && dragState.type === type) {
+      const minIdx = Math.min(dragState.startIndex, dragState.currentIndex);
+      const maxIdx = Math.max(dragState.startIndex, dragState.currentIndex);
+      return i >= minIdx && i <= maxIdx;
+    }
+    if (dateFilter.type === type && (dateFilter.start || dateFilter.end)) {
+      const dsStr = dateFilter.start ? dateFilter.start.substring(0,7) : "0000-00";
+      const deStr = dateFilter.end ? dateFilter.end.substring(0,7) : "9999-99";
+      return p.ym >= dsStr && p.ym <= deStr;
+    }
+    return false;
+  };
+
   const renderHighlight = (points, type, rgb) => {
+    // 1º PRIORIDADE: Se estiver a arrastar, mostra a nova área em tempo real (mesmo que haja um filtro anterior)
+    if (dragState.isDragging && dragState.type === type && points.length > 0) {
+       const minIdx = Math.min(dragState.startIndex, dragState.currentIndex);
+       const maxIdx = Math.max(dragState.startIndex, dragState.currentIndex);
+       if (points[minIdx] && points[maxIdx]) {
+          const xStart = points[minIdx].x - segmentWidth/2;
+          const xEnd = points[maxIdx].x + segmentWidth/2;
+          return <rect x={xStart} y={paddingTop} width={xEnd - xStart} height={chartHeight} fill={`rgba(${rgb}, 0.15)`} stroke={`rgba(${rgb}, 0.5)`} strokeWidth="1" />;
+       }
+    }
+
+    // 2º PRIORIDADE: Se NÃO estiver a arrastar, mostra o filtro guardado
     if (dateFilter.type === type && (dateFilter.start || dateFilter.end)) {
        const dsStr = dateFilter.start ? dateFilter.start.substring(0,7) : "0000-00";
        const deStr = dateFilter.end ? dateFilter.end.substring(0,7) : "9999-99";
@@ -261,15 +288,6 @@ function EvolutionCharts({ rows, dateFilter, setDateFilter, setBorderoFilter, se
           const xStart = selPoints[0].x - segmentWidth/2;
           const xEnd = selPoints[selPoints.length - 1].x + segmentWidth/2;
           return <rect x={xStart} y={paddingTop} width={xEnd - xStart} height={chartHeight} fill={`rgba(${rgb}, 0.08)`} />;
-       }
-    }
-    if (dragState.isDragging && dragState.type === type && points.length > 0) {
-       const minIdx = Math.min(dragState.startIndex, dragState.currentIndex);
-       const maxIdx = Math.max(dragState.startIndex, dragState.currentIndex);
-       if (points[minIdx] && points[maxIdx]) {
-          const xStart = points[minIdx].x - segmentWidth/2;
-          const xEnd = points[maxIdx].x + segmentWidth/2;
-          return <rect x={xStart} y={paddingTop} width={xEnd - xStart} height={chartHeight} fill={`rgba(${rgb}, 0.15)`} stroke={`rgba(${rgb}, 0.5)`} strokeWidth="1" />;
        }
     }
     return null;
@@ -310,16 +328,12 @@ function EvolutionCharts({ rows, dateFilter, setDateFilter, setBorderoFilter, se
                   <path d={pathD1} fill="none" stroke="#4f46e5" strokeWidth="3" strokeLinejoin="round" />
                   
                   {points1.map((p, i) => {
-                    const dsStr = dateFilter.start ? dateFilter.start.substring(0,7) : "0000-00";
-                    const deStr = dateFilter.end ? dateFilter.end.substring(0,7) : "9999-99";
-                    const isSelected = dateFilter.type === 'emis' && p.ym >= dsStr && p.ym <= deStr;
+                    const isSelected = isPointSelected(p, i, 'emis');
                     return isSelected ? <circle key={`sel1-${i}`} cx={p.x} cy={p.y} r="5" fill="#4f46e5" stroke="#fff" strokeWidth="2" /> : null;
                   })}
                   {points1.map((p, i) => {
                     if (i % step !== 0 && i !== points1.length - 1) return null;
-                    const dsStr = dateFilter.start ? dateFilter.start.substring(0,7) : "0000-00";
-                    const deStr = dateFilter.end ? dateFilter.end.substring(0,7) : "9999-99";
-                    const isSelected = dateFilter.type === 'emis' && p.ym >= dsStr && p.ym <= deStr;
+                    const isSelected = isPointSelected(p, i, 'emis');
                     return <text key={`lab1-${i}`} x={p.x} y={svgHeight - paddingBottom + 16} fill={isSelected ? "#4f46e5" : "#6b7280"} fontSize="11px" fontWeight={isSelected ? "700" : "400"} textAnchor="end" transform={`rotate(-45, ${p.x}, ${svgHeight - paddingBottom + 16})`}>{p.label}</text>;
                   })}
                   {hoveredIndex1 !== null && (
@@ -360,16 +374,12 @@ function EvolutionCharts({ rows, dateFilter, setDateFilter, setBorderoFilter, se
                   <path d={pathD2} fill="none" stroke="#ef4444" strokeWidth="3" strokeLinejoin="round" />
                   
                   {points2.map((p, i) => {
-                    const dsStr = dateFilter.start ? dateFilter.start.substring(0,7) : "0000-00";
-                    const deStr = dateFilter.end ? dateFilter.end.substring(0,7) : "9999-99";
-                    const isSelected = dateFilter.type === 'vcto' && p.ym >= dsStr && p.ym <= deStr;
+                    const isSelected = isPointSelected(p, i, 'vcto');
                     return isSelected ? <circle key={`sel2-${i}`} cx={p.x} cy={p.y} r="5" fill="#ef4444" stroke="#fff" strokeWidth="2" /> : null;
                   })}
                   {points2.map((p, i) => {
                     if (i % step !== 0 && i !== points2.length - 1) return null;
-                    const dsStr = dateFilter.start ? dateFilter.start.substring(0,7) : "0000-00";
-                    const deStr = dateFilter.end ? dateFilter.end.substring(0,7) : "9999-99";
-                    const isSelected = dateFilter.type === 'vcto' && p.ym >= dsStr && p.ym <= deStr;
+                    const isSelected = isPointSelected(p, i, 'vcto');
                     return <text key={`lab2-${i}`} x={p.x} y={svgHeight - paddingBottom + 16} fill={isSelected ? "#ef4444" : "#6b7280"} fontSize="11px" fontWeight={isSelected ? "700" : "400"} textAnchor="end" transform={`rotate(-45, ${p.x}, ${svgHeight - paddingBottom + 16})`}>{p.label}</text>;
                   })}
                   {hoveredIndex2 !== null && (
@@ -412,16 +422,12 @@ function EvolutionCharts({ rows, dateFilter, setDateFilter, setBorderoFilter, se
                   <path d={pathD3} fill="none" stroke="#10b981" strokeWidth="3" strokeLinejoin="round" />
                   
                   {points3.map((p, i) => {
-                    const dsStr = dateFilter.start ? dateFilter.start.substring(0,7) : "0000-00";
-                    const deStr = dateFilter.end ? dateFilter.end.substring(0,7) : "9999-99";
-                    const isSelected = dateFilter.type === 'emis' && p.ym >= dsStr && p.ym <= deStr;
+                    const isSelected = isPointSelected(p, i, 'emis');
                     return isSelected ? <circle key={`sel3-${i}`} cx={p.x} cy={p.y} r="5" fill="#10b981" stroke="#fff" strokeWidth="2" /> : null;
                   })}
                   {points3.map((p, i) => {
                     if (i % step !== 0 && i !== points3.length - 1) return null;
-                    const dsStr = dateFilter.start ? dateFilter.start.substring(0,7) : "0000-00";
-                    const deStr = dateFilter.end ? dateFilter.end.substring(0,7) : "9999-99";
-                    const isSelected = dateFilter.type === 'emis' && p.ym >= dsStr && p.ym <= deStr;
+                    const isSelected = isPointSelected(p, i, 'emis');
                     return <text key={`lab3-${i}`} x={p.x} y={svgHeight - paddingBottom + 16} fill={isSelected ? "#10b981" : "#6b7280"} fontSize="11px" fontWeight={isSelected ? "700" : "400"} textAnchor="end" transform={`rotate(-45, ${p.x}, ${svgHeight - paddingBottom + 16})`}>{p.label}</text>;
                   })}
                   {hoveredIndex3 !== null && (
@@ -462,16 +468,12 @@ function EvolutionCharts({ rows, dateFilter, setDateFilter, setBorderoFilter, se
                   <path d={pathD4} fill="none" stroke="#f59e0b" strokeWidth="3" strokeLinejoin="round" />
                   
                   {points4.map((p, i) => {
-                    const dsStr = dateFilter.start ? dateFilter.start.substring(0,7) : "0000-00";
-                    const deStr = dateFilter.end ? dateFilter.end.substring(0,7) : "9999-99";
-                    const isSelected = dateFilter.type === 'emis' && p.ym >= dsStr && p.ym <= deStr;
+                    const isSelected = isPointSelected(p, i, 'emis');
                     return isSelected ? <circle key={`sel4-${i}`} cx={p.x} cy={p.y} r="5" fill="#f59e0b" stroke="#fff" strokeWidth="2" /> : null;
                   })}
                   {points4.map((p, i) => {
                     if (i % step !== 0 && i !== points4.length - 1) return null;
-                    const dsStr = dateFilter.start ? dateFilter.start.substring(0,7) : "0000-00";
-                    const deStr = dateFilter.end ? dateFilter.end.substring(0,7) : "9999-99";
-                    const isSelected = dateFilter.type === 'emis' && p.ym >= dsStr && p.ym <= deStr;
+                    const isSelected = isPointSelected(p, i, 'emis');
                     return <text key={`lab4-${i}`} x={p.x} y={svgHeight - paddingBottom + 16} fill={isSelected ? "#f59e0b" : "#6b7280"} fontSize="11px" fontWeight={isSelected ? "700" : "400"} textAnchor="end" transform={`rotate(-45, ${p.x}, ${svgHeight - paddingBottom + 16})`}>{p.label}</text>;
                   })}
                   {hoveredIndex4 !== null && (
