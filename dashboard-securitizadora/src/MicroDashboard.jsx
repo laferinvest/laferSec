@@ -1216,49 +1216,79 @@ export default function MicroDashboard({ session }) {
       {rowsFilteredByMode.length > 0 && (
         <div style={{ marginTop: "24px" }}>
           
+{/* BANNER DE KPIs INTELIGENTE - CORPORATIVO ELEVADO COM LEVE DESTAQUE */}
           {rowsParaTabela.length > 0 && kpiData.baseCalculo > 0 && (
-            <div style={{ background: "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)", color: "#fff", padding: "20px 24px", borderRadius: "12px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "24px", boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)", marginBottom: "24px", border: "1px solid #334155" }}>
+            <div style={{
+              background: "#d1d5db", // Fundo cinza cria a borda do grid internamente
+              borderRadius: "12px",
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+              gap: "1px",
+              boxShadow: "0 14px 28px -6px rgba(0, 0, 0, 0.12), 0 4px 10px -4px rgba(0, 0, 0, 0.08)", // Sombreado elevado
+              marginBottom: "32px",
+              border: "1px solid #d1d5db",
+              overflow: "hidden"
+            }}>
               
               {/* BLOCO 1: Taxa Média */}
-              <div style={{ display: "flex", alignItems: "center", gap: "16px", flex: "1 1 200px" }}>
-                <div style={{ background: "rgba(56, 189, 248, 0.1)", padding: "12px", borderRadius: "50%", border: "1px solid rgba(56, 189, 248, 0.2)" }}>
-                  <svg width="24" height="24" fill="none" stroke="#38bdf8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M23 6l-9.5 9.5-5-5L1 18"/><path d="M17 6h6v6"/></svg>
-                </div>
-                <div>
-                  <h3 style={{ margin: 0, fontSize: "13px", fontWeight: "600", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em" }}>Taxa Média Ponderada</h3>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: "8px", marginTop: "4px" }}>
-                    <span style={{ fontSize: "24px", fontWeight: "700", color: "#f8fafc", lineHeight: "1" }}>{kpiData.taxaMedia.toFixed(2).replace('.', ',')}%</span>
+              <div style={{ background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #4f46e5", padding: "24px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
+                  <div style={{ background: "rgba(79, 70, 229, 0.1)", padding: "6px", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <svg width="18" height="18" fill="none" stroke="#4f46e5" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                      <path d="M23 6l-9.5 9.5-5-5L1 18"/>
+                      <path d="M17 6h6v6"/>
+                    </svg>
                   </div>
-                  <div style={{ fontSize: "11px", color: "#64748b", marginTop: "4px" }}>Base: {formatarMoeda(kpiData.baseCalculo)}</div>
+                  <h3 style={{ margin: 0, fontSize: "12px", fontWeight: "700", color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em" }}>Taxa Média Ponderada</h3>
+                </div>
+                <div style={{ display: "flex", alignItems: "baseline", gap: "4px" }}>
+                  <span style={{ fontSize: "36px", fontWeight: "700", color: "#111827", lineHeight: "1", letterSpacing: "-0.02em" }}>{kpiData.taxaMedia.toFixed(2).replace('.', ',')}%</span>
+                </div>
+                <div style={{ fontSize: "13px", color: "#6b7280", marginTop: "12px", fontWeight: "500" }}>
+                  Base: <span style={{color: "#374151", fontWeight: "600"}}>{formatarMoeda(kpiData.baseCalculo)}</span> 
+                  {(insightFilter || chartFilter || borderoFilter || dctoFilter) && (
+                    <span style={{color: "#4f46e5", background: "#e0e7ff", padding: "2px 6px", borderRadius: "4px", marginLeft: "4px", fontSize: "11px", fontWeight: "700"}}>FILTRO ATIVO</span>
+                  )}
                 </div>
               </div>
 
               {/* BLOCO 2: Ticket Médio */}
-              <div style={{ display: "flex", alignItems: "center", gap: "16px", flex: "1 1 200px" }}>
-                <div style={{ background: "rgba(244, 63, 94, 0.1)", padding: "12px", borderRadius: "50%", border: "1px solid rgba(244, 63, 94, 0.2)" }}>
-                  <svg width="24" height="24" fill="none" stroke="#fb7185" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
-                </div>
-                <div>
-                  <h3 style={{ margin: 0, fontSize: "13px", fontWeight: "600", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em" }}>Ticket Médio</h3>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: "8px", marginTop: "4px" }}>
-                    <span style={{ fontSize: "24px", fontWeight: "700", color: "#f8fafc", lineHeight: "1" }}>{formatarMoeda(kpiData.valorMedio)}</span>
+              <div style={{ background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #0ea5e9", padding: "24px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
+                  <div style={{ background: "rgba(14, 165, 233, 0.1)", padding: "6px", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <svg width="18" height="18" fill="none" stroke="#0ea5e9" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                      <rect x="2" y="6" width="20" height="12" rx="2"></rect>
+                      <circle cx="12" cy="12" r="2"></circle>
+                      <path d="M6 12h.01M18 12h.01"></path>
+                    </svg>
                   </div>
-                  <div style={{ fontSize: "11px", color: "#64748b", marginTop: "4px" }}>Considerando todos os títulos</div>
+                  <h3 style={{ margin: 0, fontSize: "12px", fontWeight: "700", color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em" }}>Ticket Médio</h3>
+                </div>
+                <div style={{ display: "flex", alignItems: "baseline", gap: "4px" }}>
+                  <span style={{ fontSize: "36px", fontWeight: "700", color: "#111827", lineHeight: "1", letterSpacing: "-0.02em" }}>{formatarMoeda(kpiData.valorMedio)}</span>
+                </div>
+                <div style={{ fontSize: "13px", color: "#6b7280", marginTop: "12px", fontWeight: "500" }}>
+                  Considerando todos os títulos
                 </div>
               </div>
 
               {/* BLOCO 3: Prazo Médio */}
-              <div style={{ display: "flex", alignItems: "center", gap: "16px", flex: "1 1 200px" }}>
-                <div style={{ background: "rgba(16, 185, 129, 0.1)", padding: "12px", borderRadius: "50%", border: "1px solid rgba(16, 185, 129, 0.2)" }}>
-                  <svg width="24" height="24" fill="none" stroke="#34d399" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-                </div>
-                <div>
-                  <h3 style={{ margin: 0, fontSize: "13px", fontWeight: "600", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em" }}>Prazo Médio</h3>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: "6px", marginTop: "4px" }}>
-                    <span style={{ fontSize: "24px", fontWeight: "700", color: "#f8fafc", lineHeight: "1" }}>{kpiData.prazoMedio.toFixed(0)}</span>
-                    <span style={{ fontSize: "14px", color: "#94a3b8", fontWeight: "500" }}>dias</span>
+              <div style={{ background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #10b981", padding: "24px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
+                  <div style={{ background: "rgba(16, 185, 129, 0.1)", padding: "6px", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <svg width="18" height="18" fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <polyline points="12 6 12 12 16 14"></polyline>
+                    </svg>
                   </div>
-                  <div style={{ fontSize: "11px", color: "#64748b", marginTop: "4px" }}>Ponderado pelo valor de face</div>
+                  <h3 style={{ margin: 0, fontSize: "12px", fontWeight: "700", color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em" }}>Prazo Médio</h3>
+                </div>
+                <div style={{ display: "flex", alignItems: "baseline", gap: "6px" }}>
+                  <span style={{ fontSize: "36px", fontWeight: "700", color: "#111827", lineHeight: "1", letterSpacing: "-0.02em" }}>{kpiData.prazoMedio.toFixed(0)}</span>
+                  <span style={{ fontSize: "16px", color: "#6b7280", fontWeight: "600" }}>dias</span>
+                </div>
+                <div style={{ fontSize: "13px", color: "#6b7280", marginTop: "12px", fontWeight: "500" }}>
+                  Ponderado pelo valor de face
                 </div>
               </div>
 
