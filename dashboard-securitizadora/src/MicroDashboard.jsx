@@ -41,13 +41,16 @@ function sacadoValido(sacado) {
 }
 
 // --- COMPONENTE DE EVOLUÇÃO ---
-function EvolutionCharts({ rows, chartFilter, setChartFilter, setBorderoFilter, setDctoFilter }) {
+function EvolutionCharts({ rows, dateFilter, setDateFilter, setBorderoFilter, setDctoFilter }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   const [hoveredIndex1, setHoveredIndex1] = useState(null);
   const [hoveredIndex2, setHoveredIndex2] = useState(null);
   const [hoveredIndex3, setHoveredIndex3] = useState(null);
   const [hoveredIndex4, setHoveredIndex4] = useState(null);
+
+  // Estado para controlar a seleção de arrasto (Brush Selection)
+  const [dragState, setDragState] = useState({ isDragging: false, startIndex: null, currentIndex: null, type: null });
 
   const { chartData, chartDataRate, chartDataDesagio } = useMemo(() => {
     const grouped = {};
@@ -148,12 +151,48 @@ function EvolutionCharts({ rows, chartFilter, setChartFilter, setBorderoFilter, 
     return { chartData: cData, chartDataRate: cDataRate, chartDataDesagio: cDataDesagio };
   }, [rows]);
 
+  // Lógica de finalização do arrasto para selecionar período
+  useEffect(() => {
+    const handleMouseUp = () => {
+       if (dragState.isDragging) {
+          const minIdx = Math.min(dragState.startIndex, dragState.currentIndex);
+          const maxIdx = Math.max(dragState.startIndex, dragState.currentIndex);
+          
+          if (chartData[minIdx] && chartData[maxIdx]) {
+             const startMonth = chartData[minIdx].ym;
+             const endMonth = chartData[maxIdx].ym;
+             
+             const [sy, sm] = startMonth.split('-');
+             const startDate = `${sy}-${sm}-01`;
+             
+             const [ey, em] = endMonth.split('-');
+             const lastDay = new Date(ey, em, 0).getDate();
+             const endDate = `${ey}-${em}-${String(lastDay).padStart(2, '0')}`;
+             
+             // Se clicar exatamente no mesmo intervalo que já está ativo, remove o filtro
+             if (dateFilter.start === startDate && dateFilter.end === endDate && dateFilter.type === dragState.type) {
+                setDateFilter({ type: 'emis', start: '', end: '' });
+             } else {
+                setDateFilter({ type: dragState.type, start: startDate, end: endDate });
+             }
+             setBorderoFilter(null); 
+             setDctoFilter(null);
+          }
+          setDragState({ isDragging: false, startIndex: null, currentIndex: null, type: null });
+       }
+    };
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => window.removeEventListener('mouseup', handleMouseUp);
+  }, [dragState, chartData, dateFilter, setDateFilter, setBorderoFilter, setDctoFilter]);
+
+
   if (chartData.length === 0) return null;
 
   const svgWidth = 600; const svgHeight = 240; 
   const paddingX = 50; const paddingRight = 20; const paddingTop = 30; const paddingBottom = 55; 
   const chartWidth = svgWidth - paddingX - paddingRight; const chartHeight = svgHeight - paddingTop - paddingBottom;
   const step = Math.ceil(chartData.length / 12); 
+  const segmentWidth = chartData.length > 1 ? chartWidth / (chartData.length - 1) : chartWidth;
 
   const formatAxisVal = (val) => {
     if (val === 0) return '0';
@@ -200,20 +239,39 @@ function EvolutionCharts({ rows, chartFilter, setChartFilter, setBorderoFilter, 
   const pathD4 = points4.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
   const areaD4 = points4.length > 1 ? `${pathD4} L ${points4[points4.length - 1].x} ${svgHeight - paddingBottom} L ${points4[0].x} ${svgHeight - paddingBottom} Z` : "";
 
-  // Estilo padronizado para os cards dos gráficos
-  const chartBoxStyle = {
-    flex: "1 1 400px", 
-    background: "#fff", 
-    padding: "20px", 
-    borderRadius: "10px", 
-    border: "1px solid #e5e7eb", 
-    boxShadow: "0 4px 12px rgba(0,0,0,0.05)" // O sombreado elegante aqui
-  };
+  // Função para desenhar a área de seleção cinza/colorida
+  const renderHighlight = (points, type, rgb) => {
+    if (dateFilter.type === type && (dateFilter.start || dateFilter.end)) {
+       const dsStr = dateFilter.start ? dateFilter.start.substring(0,7) : "0000-00";
+       const deStr = dateFilter.end ? dateFilter.end.substring(0,7) : "9999-99";
+       const selPoints = points.filter(p => p.ym >= dsStr && p.ym <= deStr);
+       if (selPoints.length > 0) {
+          const xStart = selPoints[0].x - segmentWidth/2;
+          const xEnd = selPoints[selPoints.length - 1].x + segmentWidth/2;
+          return <rect x={xStart} y={paddingTop} width={xEnd - xStart} height={chartHeight} fill={`rgba(${rgb}, 0.08)`} />;
+       }
+    }
+    if (dragState.isDragging && dragState.type === type && points.length > 0) {
+       const minIdx = Math.min(dragState.startIndex, dragState.currentIndex);
+       const maxIdx = Math.max(dragState.startIndex, dragState.currentIndex);
+       if (points[minIdx] && points[maxIdx]) {
+          const xStart = points[minIdx].x - segmentWidth/2;
+          const xEnd = points[maxIdx].x + segmentWidth/2;
+          return <rect x={xStart} y={paddingTop} width={xEnd - xStart} height={chartHeight} fill={`rgba(${rgb}, 0.15)`} stroke={`rgba(${rgb}, 0.5)`} strokeWidth="1" />;
+       }
+    }
+    return null;
+  }
+
+  const chartBoxStyle = { flex: "1 1 400px", background: "#fff", padding: "20px", borderRadius: "10px", border: "1px solid #e5e7eb", boxShadow: "0 4px 12px rgba(0,0,0,0.05)" };
 
   return (
     <div style={{ background: "#fff", padding: "24px", borderRadius: "12px", boxShadow: "0 8px 20px rgba(0, 0, 0, 0.06)", border: "1px solid #e5e7eb", marginBottom: "24px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: isCollapsed ? "0" : "24px" }}>
-        <h2 style={{ margin: 0, fontSize: "16px", fontWeight: "700", color: "#374151" }}>Análise Gráfica</h2>
+        <div>
+           <h2 style={{ margin: 0, fontSize: "16px", fontWeight: "700", color: "#374151" }}>Análise Gráfica Evolutiva</h2>
+           <p style={{ margin: 0, fontSize: "12px", color: "#6b7280" }}>Arraste o mouse sobre os gráficos para selecionar um período.</p>
+        </div>
         <button onClick={() => setIsCollapsed(!isCollapsed)} style={{ background: "transparent", border: "1px solid #d1d5db", padding: "4px 10px", borderRadius: "6px", color: "#4b5563", fontSize: "12px", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
           {isCollapsed ? "▼ Expandir Gráficos" : "▲ Ocultar Gráficos"}
         </button>
@@ -221,10 +279,10 @@ function EvolutionCharts({ rows, chartFilter, setChartFilter, setBorderoFilter, 
 
       {!isCollapsed && (
         <div>
-          {/* --- PRIMEIRA LINHA --- */}
+          {/* PRIMEIRA LINHA */}
           <div style={{ display: "flex", flexWrap: "wrap", gap: "24px", marginBottom: "24px" }}>
             
-            {/* GRÁFICO 1 */}
+            {/* GRÁFICO 1: Valores (Emissão) */}
             <div style={chartBoxStyle}>
               <h3 style={{ margin: "0 0 16px 0", color: "#111827", fontSize: "16px", fontWeight: "600" }}>
                 Evolução de Valores <span style={{fontSize: "12px", color:"#9ca3af", fontWeight: "400"}}>(Emissão)</span>
@@ -232,6 +290,7 @@ function EvolutionCharts({ rows, chartFilter, setChartFilter, setBorderoFilter, 
               <div style={{ position: "relative", width: "100%", height: "auto" }}>
                 <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} style={{ width: "100%", height: "auto", overflow: "visible" }}>
                   <defs><linearGradient id="gradientArea1" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#4f46e5" stopOpacity="0.4" /><stop offset="100%" stopColor="#4f46e5" stopOpacity="0.0" /></linearGradient></defs>
+                  {renderHighlight(points1, 'emis', '79, 70, 229')}
                   <line x1={paddingX} y1={paddingTop} x2={svgWidth - paddingRight} y2={paddingTop} stroke="#f3f4f6" strokeWidth="1" />
                   <line x1={paddingX} y1={paddingTop + chartHeight / 2} x2={svgWidth - paddingRight} y2={paddingTop + chartHeight / 2} stroke="#f3f4f6" strokeWidth="1" />
                   <line x1={paddingX} y1={svgHeight - paddingBottom} x2={svgWidth - paddingRight} y2={svgHeight - paddingBottom} stroke="#e5e7eb" strokeWidth="1" />
@@ -240,22 +299,19 @@ function EvolutionCharts({ rows, chartFilter, setChartFilter, setBorderoFilter, 
                   <text x={paddingX - 8} y={svgHeight - paddingBottom + 4} fill="#9ca3af" fontSize="11px" fontWeight="500" textAnchor="end">0</text>
                   {points1.length > 1 && <path d={areaD1} fill="url(#gradientArea1)" />}
                   <path d={pathD1} fill="none" stroke="#4f46e5" strokeWidth="3" strokeLinejoin="round" />
+                  
                   {points1.map((p, i) => {
-                    const isSelected = chartFilter?.type === 'emis' && chartFilter.month === p.ym;
-                    if (!isSelected) return null;
-                    return (
-                      <g key={`selected1-${i}`}>
-                        <line x1={p.x} y1={paddingTop} x2={p.x} y2={svgHeight - paddingBottom} stroke="#4f46e5" strokeWidth="2" strokeDasharray="4 4" />
-                        <circle cx={p.x} cy={p.y} r="6" fill="#4f46e5" stroke="#fff" strokeWidth="2" />
-                      </g>
-                    );
+                    const dsStr = dateFilter.start ? dateFilter.start.substring(0,7) : "0000-00";
+                    const deStr = dateFilter.end ? dateFilter.end.substring(0,7) : "9999-99";
+                    const isSelected = dateFilter.type === 'emis' && p.ym >= dsStr && p.ym <= deStr;
+                    return isSelected ? <circle key={`sel1-${i}`} cx={p.x} cy={p.y} r="5" fill="#4f46e5" stroke="#fff" strokeWidth="2" /> : null;
                   })}
                   {points1.map((p, i) => {
                     if (i % step !== 0 && i !== points1.length - 1) return null;
-                    const isSelected = chartFilter?.type === 'emis' && chartFilter.month === p.ym;
-                    return (
-                      <text key={`label1-${i}`} x={p.x} y={svgHeight - paddingBottom + 16} fill={isSelected ? "#4f46e5" : "#6b7280"} fontSize="11px" fontWeight={isSelected ? "700" : "400"} textAnchor="end" transform={`rotate(-45, ${p.x}, ${svgHeight - paddingBottom + 16})`}>{p.label}</text>
-                    );
+                    const dsStr = dateFilter.start ? dateFilter.start.substring(0,7) : "0000-00";
+                    const deStr = dateFilter.end ? dateFilter.end.substring(0,7) : "9999-99";
+                    const isSelected = dateFilter.type === 'emis' && p.ym >= dsStr && p.ym <= deStr;
+                    return <text key={`lab1-${i}`} x={p.x} y={svgHeight - paddingBottom + 16} fill={isSelected ? "#4f46e5" : "#6b7280"} fontSize="11px" fontWeight={isSelected ? "700" : "400"} textAnchor="end" transform={`rotate(-45, ${p.x}, ${svgHeight - paddingBottom + 16})`}>{p.label}</text>;
                   })}
                   {hoveredIndex1 !== null && (
                     <g>
@@ -265,24 +321,19 @@ function EvolutionCharts({ rows, chartFilter, setChartFilter, setBorderoFilter, 
                       <text x={points1[hoveredIndex1].x} y={points1[hoveredIndex1].y - 18} fill="#fff" fontSize="11px" fontWeight="600" textAnchor="middle">{formatarMoeda(points1[hoveredIndex1].value)}</text>
                     </g>
                   )}
-                  {points1.map((p, i) => {
-                    const segmentWidth = chartData.length > 1 ? chartWidth / (chartData.length - 1) : chartWidth;
-                    return (
-                      <rect key={`interact1-${i}`} x={p.x - segmentWidth / 2} y={paddingTop} width={segmentWidth} height={chartHeight} fill="transparent"
-                        onMouseEnter={() => setHoveredIndex1(i)} onMouseLeave={() => setHoveredIndex1(null)}
-                        onClick={() => {
-                          setChartFilter(prev => prev?.type === 'emis' && prev.month === p.ym ? null : { type: 'emis', month: p.ym });
-                          setBorderoFilter(null); setDctoFilter(null);
-                        }}
-                        style={{ cursor: "pointer" }}
-                      />
-                    );
-                  })}
+                  {points1.map((p, i) => (
+                    <rect key={`interact1-${i}`} x={p.x - segmentWidth / 2} y={paddingTop} width={segmentWidth} height={chartHeight} fill="transparent"
+                      onMouseDown={(e) => { e.preventDefault(); setDragState({ isDragging: true, startIndex: i, currentIndex: i, type: 'emis' }); }}
+                      onMouseEnter={() => { setHoveredIndex1(i); if (dragState.isDragging && dragState.type === 'emis') setDragState(prev => ({...prev, currentIndex: i})); }}
+                      onMouseLeave={() => setHoveredIndex1(null)}
+                      style={{ cursor: "crosshair" }}
+                    />
+                  ))}
                 </svg>
               </div>
             </div>
 
-            {/* GRÁFICO 2 */}
+            {/* GRÁFICO 2: Atraso (Vencimento) */}
             <div style={chartBoxStyle}>
               <h3 style={{ margin: "0 0 16px 0", color: "#111827", fontSize: "16px", fontWeight: "600" }}>
                 Percentual de Atraso <span style={{fontSize: "12px", color:"#9ca3af", fontWeight: "400"}}>(Vencimento)</span>
@@ -290,6 +341,7 @@ function EvolutionCharts({ rows, chartFilter, setChartFilter, setBorderoFilter, 
               <div style={{ position: "relative", width: "100%", height: "auto" }}>
                 <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} style={{ width: "100%", height: "auto", overflow: "visible" }}>
                   <defs><linearGradient id="gradientArea2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#ef4444" stopOpacity="0.3" /><stop offset="100%" stopColor="#ef4444" stopOpacity="0.0" /></linearGradient></defs>
+                  {renderHighlight(points2, 'vcto', '239, 68, 68')}
                   <line x1={paddingX} y1={paddingTop} x2={svgWidth - paddingRight} y2={paddingTop} stroke="#f3f4f6" strokeWidth="1" />
                   <line x1={paddingX} y1={paddingTop + chartHeight / 2} x2={svgWidth - paddingRight} y2={paddingTop + chartHeight / 2} stroke="#f3f4f6" strokeWidth="1" />
                   <line x1={paddingX} y1={svgHeight - paddingBottom} x2={svgWidth - paddingRight} y2={svgHeight - paddingBottom} stroke="#e5e7eb" strokeWidth="1" />
@@ -298,22 +350,19 @@ function EvolutionCharts({ rows, chartFilter, setChartFilter, setBorderoFilter, 
                   <text x={paddingX - 8} y={svgHeight - paddingBottom + 4} fill="#9ca3af" fontSize="11px" fontWeight="500" textAnchor="end">0%</text>
                   {points2.length > 1 && <path d={areaD2} fill="url(#gradientArea2)" />}
                   <path d={pathD2} fill="none" stroke="#ef4444" strokeWidth="3" strokeLinejoin="round" />
+                  
                   {points2.map((p, i) => {
-                    const isSelected = chartFilter?.type === 'vcto' && chartFilter.month === p.ym;
-                    if (!isSelected) return null;
-                    return (
-                      <g key={`selected2-${i}`}>
-                        <line x1={p.x} y1={paddingTop} x2={p.x} y2={svgHeight - paddingBottom} stroke="#ef4444" strokeWidth="2" strokeDasharray="4 4" />
-                        <circle cx={p.x} cy={p.y} r="6" fill="#ef4444" stroke="#fff" strokeWidth="2" />
-                      </g>
-                    );
+                    const dsStr = dateFilter.start ? dateFilter.start.substring(0,7) : "0000-00";
+                    const deStr = dateFilter.end ? dateFilter.end.substring(0,7) : "9999-99";
+                    const isSelected = dateFilter.type === 'vcto' && p.ym >= dsStr && p.ym <= deStr;
+                    return isSelected ? <circle key={`sel2-${i}`} cx={p.x} cy={p.y} r="5" fill="#ef4444" stroke="#fff" strokeWidth="2" /> : null;
                   })}
                   {points2.map((p, i) => {
                     if (i % step !== 0 && i !== points2.length - 1) return null;
-                    const isSelected = chartFilter?.type === 'vcto' && chartFilter.month === p.ym;
-                    return (
-                      <text key={`label2-${i}`} x={p.x} y={svgHeight - paddingBottom + 16} fill={isSelected ? "#ef4444" : "#6b7280"} fontSize="11px" fontWeight={isSelected ? "700" : "400"} textAnchor="end" transform={`rotate(-45, ${p.x}, ${svgHeight - paddingBottom + 16})`}>{p.label}</text>
-                    );
+                    const dsStr = dateFilter.start ? dateFilter.start.substring(0,7) : "0000-00";
+                    const deStr = dateFilter.end ? dateFilter.end.substring(0,7) : "9999-99";
+                    const isSelected = dateFilter.type === 'vcto' && p.ym >= dsStr && p.ym <= deStr;
+                    return <text key={`lab2-${i}`} x={p.x} y={svgHeight - paddingBottom + 16} fill={isSelected ? "#ef4444" : "#6b7280"} fontSize="11px" fontWeight={isSelected ? "700" : "400"} textAnchor="end" transform={`rotate(-45, ${p.x}, ${svgHeight - paddingBottom + 16})`}>{p.label}</text>;
                   })}
                   {hoveredIndex2 !== null && (
                     <g>
@@ -323,19 +372,14 @@ function EvolutionCharts({ rows, chartFilter, setChartFilter, setBorderoFilter, 
                       <text x={points2[hoveredIndex2].x} y={points2[hoveredIndex2].y - 18} fill="#fff" fontSize="12px" fontWeight="600" textAnchor="middle">{points2[hoveredIndex2].pctAtraso.toFixed(1)}%</text>
                     </g>
                   )}
-                  {points2.map((p, i) => {
-                    const segmentWidth = chartData.length > 1 ? chartWidth / (chartData.length - 1) : chartWidth;
-                    return (
-                      <rect key={`interact2-${i}`} x={p.x - segmentWidth / 2} y={paddingTop} width={segmentWidth} height={chartHeight} fill="transparent"
-                        onMouseEnter={() => setHoveredIndex2(i)} onMouseLeave={() => setHoveredIndex2(null)}
-                        onClick={() => {
-                          setChartFilter(prev => prev?.type === 'vcto' && prev.month === p.ym ? null : { type: 'vcto', month: p.ym });
-                          setBorderoFilter(null); setDctoFilter(null);
-                        }}
-                        style={{ cursor: "pointer" }}
-                      />
-                    );
-                  })}
+                  {points2.map((p, i) => (
+                    <rect key={`interact2-${i}`} x={p.x - segmentWidth / 2} y={paddingTop} width={segmentWidth} height={chartHeight} fill="transparent"
+                      onMouseDown={(e) => { e.preventDefault(); setDragState({ isDragging: true, startIndex: i, currentIndex: i, type: 'vcto' }); }}
+                      onMouseEnter={() => { setHoveredIndex2(i); if (dragState.isDragging && dragState.type === 'vcto') setDragState(prev => ({...prev, currentIndex: i})); }}
+                      onMouseLeave={() => setHoveredIndex2(null)}
+                      style={{ cursor: "crosshair" }}
+                    />
+                  ))}
                 </svg>
               </div>
             </div>
@@ -345,7 +389,7 @@ function EvolutionCharts({ rows, chartFilter, setChartFilter, setBorderoFilter, 
           {/* --- SEGUNDA LINHA --- */}
           <div style={{ display: "flex", flexWrap: "wrap", gap: "24px" }}>
             
-            {/* GRÁFICO 3 */}
+            {/* GRÁFICO 3: Taxa Efetiva */}
             <div style={chartBoxStyle}>
               <h3 style={{ margin: "0 0 16px 0", color: "#111827", fontSize: "16px", fontWeight: "600" }}>
                 Evolução da Taxa Média <span style={{fontSize: "12px", color:"#9ca3af", fontWeight: "400"}}>(Emissão)</span>
@@ -353,6 +397,7 @@ function EvolutionCharts({ rows, chartFilter, setChartFilter, setBorderoFilter, 
               <div style={{ position: "relative", width: "100%", height: "auto" }}>
                 <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} style={{ width: "100%", height: "auto", overflow: "visible" }}>
                   <defs><linearGradient id="gradientArea3" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#10b981" stopOpacity="0.4" /><stop offset="100%" stopColor="#10b981" stopOpacity="0.0" /></linearGradient></defs>
+                  {renderHighlight(points3, 'emis', '16, 185, 129')}
                   <line x1={paddingX} y1={paddingTop} x2={svgWidth - paddingRight} y2={paddingTop} stroke="#f3f4f6" strokeWidth="1" />
                   <line x1={paddingX} y1={paddingTop + chartHeight / 2} x2={svgWidth - paddingRight} y2={paddingTop + chartHeight / 2} stroke="#f3f4f6" strokeWidth="1" />
                   <line x1={paddingX} y1={svgHeight - paddingBottom} x2={svgWidth - paddingRight} y2={svgHeight - paddingBottom} stroke="#e5e7eb" strokeWidth="1" />
@@ -361,22 +406,19 @@ function EvolutionCharts({ rows, chartFilter, setChartFilter, setBorderoFilter, 
                   <text x={paddingX - 8} y={svgHeight - paddingBottom + 4} fill="#9ca3af" fontSize="11px" fontWeight="500" textAnchor="end">0%</text>
                   {points3.length > 1 && <path d={areaD3} fill="url(#gradientArea3)" />}
                   <path d={pathD3} fill="none" stroke="#10b981" strokeWidth="3" strokeLinejoin="round" />
+                  
                   {points3.map((p, i) => {
-                    const isSelected = chartFilter?.type === 'emis' && chartFilter.month === p.ym;
-                    if (!isSelected) return null;
-                    return (
-                      <g key={`selected3-${i}`}>
-                        <line x1={p.x} y1={paddingTop} x2={p.x} y2={svgHeight - paddingBottom} stroke="#10b981" strokeWidth="2" strokeDasharray="4 4" />
-                        <circle cx={p.x} cy={p.y} r="6" fill="#10b981" stroke="#fff" strokeWidth="2" />
-                      </g>
-                    );
+                    const dsStr = dateFilter.start ? dateFilter.start.substring(0,7) : "0000-00";
+                    const deStr = dateFilter.end ? dateFilter.end.substring(0,7) : "9999-99";
+                    const isSelected = dateFilter.type === 'emis' && p.ym >= dsStr && p.ym <= deStr;
+                    return isSelected ? <circle key={`sel3-${i}`} cx={p.x} cy={p.y} r="5" fill="#10b981" stroke="#fff" strokeWidth="2" /> : null;
                   })}
                   {points3.map((p, i) => {
                     if (i % step !== 0 && i !== points3.length - 1) return null;
-                    const isSelected = chartFilter?.type === 'emis' && chartFilter.month === p.ym;
-                    return (
-                      <text key={`label3-${i}`} x={p.x} y={svgHeight - paddingBottom + 16} fill={isSelected ? "#10b981" : "#6b7280"} fontSize="11px" fontWeight={isSelected ? "700" : "400"} textAnchor="end" transform={`rotate(-45, ${p.x}, ${svgHeight - paddingBottom + 16})`}>{p.label}</text>
-                    );
+                    const dsStr = dateFilter.start ? dateFilter.start.substring(0,7) : "0000-00";
+                    const deStr = dateFilter.end ? dateFilter.end.substring(0,7) : "9999-99";
+                    const isSelected = dateFilter.type === 'emis' && p.ym >= dsStr && p.ym <= deStr;
+                    return <text key={`lab3-${i}`} x={p.x} y={svgHeight - paddingBottom + 16} fill={isSelected ? "#10b981" : "#6b7280"} fontSize="11px" fontWeight={isSelected ? "700" : "400"} textAnchor="end" transform={`rotate(-45, ${p.x}, ${svgHeight - paddingBottom + 16})`}>{p.label}</text>;
                   })}
                   {hoveredIndex3 !== null && (
                     <g>
@@ -386,24 +428,19 @@ function EvolutionCharts({ rows, chartFilter, setChartFilter, setBorderoFilter, 
                       <text x={points3[hoveredIndex3].x} y={points3[hoveredIndex3].y - 18} fill="#fff" fontSize="12px" fontWeight="600" textAnchor="middle">{points3[hoveredIndex3].avgRate.toFixed(2).replace('.',',')}%</text>
                     </g>
                   )}
-                  {points3.map((p, i) => {
-                    const segmentWidth = chartDataRate.length > 1 ? chartWidth / (chartDataRate.length - 1) : chartWidth;
-                    return (
-                      <rect key={`interact3-${i}`} x={p.x - segmentWidth / 2} y={paddingTop} width={segmentWidth} height={chartHeight} fill="transparent"
-                        onMouseEnter={() => setHoveredIndex3(i)} onMouseLeave={() => setHoveredIndex3(null)}
-                        onClick={() => {
-                          setChartFilter(prev => prev?.type === 'emis' && prev.month === p.ym ? null : { type: 'emis', month: p.ym });
-                          setBorderoFilter(null); setDctoFilter(null);
-                        }}
-                        style={{ cursor: "pointer" }}
-                      />
-                    );
-                  })}
+                  {points3.map((p, i) => (
+                    <rect key={`interact3-${i}`} x={p.x - segmentWidth / 2} y={paddingTop} width={segmentWidth} height={chartHeight} fill="transparent"
+                      onMouseDown={(e) => { e.preventDefault(); setDragState({ isDragging: true, startIndex: i, currentIndex: i, type: 'emis' }); }}
+                      onMouseEnter={() => { setHoveredIndex3(i); if (dragState.isDragging && dragState.type === 'emis') setDragState(prev => ({...prev, currentIndex: i})); }}
+                      onMouseLeave={() => setHoveredIndex3(null)}
+                      style={{ cursor: "crosshair" }}
+                    />
+                  ))}
                 </svg>
               </div>
             </div>
 
-            {/* GRÁFICO 4 */}
+            {/* GRÁFICO 4: Deságio */}
             <div style={chartBoxStyle}>
               <h3 style={{ margin: "0 0 16px 0", color: "#111827", fontSize: "16px", fontWeight: "600" }}>
                 Evolução do Deságio <span style={{fontSize: "12px", color:"#9ca3af", fontWeight: "400"}}>(Emissão)</span>
@@ -411,6 +448,7 @@ function EvolutionCharts({ rows, chartFilter, setChartFilter, setBorderoFilter, 
               <div style={{ position: "relative", width: "100%", height: "auto" }}>
                 <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} style={{ width: "100%", height: "auto", overflow: "visible" }}>
                   <defs><linearGradient id="gradientArea4" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#f59e0b" stopOpacity="0.4" /><stop offset="100%" stopColor="#f59e0b" stopOpacity="0.0" /></linearGradient></defs>
+                  {renderHighlight(points4, 'emis', '245, 158, 11')}
                   <line x1={paddingX} y1={paddingTop} x2={svgWidth - paddingRight} y2={paddingTop} stroke="#f3f4f6" strokeWidth="1" />
                   <line x1={paddingX} y1={paddingTop + chartHeight / 2} x2={svgWidth - paddingRight} y2={paddingTop + chartHeight / 2} stroke="#f3f4f6" strokeWidth="1" />
                   <line x1={paddingX} y1={svgHeight - paddingBottom} x2={svgWidth - paddingRight} y2={svgHeight - paddingBottom} stroke="#e5e7eb" strokeWidth="1" />
@@ -419,22 +457,19 @@ function EvolutionCharts({ rows, chartFilter, setChartFilter, setBorderoFilter, 
                   <text x={paddingX - 8} y={svgHeight - paddingBottom + 4} fill="#9ca3af" fontSize="11px" fontWeight="500" textAnchor="end">0</text>
                   {points4.length > 1 && <path d={areaD4} fill="url(#gradientArea4)" />}
                   <path d={pathD4} fill="none" stroke="#f59e0b" strokeWidth="3" strokeLinejoin="round" />
+                  
                   {points4.map((p, i) => {
-                    const isSelected = chartFilter?.type === 'emis' && chartFilter.month === p.ym;
-                    if (!isSelected) return null;
-                    return (
-                      <g key={`selected4-${i}`}>
-                        <line x1={p.x} y1={paddingTop} x2={p.x} y2={svgHeight - paddingBottom} stroke="#f59e0b" strokeWidth="2" strokeDasharray="4 4" />
-                        <circle cx={p.x} cy={p.y} r="6" fill="#f59e0b" stroke="#fff" strokeWidth="2" />
-                      </g>
-                    );
+                    const dsStr = dateFilter.start ? dateFilter.start.substring(0,7) : "0000-00";
+                    const deStr = dateFilter.end ? dateFilter.end.substring(0,7) : "9999-99";
+                    const isSelected = dateFilter.type === 'emis' && p.ym >= dsStr && p.ym <= deStr;
+                    return isSelected ? <circle key={`sel4-${i}`} cx={p.x} cy={p.y} r="5" fill="#f59e0b" stroke="#fff" strokeWidth="2" /> : null;
                   })}
                   {points4.map((p, i) => {
                     if (i % step !== 0 && i !== points4.length - 1) return null;
-                    const isSelected = chartFilter?.type === 'emis' && chartFilter.month === p.ym;
-                    return (
-                      <text key={`label4-${i}`} x={p.x} y={svgHeight - paddingBottom + 16} fill={isSelected ? "#f59e0b" : "#6b7280"} fontSize="11px" fontWeight={isSelected ? "700" : "400"} textAnchor="end" transform={`rotate(-45, ${p.x}, ${svgHeight - paddingBottom + 16})`}>{p.label}</text>
-                    );
+                    const dsStr = dateFilter.start ? dateFilter.start.substring(0,7) : "0000-00";
+                    const deStr = dateFilter.end ? dateFilter.end.substring(0,7) : "9999-99";
+                    const isSelected = dateFilter.type === 'emis' && p.ym >= dsStr && p.ym <= deStr;
+                    return <text key={`lab4-${i}`} x={p.x} y={svgHeight - paddingBottom + 16} fill={isSelected ? "#f59e0b" : "#6b7280"} fontSize="11px" fontWeight={isSelected ? "700" : "400"} textAnchor="end" transform={`rotate(-45, ${p.x}, ${svgHeight - paddingBottom + 16})`}>{p.label}</text>;
                   })}
                   {hoveredIndex4 !== null && (
                     <g>
@@ -444,30 +479,19 @@ function EvolutionCharts({ rows, chartFilter, setChartFilter, setBorderoFilter, 
                       <text x={points4[hoveredIndex4].x} y={points4[hoveredIndex4].y - 18} fill="#fff" fontSize="11px" fontWeight="600" textAnchor="middle">{formatarMoeda(points4[hoveredIndex4].value)}</text>
                     </g>
                   )}
-                  {points4.map((p, i) => {
-                    const segmentWidth = chartDataDesagio.length > 1 ? chartWidth / (chartDataDesagio.length - 1) : chartWidth;
-                    return (
-                      <rect key={`interact4-${i}`} x={p.x - segmentWidth / 2} y={paddingTop} width={segmentWidth} height={chartHeight} fill="transparent"
-                        onMouseEnter={() => setHoveredIndex4(i)} onMouseLeave={() => setHoveredIndex4(null)}
-                        onClick={() => {
-                          setChartFilter(prev => prev?.type === 'emis' && prev.month === p.ym ? null : { type: 'emis', month: p.ym });
-                          setBorderoFilter(null); setDctoFilter(null);
-                        }}
-                        style={{ cursor: "pointer" }}
-                      />
-                    );
-                  })}
+                  {points4.map((p, i) => (
+                    <rect key={`interact4-${i}`} x={p.x - segmentWidth / 2} y={paddingTop} width={segmentWidth} height={chartHeight} fill="transparent"
+                      onMouseDown={(e) => { e.preventDefault(); setDragState({ isDragging: true, startIndex: i, currentIndex: i, type: 'emis' }); }}
+                      onMouseEnter={() => { setHoveredIndex4(i); if (dragState.isDragging && dragState.type === 'emis') setDragState(prev => ({...prev, currentIndex: i})); }}
+                      onMouseLeave={() => setHoveredIndex4(null)}
+                      style={{ cursor: "crosshair" }}
+                    />
+                  ))}
                 </svg>
               </div>
             </div>
 
           </div>
-        </div>
-      )}
-
-      {!isCollapsed && chartFilter && (
-        <div style={{ marginTop: "12px", fontSize: "13px", color: "#2563eb", fontWeight: "500", textAlign: "right" }}>
-          Filtro ativo: {chartFilter.type === 'emis' ? 'Emissão' : 'Vencimento'} em {formatarMesAno(chartFilter.month)}. Clique no gráfico novamente para limpar.
         </div>
       )}
     </div>
@@ -675,7 +699,7 @@ function DashboardInsights({ processedRows, insightFilter, setInsightFilter, set
               {renderCard('aVencer', "#94a3b8", "A Vencer", stats.counts.aVencer, stats.values.aVencer, null, stats.desagioValues.aVencer)}
             </div>
           </div>
-          {insightFilter && <div style={{ marginTop: "16px", fontSize: "13px", color: "#2563eb", fontWeight: "500", textAlign: "right" }}>Filtro de status ativo. Clique no card ou no gráfico novamente para limpar.</div>}
+          {insightFilter && <div style={{ marginTop: "16px", fontSize: "13px", color: "#2563eb", fontWeight: "500", textAlign: "right" }}>Filtro de status ativo. Clique no card novamente para limpar.</div>}
           {tooltip.show && (
             <div style={{ position: 'fixed', top: tooltip.y + 15, left: tooltip.x + 15, background: 'rgba(17, 24, 39, 0.9)', color: '#fff', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', pointerEvents: 'none', zIndex: 9999 }}>
               <div style={{ fontWeight: 600 }}>{tooltip.label}</div>
@@ -690,11 +714,11 @@ function DashboardInsights({ processedRows, insightFilter, setInsightFilter, set
 }
 
 // --- COMPONENTE DA TABELA ---
-function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, chartFilter, borderoFilter, setBorderoFilter, dctoFilter, setDctoFilter, setChartFilter, setInsightFilter, setClienteSelecionado, setSacadoSelecionado }) {
+function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, borderoFilter, setBorderoFilter, dctoFilter, setDctoFilter, setDateFilter, setInsightFilter, setClienteSelecionado, setSacadoSelecionado }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [sortConfig, setSortConfig] = useState(null);
 
-  useEffect(() => { setSortConfig(null); }, [chartFilter]);
+  useEffect(() => { setSortConfig(null); }, [dateFilter]);
 
   const colunasOcultas = ["id", "created_at", "Cód.Red", "UF", "Banco", "Rec.", "Estado", "_status"];
   const columns = useMemo(() => {
@@ -711,18 +735,18 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, chartFilter,
   const activeSort = useMemo(() => {
     if (sortConfig) return sortConfig;
     if (rows.length === 0) return null;
-    if (chartFilter?.type === 'emis') {
+    if (dateFilter?.type === 'emis') {
       const emisKey = Object.keys(rows[0]).find(k => k.toLowerCase().includes('emis'));
       if (emisKey) return { key: emisKey, direction: 'asc' };
     }
-    if (chartFilter?.type === 'vcto') {
+    if (dateFilter?.type === 'vcto') {
       const vctoKey = Object.keys(rows[0]).find(k => k.toLowerCase().includes('vcto') && !k.toLowerCase().includes('vl'));
       if (vctoKey) return { key: vctoKey, direction: 'asc' };
     }
     const defaultDateKey = Object.keys(rows[0]).find(k => k.toLowerCase().includes('vcto') && !k.toLowerCase().includes('vl')) || Object.keys(rows[0]).find(k => k.toLowerCase().includes('pgto') && !k.toLowerCase().includes('vl'));
     if (defaultDateKey) return { key: defaultDateKey, direction: 'desc' };
     return null;
-  }, [sortConfig, rows, chartFilter]);
+  }, [sortConfig, rows, dateFilter]);
 
   const sortedRows = useMemo(() => {
     let sortableItems = [...rows];
@@ -753,7 +777,6 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, chartFilter,
     return sortableItems;
   }, [rows, activeSort]);
 
-  // Cálculo Unificado do Rodapé
   const { totalFace, totalDesagio, taxaMedia, valorMedio, prazoMedio } = useMemo(() => {
     let f = 0; let d = 0;
     let countTitulos = 0;
@@ -769,11 +792,11 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, chartFilter,
       const valKey = Object.keys(row).find(k => k.toLowerCase() === 'entrada' || (k.toLowerCase().includes('valor') && !k.toLowerCase().includes('pgto')));
       const val = valKey ? (Number(row[valKey]) || 0) : 0;
       
-      // Face Total, Ticket Médio, Prazo Médio (TODAS AS ENTRADAS)
       f += val;
       if (val > 0) {
         countTitulos += 1;
         
+        // PRAZO MÉDIO (AGORA CALCULA PARA TODOS OS TÍTULOS DA TABELA)
         const emisKey = Object.keys(row).find(k => k.toLowerCase().includes('emis'));
         const vctoKey = Object.keys(row).find(k => k.toLowerCase() === 'vcto' || (k.toLowerCase().includes('vcto') && !k.toLowerCase().includes('vl')));
         
@@ -787,7 +810,6 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, chartFilter,
         sumPrazoWeighted += (prazo * val);
       }
 
-      // Deságio (ÚNICO POR BORDERÔ)
       const desagioKey = Object.keys(row).find(k => k.toLowerCase() === 'desagio' || k.toLowerCase() === 'deságio');
       const desagioVal = desagioKey ? (Number(row[desagioKey]) || 0) : 0;
       if (!seenBorderosDesagio.has(bNum)) {
@@ -795,7 +817,6 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, chartFilter,
          d += desagioVal;
       }
 
-      // Taxa Efetiva Ponderada (ÚNICA POR BORDERÔ)
       const rateKey = Object.keys(row).find(k => k.toLowerCase() === 'tx.efet' || k.toLowerCase().includes('tx.efet') || k.toLowerCase().includes('tx efet'));
       const rawRate = rateKey ? row[rateKey] : null;
       const hasRateVal = rawRate !== null && rawRate !== undefined && String(rawRate).trim() !== "";
@@ -826,7 +847,7 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, chartFilter,
       totalDesagio: d, 
       taxaMedia: totalValueTaxa > 0 ? (weightedRateSum / totalValueTaxa) : 0,
       valorMedio: countTitulos > 0 ? f / countTitulos : 0,
-      prazoMedio: f > 0 ? (sumPrazoWeighted / f) : 0
+      prazoMedio: f > 0 ? (sumPrazoWeighted / f) : 0 
     };
   }, [sortedRows]);
 
@@ -900,9 +921,9 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, chartFilter,
                         return (
                           <td key={c} style={{ padding: "12px 16px", color: "#374151" }}>
                             {isBorderoCol ? (
-                              <span onClick={(e) => { e.stopPropagation(); if (isThisBorderoFiltered) setBorderoFilter(null); else { setBorderoFilter({ key: c, value: valor }); setDctoFilter(null); if (setChartFilter) setChartFilter(null); if (setInsightFilter) setInsightFilter(null); } }} style={{ background: isThisBorderoFiltered ? "#4f46e5" : "rgba(79, 70, 229, 0.08)", color: isThisBorderoFiltered ? "#fff" : "#4f46e5", padding: "4px 8px", borderRadius: "6px", fontWeight: "600", cursor: "pointer" }}>{escapeText(valor)}</span>
+                              <span onClick={(e) => { e.stopPropagation(); if (isThisBorderoFiltered) setBorderoFilter(null); else { setBorderoFilter({ key: c, value: valor }); setDctoFilter(null); setDateFilter({ type: 'emis', start: '', end: '' }); if (setInsightFilter) setInsightFilter(null); } }} style={{ background: isThisBorderoFiltered ? "#4f46e5" : "rgba(79, 70, 229, 0.08)", color: isThisBorderoFiltered ? "#fff" : "#4f46e5", padding: "4px 8px", borderRadius: "6px", fontWeight: "600", cursor: "pointer" }}>{escapeText(valor)}</span>
                             ) : isDctoCol ? (
-                              <span onClick={(e) => { e.stopPropagation(); if (isThisDctoFiltered) setDctoFilter(null); else { setDctoFilter({ key: c, value: valor }); setBorderoFilter(null); if (setChartFilter) setChartFilter(null); if (setInsightFilter) setInsightFilter(null); } }} style={{ background: isThisDctoFiltered ? "#0ea5e9" : "rgba(14, 165, 233, 0.08)", color: isThisDctoFiltered ? "#fff" : "#0ea5e9", padding: "4px 8px", borderRadius: "6px", fontWeight: "600", cursor: "pointer" }}>{escapeText(valor)}</span>
+                              <span onClick={(e) => { e.stopPropagation(); if (isThisDctoFiltered) setDctoFilter(null); else { setDctoFilter({ key: c, value: valor }); setBorderoFilter(null); setDateFilter({ type: 'emis', start: '', end: '' }); if (setInsightFilter) setInsightFilter(null); } }} style={{ background: isThisDctoFiltered ? "#0ea5e9" : "rgba(14, 165, 233, 0.08)", color: isThisDctoFiltered ? "#fff" : "#0ea5e9", padding: "4px 8px", borderRadius: "6px", fontWeight: "600", cursor: "pointer" }}>{escapeText(valor)}</span>
                             ) : c === "Cliente" ? (
                               <span onClick={(e) => { e.stopPropagation(); setClienteSelecionado(valor); }} style={{ cursor: "pointer", fontWeight: "600", color: "#374151" }} onMouseOver={(e) => e.currentTarget.style.color = '#4f46e5'} onMouseOut={(e) => e.currentTarget.style.color = '#374151'}>{escapeText(valor)}</span>
                             ) : c === "Sacado" ? (
@@ -918,7 +939,6 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, chartFilter,
             </table>
           </div>
           
-          {/* RODAPÉ ELEGANTE DESTACADO */}
           <div style={{ 
             padding: "18px 24px", 
             background: "#f8fafc", 
@@ -958,7 +978,7 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, chartFilter,
   );
 }
 
-// ... manter a função CustomDropdown exatamente igual
+// DROPDOWN CUSTOMIZADO
 function CustomDropdown({ value, options, onChange, placeholder }) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -975,7 +995,7 @@ function CustomDropdown({ value, options, onChange, placeholder }) {
 
   return (
     <div ref={wrapperRef} style={{ position: "relative", width: "100%" }}>
-      <input type="text" value={displayValue} onChange={(e) => { setSearchTerm(e.target.value); setIsOpen(true); }} onFocus={() => { setIsOpen(true); setSearchTerm(""); }} onKeyDown={handleKeyDown} placeholder={isOpen && value ? value : placeholder} style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid #d1d5db", background: "#f9fafb", fontSize: "14px", color: "#111827", outline: "none", boxSizing: "border-box" }} />
+      <input type="text" value={displayValue} onChange={(e) => { setSearchTerm(e.target.value); setIsOpen(true); }} onFocus={() => { setIsOpen(true); setSearchTerm(""); }} onKeyDown={handleKeyDown} placeholder={isOpen && value ? value : placeholder} style={{ width: "100%", padding: "11px", borderRadius: "6px", border: "1px solid #d1d5db", background: "#fff", fontSize: "14px", color: "#111827", outline: "none", boxSizing: "border-box" }} />
       <div style={{ position: "absolute", right: "12px", top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: "#6b7280", fontSize: "12px" }}>▼</div>
       {isOpen && (
         <div style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: "4px", background: "#fff", border: "1px solid #d1d5db", borderRadius: "8px", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1)", zIndex: 50, maxHeight: "250px", overflowY: "auto" }}>
@@ -994,7 +1014,12 @@ export default function MicroDashboard({ session }) {
   
   const [viewMode, setViewMode] = useState('all'); 
   const [insightFilter, setInsightFilter] = useState(null);
-  const [chartFilter, setChartFilter] = useState(null);
+  
+  const [dateFilter, setDateFilter] = useState({ type: 'emis', start: '', end: '' });
+  const [inputDateStart, setInputDateStart] = useState("");
+  const [inputDateEnd, setInputDateEnd] = useState("");
+  const [inputType, setInputType] = useState("emis");
+
   const [borderoFilter, setBorderoFilter] = useState(null); 
   const [dctoFilter, setDctoFilter] = useState(null); 
   
@@ -1003,7 +1028,16 @@ export default function MicroDashboard({ session }) {
   const [sacadoSelecionado, setSacadoSelecionado] = useState("");
 
   useEffect(() => {
-    setInsightFilter(null); setChartFilter(null); setBorderoFilter(null); setDctoFilter(null);
+    setInputDateStart(dateFilter.start);
+    setInputDateEnd(dateFilter.end);
+    setInputType(dateFilter.type);
+  }, [dateFilter]);
+
+  useEffect(() => {
+    setInsightFilter(null); 
+    setDateFilter({ type: 'emis', start: '', end: '' });
+    setBorderoFilter(null); 
+    setDctoFilter(null);
   }, [clienteSelecionado, sacadoSelecionado]);
 
   const processedRows = useMemo(() => {
@@ -1040,27 +1074,33 @@ export default function MicroDashboard({ session }) {
     return processedRows;
   }, [processedRows, viewMode]);
 
+  const rowsFilteredByDate = useMemo(() => {
+    let base = rowsFilteredByMode;
+    if (dateFilter.start || dateFilter.end) {
+       base = base.filter(r => {
+          const key = dateFilter.type === 'emis' 
+            ? Object.keys(r).find(k => k.toLowerCase().includes('emis'))
+            : Object.keys(r).find(k => k.toLowerCase() === 'vcto' || (k.toLowerCase().includes('vcto') && !k.toLowerCase().includes('vl')));
+          
+          if (!key || !r[key]) return false;
+          const dStr = String(r[key]).split("T")[0];
+          
+          if (dateFilter.start && dStr < dateFilter.start) return false;
+          if (dateFilter.end && dStr > dateFilter.end) return false;
+          return true;
+       });
+    }
+    return base;
+  }, [rowsFilteredByMode, dateFilter]);
+
   const evolutionRows = useMemo(() => {
-    if (!insightFilter) return rowsFilteredByMode;
-    return rowsFilteredByMode.filter(r => r._status === insightFilter);
+    let base = rowsFilteredByMode;
+    if (insightFilter) base = base.filter(r => r._status === insightFilter);
+    return base;
   }, [rowsFilteredByMode, insightFilter]);
 
-  const rowsFilteredByChart = useMemo(() => {
-    if (!chartFilter) return rowsFilteredByMode;
-    return rowsFilteredByMode.filter(r => {
-      if (chartFilter.type === 'emis') {
-        const emisKey = Object.keys(r).find(k => k.toLowerCase().includes('emis'));
-        return emisKey && r[emisKey] && String(r[emisKey]).startsWith(chartFilter.month);
-      } else if (chartFilter.type === 'vcto') {
-        const vctoKey = Object.keys(r).find(k => k.toLowerCase() === 'vcto' || (k.toLowerCase().includes('vcto') && !k.toLowerCase().includes('vl')));
-        return vctoKey && r[vctoKey] && String(r[vctoKey]).startsWith(chartFilter.month);
-      }
-      return true;
-    });
-  }, [rowsFilteredByMode, chartFilter]);
-
   const rowsParaTabela = useMemo(() => {
-    let filtered = rowsFilteredByChart;
+    let filtered = rowsFilteredByDate;
     if (insightFilter) filtered = filtered.filter(r => r._status === insightFilter);
     if (borderoFilter) filtered = filtered.filter(r => r[borderoFilter.key] === borderoFilter.value);
     if (dctoFilter) {
@@ -1068,9 +1108,8 @@ export default function MicroDashboard({ session }) {
       filtered = filtered.filter(r => String(r[dctoFilter.key] || "").split(/[-/]/)[0].trim() === baseTarget);
     }
     return filtered;
-  }, [rowsFilteredByChart, insightFilter, borderoFilter, dctoFilter]);
+  }, [rowsFilteredByDate, insightFilter, borderoFilter, dctoFilter]);
 
-  // --- NOVA ESTRUTURA GLOBAL DE KPIs (Taxa, Ticket e Prazo) ---
   const kpiData = useMemo(() => {
     if (!rowsParaTabela || rowsParaTabela.length === 0) return { taxaMedia: 0, baseCalculo: 0, valorMedio: 0, prazoMedio: 0 };
 
@@ -1091,7 +1130,6 @@ export default function MicroDashboard({ session }) {
       const hasRateVal = rawRate !== null && rawRate !== undefined && String(rawRate).trim() !== "";
       const rate = hasRateVal ? (Number(String(rawRate).replace('%', '').replace(',', '.')) || 0) : 0;
 
-      // Unico por Borderô (apenas para a Taxa)
       if (!borderoMap.has(bNum)) {
         borderoMap.set(bNum, { totalValue: 0, rate: 0, hasRate: false });
       }
@@ -1102,7 +1140,6 @@ export default function MicroDashboard({ session }) {
         bData.hasRate = true;
       }
 
-      // Ticket Médio e Prazo (Todas as entradas)
       if (val > 0) {
         sumFaceTotal += val;
         countTitulos += 1;
@@ -1176,12 +1213,19 @@ export default function MicroDashboard({ session }) {
     return () => clearTimeout(delayDebounceFn);
   }, [clienteSelecionado, sacadoSelecionado, session?.user?.id]);
 
-  const limparFiltros = () => {
-    setClienteSelecionado(""); setSacadoSelecionado(""); setViewMode('all');
-    setInsightFilter(null); setChartFilter(null); setBorderoFilter(null); setDctoFilter(null);
+  // Funções de limpeza separadas
+  const limparFiltroEntidades = () => {
+    setClienteSelecionado(""); 
+    setSacadoSelecionado(""); 
   };
 
-  const hasAnyFilter = clienteSelecionado || sacadoSelecionado || viewMode !== 'all' || insightFilter || chartFilter || borderoFilter || dctoFilter;
+  const limparFiltroData = () => {
+    setDateFilter({ type: inputType, start: '', end: '' }); 
+  };
+
+  const hasEntityFilter = !!(clienteSelecionado || sacadoSelecionado);
+  const hasDateFilter = !!(dateFilter.start || dateFilter.end);
+  const hasAnyFilter = hasEntityFilter || hasDateFilter || viewMode !== 'all' || insightFilter || borderoFilter || dctoFilter;
 
   const getTabStyle = (isActive) => ({
     padding: "8px 16px", borderRadius: "6px", border: "1px solid", borderColor: isActive ? "#4f46e5" : "#d1d5db",
@@ -1203,34 +1247,65 @@ export default function MicroDashboard({ session }) {
           <CustomDropdown value={sacadoSelecionado} onChange={setSacadoSelecionado} options={sacadosDisponiveis} placeholder="Selecione ou digite o Sacado..." />
         </div>
         <div>
-          <button onClick={limparFiltros} disabled={!hasAnyFilter} style={{ padding: "12px 20px", borderRadius: "8px", border: "1px solid #d1d5db", background: (!hasAnyFilter) ? "#f3f4f6" : "#fff", color: (!hasAnyFilter) ? "#9ca3af" : "#374151", fontWeight: "500", fontSize: "14px", cursor: (!hasAnyFilter) ? "not-allowed" : "pointer", transition: "all 0.2s" }}>Limpar Tudo</button>
+          <button onClick={limparFiltroEntidades} disabled={!hasEntityFilter} style={{ padding: "11px 16px", borderRadius: "6px", border: "1px solid #d1d5db", background: (!hasEntityFilter) ? "#f3f4f6" : "#fff", color: (!hasEntityFilter) ? "#9ca3af" : "#ef4444", fontWeight: "600", fontSize: "14px", cursor: (!hasEntityFilter) ? "not-allowed" : "pointer", transition: "all 0.2s" }}>Limpar Nomes</button>
         </div>
       </div>
 
+      {/* NOVA BARRA DE FILTRO DE DATA */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "16px", marginTop: "16px", alignItems: "flex-end", padding: "16px", background: "#f9fafb", borderRadius: "8px", border: "1px solid #e5e7eb" }}>
+        <div style={{ flex: "1 1 150px" }}>
+          <label style={{ display: "block", marginBottom: 6, fontSize: "13px", fontWeight: "600", color: "#4b5563" }}>Data Base</label>
+          <select value={inputType} onChange={e => setInputType(e.target.value)} style={{ width: "100%", padding: "10px", borderRadius: "6px", border: "1px solid #d1d5db", background: "#fff", fontSize: "14px", color: "#111827", outline: "none" }}>
+            <option value="emis">Emissão</option>
+            <option value="vcto">Vencimento</option>
+          </select>
+        </div>
+        <div style={{ flex: "1 1 180px" }}>
+          <label style={{ display: "block", marginBottom: 6, fontSize: "13px", fontWeight: "600", color: "#4b5563" }}>Data Inicial</label>
+          <input type="date" value={inputDateStart} onChange={e => setInputDateStart(e.target.value)} style={{ width: "100%", padding: "9px", borderRadius: "6px", border: "1px solid #d1d5db", background: "#fff", fontSize: "14px", color: "#111827", outline: "none", boxSizing: "border-box" }} />
+        </div>
+        <div style={{ flex: "1 1 180px" }}>
+          <label style={{ display: "block", marginBottom: 6, fontSize: "13px", fontWeight: "600", color: "#4b5563" }}>Data Final</label>
+          <input type="date" value={inputDateEnd} onChange={e => setInputDateEnd(e.target.value)} style={{ width: "100%", padding: "9px", borderRadius: "6px", border: "1px solid #d1d5db", background: "#fff", fontSize: "14px", color: "#111827", outline: "none", boxSizing: "border-box" }} />
+        </div>
+        <div style={{ display: "flex", gap: "12px" }}>
+          <button onClick={() => { setDateFilter({ type: inputType, start: inputDateStart, end: inputDateEnd }); setBorderoFilter(null); setDctoFilter(null); }} style={{ padding: "10px 16px", borderRadius: "6px", border: "none", background: "#4f46e5", color: "#fff", fontWeight: "600", fontSize: "13px", cursor: "pointer", transition: "all 0.2s" }}>Aplicar Data</button>
+          <button onClick={limparFiltroData} disabled={!hasDateFilter} style={{ padding: "10px 16px", borderRadius: "6px", border: "1px solid #d1d5db", background: (!hasDateFilter) ? "#f3f4f6" : "#fff", color: (!hasDateFilter) ? "#9ca3af" : "#ef4444", fontWeight: "600", fontSize: "13px", cursor: (!hasDateFilter) ? "not-allowed" : "pointer", transition: "all 0.2s" }}>Limpar Data</button>
+        </div>
+      </div>
+
+      {dateFilter && (dateFilter.start || dateFilter.end) && (
+        <div style={{ marginTop: "12px", fontSize: "13px", color: "#4f46e5", fontWeight: "600", textAlign: "right" }}>
+          Filtro de {dateFilter.type === 'emis' ? 'Emissão' : 'Vencimento'} ativo: 
+          {dateFilter.start ? ` de ${formatarData(dateFilter.start)}` : ''} 
+          {dateFilter.end ? ` até ${formatarData(dateFilter.end)}` : ''}.
+          <span style={{ color: "#6b7280", fontWeight: "500", marginLeft: "8px" }}>(Clique no período selecionado no gráfico para limpar)</span>
+        </div>
+      )}
+
       <div style={{ display: "flex", gap: "10px", marginTop: "16px", flexWrap: "wrap" }}>
-        <button onClick={() => { setViewMode('all'); setInsightFilter(null); setChartFilter(null); setBorderoFilter(null); setDctoFilter(null); }} style={getTabStyle(viewMode === 'all')}>Visão Geral</button>
-        <button onClick={() => { setViewMode(prev => prev === 'finalized' ? 'all' : 'finalized'); setInsightFilter(null); setChartFilter(null); setBorderoFilter(null); setDctoFilter(null); }} style={getTabStyle(viewMode === 'finalized')}>Operações Já Finalizadas</button>
-        <button onClick={() => { setViewMode(prev => prev === 'open' ? 'all' : 'open'); setInsightFilter(null); setChartFilter(null); setBorderoFilter(null); setDctoFilter(null); }} style={getTabStyle(viewMode === 'open')}>Mostrar Em Aberto</button>
+        <button onClick={() => { setViewMode('all'); setInsightFilter(null); setDateFilter({ type: 'emis', start: '', end: '' }); setBorderoFilter(null); setDctoFilter(null); }} style={getTabStyle(viewMode === 'all')}>Visão Geral</button>
+        <button onClick={() => { setViewMode(prev => prev === 'finalized' ? 'all' : 'finalized'); setInsightFilter(null); setDateFilter({ type: 'emis', start: '', end: '' }); setBorderoFilter(null); setDctoFilter(null); }} style={getTabStyle(viewMode === 'finalized')}>Operações Já Finalizadas</button>
+        <button onClick={() => { setViewMode(prev => prev === 'open' ? 'all' : 'open'); setInsightFilter(null); setDateFilter({ type: 'emis', start: '', end: '' }); setBorderoFilter(null); setDctoFilter(null); }} style={getTabStyle(viewMode === 'open')}>Mostrar Em Aberto</button>
       </div>
 
       {rowsFilteredByMode.length > 0 && (
         <div style={{ marginTop: "24px" }}>
           
-{/* BANNER DE KPIs INTELIGENTE - CORPORATIVO ELEVADO COM LEVE DESTAQUE */}
+          {/* BANNER DE KPIs INTELIGENTE - CORPORATIVO ELEVADO COM LEVE DESTAQUE */}
           {rowsParaTabela.length > 0 && kpiData.baseCalculo > 0 && (
             <div style={{
-              background: "#d1d5db", // Fundo cinza cria a borda do grid internamente
+              background: "#d1d5db", 
               borderRadius: "12px",
               display: "grid",
               gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
               gap: "1px",
-              boxShadow: "0 14px 28px -6px rgba(0, 0, 0, 0.12), 0 4px 10px -4px rgba(0, 0, 0, 0.08)", // Sombreado elevado
+              boxShadow: "0 14px 28px -6px rgba(0, 0, 0, 0.12), 0 4px 10px -4px rgba(0, 0, 0, 0.08)", 
               marginBottom: "32px",
               border: "1px solid #d1d5db",
               overflow: "hidden"
             }}>
               
-              {/* BLOCO 1: Taxa Média */}
               <div style={{ background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #4f46e5", padding: "24px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
                   <div style={{ background: "rgba(79, 70, 229, 0.1)", padding: "6px", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -1246,13 +1321,12 @@ export default function MicroDashboard({ session }) {
                 </div>
                 <div style={{ fontSize: "13px", color: "#6b7280", marginTop: "12px", fontWeight: "500" }}>
                   Base: <span style={{color: "#374151", fontWeight: "600"}}>{formatarMoeda(kpiData.baseCalculo)}</span> 
-                  {(insightFilter || chartFilter || borderoFilter || dctoFilter) && (
+                  {(insightFilter || dateFilter.start || dateFilter.end || borderoFilter || dctoFilter) && (
                     <span style={{color: "#4f46e5", background: "#e0e7ff", padding: "2px 6px", borderRadius: "4px", marginLeft: "4px", fontSize: "11px", fontWeight: "700"}}>FILTRO ATIVO</span>
                   )}
                 </div>
               </div>
 
-              {/* BLOCO 2: Ticket Médio */}
               <div style={{ background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #0ea5e9", padding: "24px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
                   <div style={{ background: "rgba(14, 165, 233, 0.1)", padding: "6px", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -1268,11 +1342,10 @@ export default function MicroDashboard({ session }) {
                   <span style={{ fontSize: "36px", fontWeight: "700", color: "#111827", lineHeight: "1", letterSpacing: "-0.02em" }}>{formatarMoeda(kpiData.valorMedio)}</span>
                 </div>
                 <div style={{ fontSize: "13px", color: "#6b7280", marginTop: "12px", fontWeight: "500" }}>
-                  Considerando todos os títulos
+                  Considerando os títulos no filtro
                 </div>
               </div>
 
-              {/* BLOCO 3: Prazo Médio */}
               <div style={{ background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #10b981", padding: "24px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
                   <div style={{ background: "rgba(16, 185, 129, 0.1)", padding: "6px", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -1288,15 +1361,16 @@ export default function MicroDashboard({ session }) {
                   <span style={{ fontSize: "16px", color: "#6b7280", fontWeight: "600" }}>dias</span>
                 </div>
                 <div style={{ fontSize: "13px", color: "#6b7280", marginTop: "12px", fontWeight: "500" }}>
-                  Ponderado pelo valor de face
+                  Em aberto, ponderado pelo valor
                 </div>
               </div>
 
             </div>
           )}
           
-          <DashboardInsights processedRows={rowsFilteredByChart} insightFilter={insightFilter} setInsightFilter={setInsightFilter} setBorderoFilter={setBorderoFilter} setDctoFilter={setDctoFilter} />
-          <EvolutionCharts rows={evolutionRows} chartFilter={chartFilter} setChartFilter={setChartFilter} setBorderoFilter={setBorderoFilter} setDctoFilter={setDctoFilter} />
+          <DashboardInsights processedRows={rowsFilteredByDate} insightFilter={insightFilter} setInsightFilter={setInsightFilter} setBorderoFilter={setBorderoFilter} setDctoFilter={setDctoFilter} />
+          
+          <EvolutionCharts rows={evolutionRows} dateFilter={dateFilter} setDateFilter={setDateFilter} setBorderoFilter={setBorderoFilter} setDctoFilter={setDctoFilter} />
         </div>
       )}
 
@@ -1315,11 +1389,11 @@ export default function MicroDashboard({ session }) {
         {(!hasAnyFilter && !loading) ? (
           <div style={{ padding: "40px 20px", textAlign: "center", color: "#6b7280", background: "#fff", borderRadius: "12px", border: "1px dashed #d1d5db", boxShadow: "0 1px 3px 0 rgba(0,0,0,0.1)" }}>
             <p style={{ margin: 0, fontSize: "15px", fontWeight: "500" }}>Tabela oculta na Visão Geral para otimizar o desempenho.</p>
-            <p style={{ margin: "8px 0 0 0", fontSize: "13px" }}>Selecione um <strong>Cedente</strong>, <strong>Sacado</strong> ou clique nos cards e gráficos para carregar os registos detalhados.</p>
+            <p style={{ margin: "8px 0 0 0", fontSize: "13px" }}>Selecione um <strong>Cedente</strong>, <strong>Sacado</strong> ou filtre para carregar os registos detalhados.</p>
           </div>
         ) : (
           (!loading || rowsParaTabela.length > 0) && (
-            <SimpleTable rows={rowsParaTabela} clienteSelecionado={clienteSelecionado} sacadoSelecionado={sacadoSelecionado} chartFilter={chartFilter} borderoFilter={borderoFilter} setBorderoFilter={setBorderoFilter} dctoFilter={dctoFilter} setDctoFilter={setDctoFilter} setChartFilter={setChartFilter} setInsightFilter={setInsightFilter} setClienteSelecionado={setClienteSelecionado} setSacadoSelecionado={setSacadoSelecionado} />
+            <SimpleTable rows={rowsParaTabela} clienteSelecionado={clienteSelecionado} sacadoSelecionado={sacadoSelecionado} dateFilter={dateFilter} borderoFilter={borderoFilter} setBorderoFilter={setBorderoFilter} dctoFilter={dctoFilter} setDctoFilter={setDctoFilter} setDateFilter={setDateFilter} setInsightFilter={setInsightFilter} setClienteSelecionado={setClienteSelecionado} setSacadoSelecionado={setSacadoSelecionado} />
           )
         )}
       </div>
