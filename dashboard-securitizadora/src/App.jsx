@@ -8,7 +8,7 @@ export default function App() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [msg, setMsg] = useState("");
-  const [activeTab, setActiveTab] = useState('macro'); // Controle da aba ativa
+  const [activeTab, setActiveTab] = useState('micro'); // Controle da aba ativa - Padrão agora é 'micro'
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
@@ -98,16 +98,16 @@ export default function App() {
 
             {/* Alternador de Dashboards */}
             <div style={{ display: "flex", gap: "16px", marginBottom: "24px" }}>
+              <button onClick={() => setActiveTab('micro')} style={getTabStyle(activeTab === 'micro')}>
+                Dados Micro (Detalhes de Operações)
+              </button>
               <button onClick={() => setActiveTab('macro')} style={getTabStyle(activeTab === 'macro')}>
                 Dados Macro (Visão de Risco)
-              </button>
-              <button onClick={() => setActiveTab('micro')} style={getTabStyle(activeTab === 'micro')}>
-                Dados Micro (Detalhes e Filtros)
               </button>
             </div>
 
             {/* Renderização Condicional das Telas */}
-            {activeTab === 'macro' ? <MacroDashboard session={session} /> : <MicroDashboard session={session} />}
+            {activeTab === 'micro' ? <MicroDashboard session={session} /> : <MacroDashboard session={session} />}
 
           </div>
         )}
