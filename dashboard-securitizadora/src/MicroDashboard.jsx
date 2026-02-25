@@ -41,24 +41,60 @@ function sacadoValido(sacado) {
 }
 
 // --- COMPONENTE DE EVOLUÇÃO ---
+// --- COMPONENTE DE EVOLUÇÃO ---
 function EvolutionCharts({ rows, chartFilter, setChartFilter, setBorderoFilter, setDctoFilter }) {
+  const [isCollapsed, setIsCollapsed] = useState(false);
+
   const [hoveredIndex1, setHoveredIndex1] = useState(null);
   const [hoveredIndex2, setHoveredIndex2] = useState(null);
+  const [hoveredIndex3, setHoveredIndex3] = useState(null);
+  const [hoveredIndex4, setHoveredIndex4] = useState(null);
 
-  const chartData = useMemo(() => {
+  const { chartData, chartDataRate, chartDataDesagio } = useMemo(() => {
     const grouped = {};
-    rows.forEach(r => {
+    const groupedRate = {};
+    const groupedDesagio = {};
+
+    rows.forEach((r, idx) => {
       const emisKey = Object.keys(r).find(k => k.toLowerCase().includes('emis'));
       const vctoKey = Object.keys(r).find(k => k.toLowerCase() === 'vcto' || (k.toLowerCase().includes('vcto') && !k.toLowerCase().includes('vl')));
       const valKey = Object.keys(r).find(k => k.toLowerCase() === 'entrada' || (k.toLowerCase().includes('valor') && !k.toLowerCase().includes('pgto')));
       
+      const borderoKey = Object.keys(r).find(k => k.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes("border"));
+      const rateKey = Object.keys(r).find(k => k.toLowerCase() === 'tx.efet' || k.toLowerCase().includes('tx.efet') || k.toLowerCase().includes('tx efet'));
+      const desagioKey = Object.keys(r).find(k => k.toLowerCase() === 'desagio' || k.toLowerCase() === 'deságio');
+      
+      const bNum = (borderoKey && r[borderoKey]) ? String(r[borderoKey]).trim() : `avulso_${idx}`; 
+      const val = valKey ? (Number(r[valKey]) || 0) : 0;
+      const desagioVal = desagioKey ? (Number(r[desagioKey]) || 0) : 0;
+
       if (emisKey && r[emisKey]) {
         const emisStr = String(r[emisKey]).split("T")[0];
         if (emisStr.length >= 7) {
           const ym = emisStr.substring(0, 7); 
           if (!grouped[ym]) grouped[ym] = { val: 0, numAtraso: 0, numTotalFin: 0 };
-          const val = valKey ? (Number(r[valKey]) || 0) : 0;
           grouped[ym].val += val;
+
+          if (!groupedRate[ym]) groupedRate[ym] = new Map();
+          const rawRate = rateKey ? r[rateKey] : null;
+          const hasRateVal = rawRate !== null && rawRate !== undefined && String(rawRate).trim() !== "";
+          const rate = hasRateVal ? (Number(String(rawRate).replace('%', '').replace(',', '.')) || 0) : 0;
+
+          const mapYm = groupedRate[ym];
+          if (!mapYm.has(bNum)) {
+             mapYm.set(bNum, { totalValue: 0, rate: 0, hasRate: false });
+          }
+          const bData = mapYm.get(bNum);
+          bData.totalValue += val;
+          if (!bData.hasRate && hasRateVal) {
+             bData.rate = rate;
+             bData.hasRate = true;
+          }
+
+          if (!groupedDesagio[ym]) groupedDesagio[ym] = new Map();
+          if (!groupedDesagio[ym].has(bNum)) {
+            groupedDesagio[ym].set(bNum, desagioVal);
+          }
         }
       }
 
@@ -82,10 +118,35 @@ function EvolutionCharts({ rows, chartFilter, setChartFilter, setBorderoFilter, 
     const currentYM = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
     const sortedMonths = Object.keys(grouped).sort().filter(ym => ym <= currentYM);
 
-    return sortedMonths.map(ym => {
+    const cData = sortedMonths.map(ym => {
       const obj = grouped[ym];
       return { ym, label: formatarMesAno(ym), value: obj.val, pctAtraso: obj.numTotalFin > 0 ? (obj.numAtraso / obj.numTotalFin) * 100 : 0 };
     });
+
+    const cDataRate = sortedMonths.map(ym => {
+      let sumVal = 0;
+      let sumWeightedRate = 0;
+      if (groupedRate[ym]) {
+        groupedRate[ym].forEach(b => {
+           if (b.hasRate && b.totalValue > 0) {
+              sumVal += b.totalValue;
+              sumWeightedRate += (b.rate * b.totalValue);
+           }
+        });
+      }
+      const avgRate = sumVal > 0 ? (sumWeightedRate / sumVal) : 0;
+      return { ym, label: formatarMesAno(ym), avgRate };
+    });
+
+    const cDataDesagio = sortedMonths.map(ym => {
+      let sumDesagio = 0;
+      if (groupedDesagio[ym]) {
+        groupedDesagio[ym].forEach(val => sumDesagio += val);
+      }
+      return { ym, label: formatarMesAno(ym), value: sumDesagio };
+    });
+
+    return { chartData: cData, chartDataRate: cDataRate, chartDataDesagio: cDataDesagio };
   }, [rows]);
 
   if (chartData.length === 0) return null;
@@ -102,6 +163,7 @@ function EvolutionCharts({ rows, chartFilter, setChartFilter, setBorderoFilter, 
     return Math.floor(val).toString();
   };
   const formatAxisPct = (val) => Math.floor(val) + '%';
+  const formatAxisRate = (val) => val.toFixed(1) + '%';
 
   const maxVal1 = Math.max(...chartData.map(d => d.value), 10);
   const points1 = chartData.map((d, i) => {
@@ -121,126 +183,290 @@ function EvolutionCharts({ rows, chartFilter, setChartFilter, setBorderoFilter, 
   const pathD2 = points2.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
   const areaD2 = points2.length > 1 ? `${pathD2} L ${points2[points2.length - 1].x} ${svgHeight - paddingBottom} L ${points2[0].x} ${svgHeight - paddingBottom} Z` : "";
 
-  return (
-    <div style={{ marginBottom: "24px" }}>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: "24px" }}>
-        {/* GRÁFICO 1 */}
-        <div style={{ flex: "1 1 400px", background: "#fff", padding: "24px", borderRadius: "12px", boxShadow: "0 1px 3px 0 rgba(0,0,0,0.1)" }}>
-          <h3 style={{ margin: "0 0 16px 0", color: "#111827", fontSize: "16px", fontWeight: "600" }}>
-            Evolução de Valores Descontados <span style={{fontSize: "12px", color:"#9ca3af", fontWeight: "400"}}>(clique num mês)</span>
-          </h3>
-          <div style={{ position: "relative", width: "100%", height: "auto" }}>
-            <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} style={{ width: "100%", height: "auto", overflow: "visible" }}>
-              <defs><linearGradient id="gradientArea1" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#4f46e5" stopOpacity="0.4" /><stop offset="100%" stopColor="#4f46e5" stopOpacity="0.0" /></linearGradient></defs>
-              <line x1={paddingX} y1={paddingTop} x2={svgWidth - paddingRight} y2={paddingTop} stroke="#f3f4f6" strokeWidth="1" />
-              <line x1={paddingX} y1={paddingTop + chartHeight / 2} x2={svgWidth - paddingRight} y2={paddingTop + chartHeight / 2} stroke="#f3f4f6" strokeWidth="1" />
-              <line x1={paddingX} y1={svgHeight - paddingBottom} x2={svgWidth - paddingRight} y2={svgHeight - paddingBottom} stroke="#e5e7eb" strokeWidth="1" />
-              <text x={paddingX - 8} y={paddingTop + 4} fill="#9ca3af" fontSize="11px" fontWeight="500" textAnchor="end">{formatAxisVal(maxVal1)}</text>
-              <text x={paddingX - 8} y={paddingTop + chartHeight / 2 + 4} fill="#9ca3af" fontSize="11px" fontWeight="500" textAnchor="end">{formatAxisVal(maxVal1 / 2)}</text>
-              <text x={paddingX - 8} y={svgHeight - paddingBottom + 4} fill="#9ca3af" fontSize="11px" fontWeight="500" textAnchor="end">0</text>
-              {points1.length > 1 && <path d={areaD1} fill="url(#gradientArea1)" />}
-              <path d={pathD1} fill="none" stroke="#4f46e5" strokeWidth="3" strokeLinejoin="round" />
-              {points1.map((p, i) => {
-                const isSelected = chartFilter?.type === 'emis' && chartFilter.month === p.ym;
-                if (!isSelected) return null;
-                return (
-                  <g key={`selected1-${i}`}>
-                    <line x1={p.x} y1={paddingTop} x2={p.x} y2={svgHeight - paddingBottom} stroke="#4f46e5" strokeWidth="2" strokeDasharray="4 4" />
-                    <circle cx={p.x} cy={p.y} r="6" fill="#4f46e5" stroke="#fff" strokeWidth="2" />
-                  </g>
-                );
-              })}
-              {points1.map((p, i) => {
-                if (i % step !== 0 && i !== points1.length - 1) return null;
-                const isSelected = chartFilter?.type === 'emis' && chartFilter.month === p.ym;
-                return (
-                  <text key={`label1-${i}`} x={p.x} y={svgHeight - paddingBottom + 16} fill={isSelected ? "#4f46e5" : "#6b7280"} fontSize="11px" fontWeight={isSelected ? "700" : "400"} textAnchor="end" transform={`rotate(-45, ${p.x}, ${svgHeight - paddingBottom + 16})`}>{p.label}</text>
-                );
-              })}
-              {hoveredIndex1 !== null && (
-                <g>
-                  <line x1={points1[hoveredIndex1].x} y1={paddingTop} x2={points1[hoveredIndex1].x} y2={svgHeight - paddingBottom} stroke="#9ca3af" strokeWidth="1" strokeDasharray="4 4" />
-                  <circle cx={points1[hoveredIndex1].x} cy={points1[hoveredIndex1].y} r="5" fill="#fff" stroke="#4f46e5" strokeWidth="2" />
-                  <rect x={points1[hoveredIndex1].x - 60} y={points1[hoveredIndex1].y - 35} width="120" height="26" rx="4" fill="#111827" opacity="0.9" />
-                  <text x={points1[hoveredIndex1].x} y={points1[hoveredIndex1].y - 18} fill="#fff" fontSize="11px" fontWeight="600" textAnchor="middle">{formatarMoeda(points1[hoveredIndex1].value)}</text>
-                </g>
-              )}
-              {points1.map((p, i) => {
-                const segmentWidth = chartData.length > 1 ? chartWidth / (chartData.length - 1) : chartWidth;
-                return (
-                  <rect key={`interact1-${i}`} x={p.x - segmentWidth / 2} y={paddingTop} width={segmentWidth} height={chartHeight} fill="transparent"
-                    onMouseEnter={() => setHoveredIndex1(i)} onMouseLeave={() => setHoveredIndex1(null)}
-                    onClick={() => {
-                      setChartFilter(prev => prev?.type === 'emis' && prev.month === p.ym ? null : { type: 'emis', month: p.ym });
-                      setBorderoFilter(null); setDctoFilter(null);
-                    }}
-                    style={{ cursor: "pointer" }}
-                  />
-                );
-              })}
-            </svg>
-          </div>
-        </div>
+  const maxVal3 = Math.max(...chartDataRate.map(d => d.avgRate), 1); 
+  const points3 = chartDataRate.map((d, i) => {
+    const x = chartDataRate.length > 1 ? paddingX + (i / (chartDataRate.length - 1)) * chartWidth : paddingX + chartWidth / 2;
+    const y = svgHeight - paddingBottom - (d.avgRate / maxVal3) * chartHeight;
+    return { ...d, x, y };
+  });
+  const pathD3 = points3.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+  const areaD3 = points3.length > 1 ? `${pathD3} L ${points3[points3.length - 1].x} ${svgHeight - paddingBottom} L ${points3[0].x} ${svgHeight - paddingBottom} Z` : "";
 
-        {/* GRÁFICO 2 */}
-        <div style={{ flex: "1 1 400px", background: "#fff", padding: "24px", borderRadius: "12px", boxShadow: "0 1px 3px 0 rgba(0,0,0,0.1)" }}>
-          <h3 style={{ margin: "0 0 16px 0", color: "#111827", fontSize: "16px", fontWeight: "600" }}>
-            Percentual de Atraso <span style={{fontSize: "12px", color:"#9ca3af", fontWeight: "400"}}>(clique num mês)</span>
-          </h3>
-          <div style={{ position: "relative", width: "100%", height: "auto" }}>
-            <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} style={{ width: "100%", height: "auto", overflow: "visible" }}>
-              <defs><linearGradient id="gradientArea2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#ef4444" stopOpacity="0.3" /><stop offset="100%" stopColor="#ef4444" stopOpacity="0.0" /></linearGradient></defs>
-              <line x1={paddingX} y1={paddingTop} x2={svgWidth - paddingRight} y2={paddingTop} stroke="#f3f4f6" strokeWidth="1" />
-              <line x1={paddingX} y1={paddingTop + chartHeight / 2} x2={svgWidth - paddingRight} y2={paddingTop + chartHeight / 2} stroke="#f3f4f6" strokeWidth="1" />
-              <line x1={paddingX} y1={svgHeight - paddingBottom} x2={svgWidth - paddingRight} y2={svgHeight - paddingBottom} stroke="#e5e7eb" strokeWidth="1" />
-              <text x={paddingX - 8} y={paddingTop + 4} fill="#9ca3af" fontSize="11px" fontWeight="500" textAnchor="end">{formatAxisPct(maxVal2)}</text>
-              <text x={paddingX - 8} y={paddingTop + chartHeight / 2 + 4} fill="#9ca3af" fontSize="11px" fontWeight="500" textAnchor="end">{formatAxisPct(maxVal2 / 2)}</text>
-              <text x={paddingX - 8} y={svgHeight - paddingBottom + 4} fill="#9ca3af" fontSize="11px" fontWeight="500" textAnchor="end">0%</text>
-              {points2.length > 1 && <path d={areaD2} fill="url(#gradientArea2)" />}
-              <path d={pathD2} fill="none" stroke="#ef4444" strokeWidth="3" strokeLinejoin="round" />
-              {points2.map((p, i) => {
-                const isSelected = chartFilter?.type === 'vcto' && chartFilter.month === p.ym;
-                if (!isSelected) return null;
-                return (
-                  <g key={`selected2-${i}`}>
-                    <line x1={p.x} y1={paddingTop} x2={p.x} y2={svgHeight - paddingBottom} stroke="#ef4444" strokeWidth="2" strokeDasharray="4 4" />
-                    <circle cx={p.x} cy={p.y} r="6" fill="#ef4444" stroke="#fff" strokeWidth="2" />
-                  </g>
-                );
-              })}
-              {points2.map((p, i) => {
-                if (i % step !== 0 && i !== points2.length - 1) return null;
-                const isSelected = chartFilter?.type === 'vcto' && chartFilter.month === p.ym;
-                return (
-                  <text key={`label2-${i}`} x={p.x} y={svgHeight - paddingBottom + 16} fill={isSelected ? "#ef4444" : "#6b7280"} fontSize="11px" fontWeight={isSelected ? "700" : "400"} textAnchor="end" transform={`rotate(-45, ${p.x}, ${svgHeight - paddingBottom + 16})`}>{p.label}</text>
-                );
-              })}
-              {hoveredIndex2 !== null && (
-                <g>
-                  <line x1={points2[hoveredIndex2].x} y1={paddingTop} x2={points2[hoveredIndex2].x} y2={svgHeight - paddingBottom} stroke="#9ca3af" strokeWidth="1" strokeDasharray="4 4" />
-                  <circle cx={points2[hoveredIndex2].x} cy={points2[hoveredIndex2].y} r="5" fill="#fff" stroke="#ef4444" strokeWidth="2" />
-                  <rect x={points2[hoveredIndex2].x - 35} y={points2[hoveredIndex2].y - 35} width="70" height="26" rx="4" fill="#111827" opacity="0.9" />
-                  <text x={points2[hoveredIndex2].x} y={points2[hoveredIndex2].y - 18} fill="#fff" fontSize="12px" fontWeight="600" textAnchor="middle">{points2[hoveredIndex2].pctAtraso.toFixed(1)}%</text>
-                </g>
-              )}
-              {points2.map((p, i) => {
-                const segmentWidth = chartData.length > 1 ? chartWidth / (chartData.length - 1) : chartWidth;
-                return (
-                  <rect key={`interact2-${i}`} x={p.x - segmentWidth / 2} y={paddingTop} width={segmentWidth} height={chartHeight} fill="transparent"
-                    onMouseEnter={() => setHoveredIndex2(i)} onMouseLeave={() => setHoveredIndex2(null)}
-                    onClick={() => {
-                      setChartFilter(prev => prev?.type === 'vcto' && prev.month === p.ym ? null : { type: 'vcto', month: p.ym });
-                      setBorderoFilter(null); setDctoFilter(null);
-                    }}
-                    style={{ cursor: "pointer" }}
-                  />
-                );
-              })}
-            </svg>
+  const maxVal4 = Math.max(...chartDataDesagio.map(d => d.value), 10);
+  const points4 = chartDataDesagio.map((d, i) => {
+    const x = chartDataDesagio.length > 1 ? paddingX + (i / (chartDataDesagio.length - 1)) * chartWidth : paddingX + chartWidth / 2;
+    const y = svgHeight - paddingBottom - (d.value / maxVal4) * chartHeight;
+    return { ...d, x, y };
+  });
+  const pathD4 = points4.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+  const areaD4 = points4.length > 1 ? `${pathD4} L ${points4[points4.length - 1].x} ${svgHeight - paddingBottom} L ${points4[0].x} ${svgHeight - paddingBottom} Z` : "";
+
+  // Estilo padronizado para os cards dos gráficos
+  const chartBoxStyle = {
+    flex: "1 1 400px", 
+    background: "#fff", 
+    padding: "20px", 
+    borderRadius: "10px", 
+    border: "1px solid #e5e7eb", 
+    boxShadow: "0 4px 12px rgba(0,0,0,0.05)" // O sombreado elegante aqui
+  };
+
+  return (
+    <div style={{ background: "#fff", padding: "24px", borderRadius: "12px", boxShadow: "0 8px 20px rgba(0, 0, 0, 0.06)", border: "1px solid #e5e7eb", marginBottom: "24px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: isCollapsed ? "0" : "24px" }}>
+        <h2 style={{ margin: 0, fontSize: "16px", fontWeight: "700", color: "#374151" }}>Análise Gráfica</h2>
+        <button onClick={() => setIsCollapsed(!isCollapsed)} style={{ background: "transparent", border: "1px solid #d1d5db", padding: "4px 10px", borderRadius: "6px", color: "#4b5563", fontSize: "12px", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
+          {isCollapsed ? "▼ Expandir Gráficos" : "▲ Ocultar Gráficos"}
+        </button>
+      </div>
+
+      {!isCollapsed && (
+        <div>
+          {/* --- PRIMEIRA LINHA --- */}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "24px", marginBottom: "24px" }}>
+            
+            {/* GRÁFICO 1 */}
+            <div style={chartBoxStyle}>
+              <h3 style={{ margin: "0 0 16px 0", color: "#111827", fontSize: "16px", fontWeight: "600" }}>
+                Evolução de Valores <span style={{fontSize: "12px", color:"#9ca3af", fontWeight: "400"}}>(Emissão)</span>
+              </h3>
+              <div style={{ position: "relative", width: "100%", height: "auto" }}>
+                <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} style={{ width: "100%", height: "auto", overflow: "visible" }}>
+                  <defs><linearGradient id="gradientArea1" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#4f46e5" stopOpacity="0.4" /><stop offset="100%" stopColor="#4f46e5" stopOpacity="0.0" /></linearGradient></defs>
+                  <line x1={paddingX} y1={paddingTop} x2={svgWidth - paddingRight} y2={paddingTop} stroke="#f3f4f6" strokeWidth="1" />
+                  <line x1={paddingX} y1={paddingTop + chartHeight / 2} x2={svgWidth - paddingRight} y2={paddingTop + chartHeight / 2} stroke="#f3f4f6" strokeWidth="1" />
+                  <line x1={paddingX} y1={svgHeight - paddingBottom} x2={svgWidth - paddingRight} y2={svgHeight - paddingBottom} stroke="#e5e7eb" strokeWidth="1" />
+                  <text x={paddingX - 8} y={paddingTop + 4} fill="#9ca3af" fontSize="11px" fontWeight="500" textAnchor="end">{formatAxisVal(maxVal1)}</text>
+                  <text x={paddingX - 8} y={paddingTop + chartHeight / 2 + 4} fill="#9ca3af" fontSize="11px" fontWeight="500" textAnchor="end">{formatAxisVal(maxVal1 / 2)}</text>
+                  <text x={paddingX - 8} y={svgHeight - paddingBottom + 4} fill="#9ca3af" fontSize="11px" fontWeight="500" textAnchor="end">0</text>
+                  {points1.length > 1 && <path d={areaD1} fill="url(#gradientArea1)" />}
+                  <path d={pathD1} fill="none" stroke="#4f46e5" strokeWidth="3" strokeLinejoin="round" />
+                  {points1.map((p, i) => {
+                    const isSelected = chartFilter?.type === 'emis' && chartFilter.month === p.ym;
+                    if (!isSelected) return null;
+                    return (
+                      <g key={`selected1-${i}`}>
+                        <line x1={p.x} y1={paddingTop} x2={p.x} y2={svgHeight - paddingBottom} stroke="#4f46e5" strokeWidth="2" strokeDasharray="4 4" />
+                        <circle cx={p.x} cy={p.y} r="6" fill="#4f46e5" stroke="#fff" strokeWidth="2" />
+                      </g>
+                    );
+                  })}
+                  {points1.map((p, i) => {
+                    if (i % step !== 0 && i !== points1.length - 1) return null;
+                    const isSelected = chartFilter?.type === 'emis' && chartFilter.month === p.ym;
+                    return (
+                      <text key={`label1-${i}`} x={p.x} y={svgHeight - paddingBottom + 16} fill={isSelected ? "#4f46e5" : "#6b7280"} fontSize="11px" fontWeight={isSelected ? "700" : "400"} textAnchor="end" transform={`rotate(-45, ${p.x}, ${svgHeight - paddingBottom + 16})`}>{p.label}</text>
+                    );
+                  })}
+                  {hoveredIndex1 !== null && (
+                    <g>
+                      <line x1={points1[hoveredIndex1].x} y1={paddingTop} x2={points1[hoveredIndex1].x} y2={svgHeight - paddingBottom} stroke="#9ca3af" strokeWidth="1" strokeDasharray="4 4" />
+                      <circle cx={points1[hoveredIndex1].x} cy={points1[hoveredIndex1].y} r="5" fill="#fff" stroke="#4f46e5" strokeWidth="2" />
+                      <rect x={points1[hoveredIndex1].x - 60} y={points1[hoveredIndex1].y - 35} width="120" height="26" rx="4" fill="#111827" opacity="0.9" />
+                      <text x={points1[hoveredIndex1].x} y={points1[hoveredIndex1].y - 18} fill="#fff" fontSize="11px" fontWeight="600" textAnchor="middle">{formatarMoeda(points1[hoveredIndex1].value)}</text>
+                    </g>
+                  )}
+                  {points1.map((p, i) => {
+                    const segmentWidth = chartData.length > 1 ? chartWidth / (chartData.length - 1) : chartWidth;
+                    return (
+                      <rect key={`interact1-${i}`} x={p.x - segmentWidth / 2} y={paddingTop} width={segmentWidth} height={chartHeight} fill="transparent"
+                        onMouseEnter={() => setHoveredIndex1(i)} onMouseLeave={() => setHoveredIndex1(null)}
+                        onClick={() => {
+                          setChartFilter(prev => prev?.type === 'emis' && prev.month === p.ym ? null : { type: 'emis', month: p.ym });
+                          setBorderoFilter(null); setDctoFilter(null);
+                        }}
+                        style={{ cursor: "pointer" }}
+                      />
+                    );
+                  })}
+                </svg>
+              </div>
+            </div>
+
+            {/* GRÁFICO 2 */}
+            <div style={chartBoxStyle}>
+              <h3 style={{ margin: "0 0 16px 0", color: "#111827", fontSize: "16px", fontWeight: "600" }}>
+                Percentual de Atraso <span style={{fontSize: "12px", color:"#9ca3af", fontWeight: "400"}}>(Vencimento)</span>
+              </h3>
+              <div style={{ position: "relative", width: "100%", height: "auto" }}>
+                <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} style={{ width: "100%", height: "auto", overflow: "visible" }}>
+                  <defs><linearGradient id="gradientArea2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#ef4444" stopOpacity="0.3" /><stop offset="100%" stopColor="#ef4444" stopOpacity="0.0" /></linearGradient></defs>
+                  <line x1={paddingX} y1={paddingTop} x2={svgWidth - paddingRight} y2={paddingTop} stroke="#f3f4f6" strokeWidth="1" />
+                  <line x1={paddingX} y1={paddingTop + chartHeight / 2} x2={svgWidth - paddingRight} y2={paddingTop + chartHeight / 2} stroke="#f3f4f6" strokeWidth="1" />
+                  <line x1={paddingX} y1={svgHeight - paddingBottom} x2={svgWidth - paddingRight} y2={svgHeight - paddingBottom} stroke="#e5e7eb" strokeWidth="1" />
+                  <text x={paddingX - 8} y={paddingTop + 4} fill="#9ca3af" fontSize="11px" fontWeight="500" textAnchor="end">{formatAxisPct(maxVal2)}</text>
+                  <text x={paddingX - 8} y={paddingTop + chartHeight / 2 + 4} fill="#9ca3af" fontSize="11px" fontWeight="500" textAnchor="end">{formatAxisPct(maxVal2 / 2)}</text>
+                  <text x={paddingX - 8} y={svgHeight - paddingBottom + 4} fill="#9ca3af" fontSize="11px" fontWeight="500" textAnchor="end">0%</text>
+                  {points2.length > 1 && <path d={areaD2} fill="url(#gradientArea2)" />}
+                  <path d={pathD2} fill="none" stroke="#ef4444" strokeWidth="3" strokeLinejoin="round" />
+                  {points2.map((p, i) => {
+                    const isSelected = chartFilter?.type === 'vcto' && chartFilter.month === p.ym;
+                    if (!isSelected) return null;
+                    return (
+                      <g key={`selected2-${i}`}>
+                        <line x1={p.x} y1={paddingTop} x2={p.x} y2={svgHeight - paddingBottom} stroke="#ef4444" strokeWidth="2" strokeDasharray="4 4" />
+                        <circle cx={p.x} cy={p.y} r="6" fill="#ef4444" stroke="#fff" strokeWidth="2" />
+                      </g>
+                    );
+                  })}
+                  {points2.map((p, i) => {
+                    if (i % step !== 0 && i !== points2.length - 1) return null;
+                    const isSelected = chartFilter?.type === 'vcto' && chartFilter.month === p.ym;
+                    return (
+                      <text key={`label2-${i}`} x={p.x} y={svgHeight - paddingBottom + 16} fill={isSelected ? "#ef4444" : "#6b7280"} fontSize="11px" fontWeight={isSelected ? "700" : "400"} textAnchor="end" transform={`rotate(-45, ${p.x}, ${svgHeight - paddingBottom + 16})`}>{p.label}</text>
+                    );
+                  })}
+                  {hoveredIndex2 !== null && (
+                    <g>
+                      <line x1={points2[hoveredIndex2].x} y1={paddingTop} x2={points2[hoveredIndex2].x} y2={svgHeight - paddingBottom} stroke="#9ca3af" strokeWidth="1" strokeDasharray="4 4" />
+                      <circle cx={points2[hoveredIndex2].x} cy={points2[hoveredIndex2].y} r="5" fill="#fff" stroke="#ef4444" strokeWidth="2" />
+                      <rect x={points2[hoveredIndex2].x - 35} y={points2[hoveredIndex2].y - 35} width="70" height="26" rx="4" fill="#111827" opacity="0.9" />
+                      <text x={points2[hoveredIndex2].x} y={points2[hoveredIndex2].y - 18} fill="#fff" fontSize="12px" fontWeight="600" textAnchor="middle">{points2[hoveredIndex2].pctAtraso.toFixed(1)}%</text>
+                    </g>
+                  )}
+                  {points2.map((p, i) => {
+                    const segmentWidth = chartData.length > 1 ? chartWidth / (chartData.length - 1) : chartWidth;
+                    return (
+                      <rect key={`interact2-${i}`} x={p.x - segmentWidth / 2} y={paddingTop} width={segmentWidth} height={chartHeight} fill="transparent"
+                        onMouseEnter={() => setHoveredIndex2(i)} onMouseLeave={() => setHoveredIndex2(null)}
+                        onClick={() => {
+                          setChartFilter(prev => prev?.type === 'vcto' && prev.month === p.ym ? null : { type: 'vcto', month: p.ym });
+                          setBorderoFilter(null); setDctoFilter(null);
+                        }}
+                        style={{ cursor: "pointer" }}
+                      />
+                    );
+                  })}
+                </svg>
+              </div>
+            </div>
+
+          </div>
+
+          {/* --- SEGUNDA LINHA --- */}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "24px" }}>
+            
+            {/* GRÁFICO 3 */}
+            <div style={chartBoxStyle}>
+              <h3 style={{ margin: "0 0 16px 0", color: "#111827", fontSize: "16px", fontWeight: "600" }}>
+                Evolução da Taxa Média <span style={{fontSize: "12px", color:"#9ca3af", fontWeight: "400"}}>(Emissão)</span>
+              </h3>
+              <div style={{ position: "relative", width: "100%", height: "auto" }}>
+                <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} style={{ width: "100%", height: "auto", overflow: "visible" }}>
+                  <defs><linearGradient id="gradientArea3" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#10b981" stopOpacity="0.4" /><stop offset="100%" stopColor="#10b981" stopOpacity="0.0" /></linearGradient></defs>
+                  <line x1={paddingX} y1={paddingTop} x2={svgWidth - paddingRight} y2={paddingTop} stroke="#f3f4f6" strokeWidth="1" />
+                  <line x1={paddingX} y1={paddingTop + chartHeight / 2} x2={svgWidth - paddingRight} y2={paddingTop + chartHeight / 2} stroke="#f3f4f6" strokeWidth="1" />
+                  <line x1={paddingX} y1={svgHeight - paddingBottom} x2={svgWidth - paddingRight} y2={svgHeight - paddingBottom} stroke="#e5e7eb" strokeWidth="1" />
+                  <text x={paddingX - 8} y={paddingTop + 4} fill="#9ca3af" fontSize="11px" fontWeight="500" textAnchor="end">{formatAxisRate(maxVal3)}</text>
+                  <text x={paddingX - 8} y={paddingTop + chartHeight / 2 + 4} fill="#9ca3af" fontSize="11px" fontWeight="500" textAnchor="end">{formatAxisRate(maxVal3 / 2)}</text>
+                  <text x={paddingX - 8} y={svgHeight - paddingBottom + 4} fill="#9ca3af" fontSize="11px" fontWeight="500" textAnchor="end">0%</text>
+                  {points3.length > 1 && <path d={areaD3} fill="url(#gradientArea3)" />}
+                  <path d={pathD3} fill="none" stroke="#10b981" strokeWidth="3" strokeLinejoin="round" />
+                  {points3.map((p, i) => {
+                    const isSelected = chartFilter?.type === 'emis' && chartFilter.month === p.ym;
+                    if (!isSelected) return null;
+                    return (
+                      <g key={`selected3-${i}`}>
+                        <line x1={p.x} y1={paddingTop} x2={p.x} y2={svgHeight - paddingBottom} stroke="#10b981" strokeWidth="2" strokeDasharray="4 4" />
+                        <circle cx={p.x} cy={p.y} r="6" fill="#10b981" stroke="#fff" strokeWidth="2" />
+                      </g>
+                    );
+                  })}
+                  {points3.map((p, i) => {
+                    if (i % step !== 0 && i !== points3.length - 1) return null;
+                    const isSelected = chartFilter?.type === 'emis' && chartFilter.month === p.ym;
+                    return (
+                      <text key={`label3-${i}`} x={p.x} y={svgHeight - paddingBottom + 16} fill={isSelected ? "#10b981" : "#6b7280"} fontSize="11px" fontWeight={isSelected ? "700" : "400"} textAnchor="end" transform={`rotate(-45, ${p.x}, ${svgHeight - paddingBottom + 16})`}>{p.label}</text>
+                    );
+                  })}
+                  {hoveredIndex3 !== null && (
+                    <g>
+                      <line x1={points3[hoveredIndex3].x} y1={paddingTop} x2={points3[hoveredIndex3].x} y2={svgHeight - paddingBottom} stroke="#9ca3af" strokeWidth="1" strokeDasharray="4 4" />
+                      <circle cx={points3[hoveredIndex3].x} cy={points3[hoveredIndex3].y} r="5" fill="#fff" stroke="#10b981" strokeWidth="2" />
+                      <rect x={points3[hoveredIndex3].x - 35} y={points3[hoveredIndex3].y - 35} width="70" height="26" rx="4" fill="#111827" opacity="0.9" />
+                      <text x={points3[hoveredIndex3].x} y={points3[hoveredIndex3].y - 18} fill="#fff" fontSize="12px" fontWeight="600" textAnchor="middle">{points3[hoveredIndex3].avgRate.toFixed(2).replace('.',',')}%</text>
+                    </g>
+                  )}
+                  {points3.map((p, i) => {
+                    const segmentWidth = chartDataRate.length > 1 ? chartWidth / (chartDataRate.length - 1) : chartWidth;
+                    return (
+                      <rect key={`interact3-${i}`} x={p.x - segmentWidth / 2} y={paddingTop} width={segmentWidth} height={chartHeight} fill="transparent"
+                        onMouseEnter={() => setHoveredIndex3(i)} onMouseLeave={() => setHoveredIndex3(null)}
+                        onClick={() => {
+                          setChartFilter(prev => prev?.type === 'emis' && prev.month === p.ym ? null : { type: 'emis', month: p.ym });
+                          setBorderoFilter(null); setDctoFilter(null);
+                        }}
+                        style={{ cursor: "pointer" }}
+                      />
+                    );
+                  })}
+                </svg>
+              </div>
+            </div>
+
+            {/* GRÁFICO 4 */}
+            <div style={chartBoxStyle}>
+              <h3 style={{ margin: "0 0 16px 0", color: "#111827", fontSize: "16px", fontWeight: "600" }}>
+                Evolução do Deságio <span style={{fontSize: "12px", color:"#9ca3af", fontWeight: "400"}}>(Emissão)</span>
+              </h3>
+              <div style={{ position: "relative", width: "100%", height: "auto" }}>
+                <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} style={{ width: "100%", height: "auto", overflow: "visible" }}>
+                  <defs><linearGradient id="gradientArea4" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#f59e0b" stopOpacity="0.4" /><stop offset="100%" stopColor="#f59e0b" stopOpacity="0.0" /></linearGradient></defs>
+                  <line x1={paddingX} y1={paddingTop} x2={svgWidth - paddingRight} y2={paddingTop} stroke="#f3f4f6" strokeWidth="1" />
+                  <line x1={paddingX} y1={paddingTop + chartHeight / 2} x2={svgWidth - paddingRight} y2={paddingTop + chartHeight / 2} stroke="#f3f4f6" strokeWidth="1" />
+                  <line x1={paddingX} y1={svgHeight - paddingBottom} x2={svgWidth - paddingRight} y2={svgHeight - paddingBottom} stroke="#e5e7eb" strokeWidth="1" />
+                  <text x={paddingX - 8} y={paddingTop + 4} fill="#9ca3af" fontSize="11px" fontWeight="500" textAnchor="end">{formatAxisVal(maxVal4)}</text>
+                  <text x={paddingX - 8} y={paddingTop + chartHeight / 2 + 4} fill="#9ca3af" fontSize="11px" fontWeight="500" textAnchor="end">{formatAxisVal(maxVal4 / 2)}</text>
+                  <text x={paddingX - 8} y={svgHeight - paddingBottom + 4} fill="#9ca3af" fontSize="11px" fontWeight="500" textAnchor="end">0</text>
+                  {points4.length > 1 && <path d={areaD4} fill="url(#gradientArea4)" />}
+                  <path d={pathD4} fill="none" stroke="#f59e0b" strokeWidth="3" strokeLinejoin="round" />
+                  {points4.map((p, i) => {
+                    const isSelected = chartFilter?.type === 'emis' && chartFilter.month === p.ym;
+                    if (!isSelected) return null;
+                    return (
+                      <g key={`selected4-${i}`}>
+                        <line x1={p.x} y1={paddingTop} x2={p.x} y2={svgHeight - paddingBottom} stroke="#f59e0b" strokeWidth="2" strokeDasharray="4 4" />
+                        <circle cx={p.x} cy={p.y} r="6" fill="#f59e0b" stroke="#fff" strokeWidth="2" />
+                      </g>
+                    );
+                  })}
+                  {points4.map((p, i) => {
+                    if (i % step !== 0 && i !== points4.length - 1) return null;
+                    const isSelected = chartFilter?.type === 'emis' && chartFilter.month === p.ym;
+                    return (
+                      <text key={`label4-${i}`} x={p.x} y={svgHeight - paddingBottom + 16} fill={isSelected ? "#f59e0b" : "#6b7280"} fontSize="11px" fontWeight={isSelected ? "700" : "400"} textAnchor="end" transform={`rotate(-45, ${p.x}, ${svgHeight - paddingBottom + 16})`}>{p.label}</text>
+                    );
+                  })}
+                  {hoveredIndex4 !== null && (
+                    <g>
+                      <line x1={points4[hoveredIndex4].x} y1={paddingTop} x2={points4[hoveredIndex4].x} y2={svgHeight - paddingBottom} stroke="#9ca3af" strokeWidth="1" strokeDasharray="4 4" />
+                      <circle cx={points4[hoveredIndex4].x} cy={points4[hoveredIndex4].y} r="5" fill="#fff" stroke="#f59e0b" strokeWidth="2" />
+                      <rect x={points4[hoveredIndex4].x - 60} y={points4[hoveredIndex4].y - 35} width="120" height="26" rx="4" fill="#111827" opacity="0.9" />
+                      <text x={points4[hoveredIndex4].x} y={points4[hoveredIndex4].y - 18} fill="#fff" fontSize="11px" fontWeight="600" textAnchor="middle">{formatarMoeda(points4[hoveredIndex4].value)}</text>
+                    </g>
+                  )}
+                  {points4.map((p, i) => {
+                    const segmentWidth = chartDataDesagio.length > 1 ? chartWidth / (chartDataDesagio.length - 1) : chartWidth;
+                    return (
+                      <rect key={`interact4-${i}`} x={p.x - segmentWidth / 2} y={paddingTop} width={segmentWidth} height={chartHeight} fill="transparent"
+                        onMouseEnter={() => setHoveredIndex4(i)} onMouseLeave={() => setHoveredIndex4(null)}
+                        onClick={() => {
+                          setChartFilter(prev => prev?.type === 'emis' && prev.month === p.ym ? null : { type: 'emis', month: p.ym });
+                          setBorderoFilter(null); setDctoFilter(null);
+                        }}
+                        style={{ cursor: "pointer" }}
+                      />
+                    );
+                  })}
+                </svg>
+              </div>
+            </div>
+
           </div>
         </div>
-      </div>
-      {chartFilter && (
+      )}
+
+      {!isCollapsed && chartFilter && (
         <div style={{ marginTop: "12px", fontSize: "13px", color: "#2563eb", fontWeight: "500", textAlign: "right" }}>
           Filtro ativo: {chartFilter.type === 'emis' ? 'Emissão' : 'Vencimento'} em {formatarMesAno(chartFilter.month)}. Clique no gráfico novamente para limpar.
         </div>
@@ -251,26 +477,44 @@ function EvolutionCharts({ rows, chartFilter, setChartFilter, setBorderoFilter, 
 
 // --- COMPONENTE DE INSIGHTS (Cards e Pizza) ---
 function DashboardInsights({ processedRows, insightFilter, setInsightFilter, setBorderoFilter, setDctoFilter }) {
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const [hoveredSlice, setHoveredSlice] = useState(null);
   const [tooltip, setTooltip] = useState({ show: false, x: 0, y: 0, label: '', count: 0, value: 0 });
 
   const stats = useMemo(() => {
     const counts = { liquidado: 0, liquidadoAtraso: 0, atraso: 0, aVencer: 0, recompra: 0, total: 0 };
     const values = { liquidado: 0, liquidadoAtraso: 0, atraso: 0, aVencer: 0, recompra: 0, total: 0 };
-    const delayDaysTotal = { liquidadoAtraso: 0, atraso: 0 };
+    const delayDaysTotal = { liquidadoAtraso: 0, atraso: 0, recompra: 0 };
+    const desagioValues = { liquidado: 0, liquidadoAtraso: 0, atraso: 0, aVencer: 0, recompra: 0, total: 0 };
+    
+    const seenBorderosStatus = { liquidado: new Set(), liquidadoAtraso: new Set(), atraso: new Set(), aVencer: new Set(), recompra: new Set(), invalido: new Set() };
+    const seenBorderosTotal = new Set();
     
     const today = new Date(); 
     today.setHours(0, 0, 0, 0);
 
-    processedRows.forEach(r => {
+    processedRows.forEach((r, idx) => {
       if (r._status !== 'invalido') {
         counts[r._status]++; counts.total++;
         const entradaKey = Object.keys(r).find(k => k.toLowerCase() === 'entrada' || k.toLowerCase().includes('valor'));
         const val = entradaKey ? (Number(r[entradaKey]) || 0) : 0;
         values[r._status] += val; values.total += val;
 
-        // --- CÁLCULO DOS DIAS DE ATRASO ---
-        if (r._status === 'liquidadoAtraso' || r._status === 'atraso') {
+        const borderoKey = Object.keys(r).find(k => k.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes("border"));
+        const bNum = (borderoKey && r[borderoKey]) ? String(r[borderoKey]).trim() : `avulso_${idx}`; 
+        const desagioKey = Object.keys(r).find(k => k.toLowerCase() === 'desagio' || k.toLowerCase() === 'deságio');
+        const desagioVal = desagioKey ? (Number(r[desagioKey]) || 0) : 0;
+
+        if (!seenBorderosStatus[r._status].has(bNum)) {
+          seenBorderosStatus[r._status].add(bNum);
+          desagioValues[r._status] += desagioVal;
+        }
+        if (!seenBorderosTotal.has(bNum)) {
+          seenBorderosTotal.add(bNum);
+          desagioValues.total += desagioVal;
+        }
+
+        if (r._status === 'liquidadoAtraso' || r._status === 'atraso' || r._status === 'recompra') {
           const vctoKey = Object.keys(r).find(k => k.toLowerCase() === 'vcto' || (k.toLowerCase().includes('vcto') && !k.toLowerCase().includes('vl')));
           if (vctoKey && r[vctoKey]) {
             const effectiveVcto = new Date(String(r[vctoKey]).split("T")[0] + "T00:00:00");
@@ -287,6 +531,16 @@ function DashboardInsights({ processedRows, insightFilter, setInsightFilter, set
             } else if (r._status === 'atraso') {
               const diffTime = today - effectiveVcto;
               if (diffTime > 0) delayDaysTotal.atraso += Math.floor(diffTime / (1000 * 60 * 60 * 24));
+            } else if (r._status === 'recompra') {
+              const pgtoKey = Object.keys(r).find(k => k.toLowerCase() === 'pgto' || (k.toLowerCase().includes('pgto') && !k.toLowerCase().includes('vl')));
+              if (pgtoKey && r[pgtoKey]) {
+                const pgtoDate = new Date(String(r[pgtoKey]).split("T")[0] + "T00:00:00");
+                const diffTime = pgtoDate - effectiveVcto;
+                if (diffTime > 0) delayDaysTotal.recompra += Math.floor(diffTime / (1000 * 60 * 60 * 24));
+              } else {
+                const diffTime = today - effectiveVcto;
+                if (diffTime > 0) delayDaysTotal.recompra += Math.floor(diffTime / (1000 * 60 * 60 * 24));
+              }
             }
           }
         }
@@ -294,15 +548,12 @@ function DashboardInsights({ processedRows, insightFilter, setInsightFilter, set
     });
 
     const avgDelays = {
-          liquidadoAtraso: counts.liquidadoAtraso > 0 
-            ? (delayDaysTotal.liquidadoAtraso / counts.liquidadoAtraso).toFixed(1).replace('.', ',') 
-            : 0,
-          atraso: counts.atraso > 0 
-            ? (delayDaysTotal.atraso / counts.atraso).toFixed(1).replace('.', ',') 
-            : 0
+          liquidadoAtraso: counts.liquidadoAtraso > 0 ? (delayDaysTotal.liquidadoAtraso / counts.liquidadoAtraso).toFixed(1).replace('.', ',') : 0,
+          atraso: counts.atraso > 0 ? (delayDaysTotal.atraso / counts.atraso).toFixed(1).replace('.', ',') : 0,
+          recompra: counts.recompra > 0 ? (delayDaysTotal.recompra / counts.recompra).toFixed(1).replace('.', ',') : 0
         };
 
-    return { counts, values, avgDelays };
+    return { counts, values, avgDelays, desagioValues };
   }, [processedRows]);
 
   if (stats.counts.total === 0) return null;
@@ -328,7 +579,7 @@ function DashboardInsights({ processedRows, insightFilter, setInsightFilter, set
 
   let cumulativePercent = 0;
 
-  const renderCard = (key, corPura, titulo, contagem, valorReal, mediaAtraso = null) => {
+  const renderCard = (key, corPura, titulo, contagem, valorReal, mediaAtraso = null, desagioVal = 0) => {
     const isZero = contagem === 0;
     const isActive = insightFilter === key;
     const isDimmed = insightFilter && !isActive;
@@ -359,7 +610,14 @@ function DashboardInsights({ processedRows, insightFilter, setInsightFilter, set
           </div>
         </div>
         
-        {/* NOVO DIVIDER COM A MÉDIA DE ATRASO */}
+        <hr style={{ border: 0, borderTop: "1px dashed #d1d5db", margin: "14px 0", width: "100%" }} />
+        <div>
+          <div style={{ display: "flex", alignItems: "baseline", gap: "6px" }}>
+            <div style={{ fontSize: "16px", fontWeight: "700", color: "#111827", lineHeight: "1" }}>{formatarMoeda(desagioVal)}</div>
+          </div>
+          <div style={{ fontSize: "11px", color: "#9ca3af", marginTop: "4px" }}>Deságio Total</div>
+        </div>
+
         {mediaAtraso !== null && (
           <>
             <hr style={{ border: 0, borderTop: "1px dashed #d1d5db", margin: "14px 0", width: "100%" }} />
@@ -376,47 +634,57 @@ function DashboardInsights({ processedRows, insightFilter, setInsightFilter, set
   };
 
   return (
-    <div style={{ background: "#fff", padding: "24px", borderRadius: "12px", boxShadow: "0 1px 3px 0 rgba(0,0,0,0.1)", marginBottom: "24px" }}>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: "32px", alignItems: "center" }}>
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "12px" }}>
-          <div style={{ width: "170px", height: "170px", position: "relative" }}>
-            <svg viewBox="-1.1 -1.1 2.2 2.2" style={{ transform: 'rotate(-90deg)', overflow: 'visible', width: '100%', height: '100%', filter: 'drop-shadow(0px 4px 6px rgba(0,0,0,0.15))' }} onMouseLeave={() => {setTooltip({show: false}); setHoveredSlice(null);}}>
-              {slicesData.map(slice => {
-                const isDimmed = insightFilter && insightFilter !== slice.key;
-                if (slice.percent === 1) return <circle key={slice.key} cx="0" cy="0" r="1" fill={slice.color} onClick={() => toggleFilter(slice.key)} onMouseMove={(e) => handleMouseMove(e, slice)} style={{ transform: hoveredSlice === slice.key ? 'scale(1.05)' : 'scale(1)', transformOrigin: '0 0', opacity: isDimmed ? 0.25 : 1, transition: 'all 0.2s', cursor: 'pointer' }} />;
-                
-                const startX = Math.cos(2 * Math.PI * cumulativePercent);
-                const startY = Math.sin(2 * Math.PI * cumulativePercent);
-                cumulativePercent += slice.percent;
-                const endX = Math.cos(2 * Math.PI * cumulativePercent);
-                const endY = Math.sin(2 * Math.PI * cumulativePercent);
-                const pathData = `M 0 0 L ${startX} ${startY} A 1 1 0 ${slice.percent > 0.5 ? 1 : 0} 1 ${endX} ${endY} Z`;
-
-                return <path key={slice.key} d={pathData} fill={slice.color} onClick={() => toggleFilter(slice.key)} onMouseMove={(e) => handleMouseMove(e, slice)} style={{ transform: hoveredSlice === slice.key ? 'scale(1.05)' : 'scale(1)', transformOrigin: '0 0', opacity: isDimmed ? 0.25 : 1, transition: 'all 0.2s', cursor: 'pointer' }} />;
-              })}
-            </svg>
-          </div>
-          <div style={{ textAlign: "center", display: "flex", flexDirection: "column", gap: "2px" }}>
-            <span style={{ fontSize: "13px", fontWeight: "500", color: "#6b7280" }}>{stats.counts.total} títulos no total</span>
-            <span style={{ fontSize: "16px", fontWeight: "700", color: "#111827" }}>{formatarMoeda(stats.values.total)}</span>
-          </div>
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "16px", flex: 1 }}>
-          {/* Note a passagem do stats.avgDelays nos dois cards correspondentes abaixo */}
-          {renderCard('liquidado', "#22c55e", "Liquidado em dia", stats.counts.liquidado, stats.values.liquidado)}
-          {renderCard('liquidadoAtraso', "#f59e0b", "Liquidado c/ atraso", stats.counts.liquidadoAtraso, stats.values.liquidadoAtraso, stats.avgDelays.liquidadoAtraso)}
-          {renderCard('atraso', "#ef4444", "Em atraso", stats.counts.atraso, stats.values.atraso, stats.avgDelays.atraso)}
-          {renderCard('recompra', "#8b5cf6", "Recompra", stats.counts.recompra, stats.values.recompra)}
-          {renderCard('aVencer', "#94a3b8", "A Vencer", stats.counts.aVencer, stats.values.aVencer)}
-        </div>
+    <div style={{ background: "#fff", padding: "24px", borderRadius: "12px", boxShadow: "0 8px 20px rgba(0, 0, 0, 0.06)", border: "1px solid #e5e7eb", marginBottom: "24px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: isCollapsed ? "0" : "24px" }}>
+        <h2 style={{ margin: 0, fontSize: "16px", fontWeight: "700", color: "#374151" }}>Visão Geral (Insights)</h2>
+        <button onClick={() => setIsCollapsed(!isCollapsed)} style={{ background: "transparent", border: "1px solid #d1d5db", padding: "4px 10px", borderRadius: "6px", color: "#4b5563", fontSize: "12px", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
+          {isCollapsed ? "▼ Expandir Insights" : "▲ Ocultar Insights"}
+        </button>
       </div>
-      {insightFilter && <div style={{ marginTop: "16px", fontSize: "13px", color: "#2563eb", fontWeight: "500", textAlign: "right" }}>Filtro de status ativo. Clique no card ou no gráfico novamente para limpar.</div>}
-      {tooltip.show && (
-        <div style={{ position: 'fixed', top: tooltip.y + 15, left: tooltip.x + 15, background: 'rgba(17, 24, 39, 0.9)', color: '#fff', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', pointerEvents: 'none', zIndex: 9999 }}>
-          <div style={{ fontWeight: 600 }}>{tooltip.label}</div>
-          <div style={{ marginTop: '4px', fontSize: '15px', fontWeight: 700 }}>{tooltip.count} títulos</div>
-          <div style={{ marginTop: '2px', fontSize: '13px', color: '#10b981' }}>{formatarMoeda(tooltip.value)}</div>
-        </div>
+
+      {!isCollapsed && (
+        <>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "32px", alignItems: "center" }}>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "12px" }}>
+              <div style={{ width: "170px", height: "170px", position: "relative" }}>
+                <svg viewBox="-1.1 -1.1 2.2 2.2" style={{ transform: 'rotate(-90deg)', overflow: 'visible', width: '100%', height: '100%', filter: 'drop-shadow(0px 4px 6px rgba(0,0,0,0.15))' }} onMouseLeave={() => {setTooltip({show: false}); setHoveredSlice(null);}}>
+                  {slicesData.map(slice => {
+                    const isDimmed = insightFilter && insightFilter !== slice.key;
+                    if (slice.percent === 1) return <circle key={slice.key} cx="0" cy="0" r="1" fill={slice.color} onClick={() => toggleFilter(slice.key)} onMouseMove={(e) => handleMouseMove(e, slice)} style={{ transform: hoveredSlice === slice.key ? 'scale(1.05)' : 'scale(1)', transformOrigin: '0 0', opacity: isDimmed ? 0.25 : 1, transition: 'all 0.2s', cursor: 'pointer' }} />;
+                    
+                    const startX = Math.cos(2 * Math.PI * cumulativePercent);
+                    const startY = Math.sin(2 * Math.PI * cumulativePercent);
+                    cumulativePercent += slice.percent;
+                    const endX = Math.cos(2 * Math.PI * cumulativePercent);
+                    const endY = Math.sin(2 * Math.PI * cumulativePercent);
+                    const pathData = `M 0 0 L ${startX} ${startY} A 1 1 0 ${slice.percent > 0.5 ? 1 : 0} 1 ${endX} ${endY} Z`;
+
+                    return <path key={slice.key} d={pathData} fill={slice.color} onClick={() => toggleFilter(slice.key)} onMouseMove={(e) => handleMouseMove(e, slice)} style={{ transform: hoveredSlice === slice.key ? 'scale(1.05)' : 'scale(1)', transformOrigin: '0 0', opacity: isDimmed ? 0.25 : 1, transition: 'all 0.2s', cursor: 'pointer' }} />;
+                  })}
+                </svg>
+              </div>
+              <div style={{ textAlign: "center", display: "flex", flexDirection: "column", gap: "2px" }}>
+                <span style={{ fontSize: "13px", fontWeight: "500", color: "#6b7280" }}>{stats.counts.total} títulos no total</span>
+                <span style={{ fontSize: "16px", fontWeight: "700", color: "#111827" }}>{formatarMoeda(stats.values.total)}</span>
+              </div>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "16px", flex: 1 }}>
+              {renderCard('liquidado', "#22c55e", "Liquidado em dia", stats.counts.liquidado, stats.values.liquidado, null, stats.desagioValues.liquidado)}
+              {renderCard('liquidadoAtraso', "#f59e0b", "Liquidado c/ atraso", stats.counts.liquidadoAtraso, stats.values.liquidadoAtraso, stats.avgDelays.liquidadoAtraso, stats.desagioValues.liquidadoAtraso)}
+              {renderCard('atraso', "#ef4444", "Em atraso", stats.counts.atraso, stats.values.atraso, stats.avgDelays.atraso, stats.desagioValues.atraso)}
+              {renderCard('recompra', "#8b5cf6", "Recompra", stats.counts.recompra, stats.values.recompra, stats.avgDelays.recompra, stats.desagioValues.recompra)}
+              {renderCard('aVencer', "#94a3b8", "A Vencer", stats.counts.aVencer, stats.values.aVencer, null, stats.desagioValues.aVencer)}
+            </div>
+          </div>
+          {insightFilter && <div style={{ marginTop: "16px", fontSize: "13px", color: "#2563eb", fontWeight: "500", textAlign: "right" }}>Filtro de status ativo. Clique no card ou no gráfico novamente para limpar.</div>}
+          {tooltip.show && (
+            <div style={{ position: 'fixed', top: tooltip.y + 15, left: tooltip.x + 15, background: 'rgba(17, 24, 39, 0.9)', color: '#fff', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', pointerEvents: 'none', zIndex: 9999 }}>
+              <div style={{ fontWeight: 600 }}>{tooltip.label}</div>
+              <div style={{ marginTop: '4px', fontSize: '15px', fontWeight: 700 }}>{tooltip.count} títulos</div>
+              <div style={{ marginTop: '2px', fontSize: '13px', color: '#10b981' }}>{formatarMoeda(tooltip.value)}</div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
@@ -424,6 +692,7 @@ function DashboardInsights({ processedRows, insightFilter, setInsightFilter, set
 
 // --- COMPONENTE DA TABELA ---
 function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, chartFilter, borderoFilter, setBorderoFilter, dctoFilter, setDctoFilter, setChartFilter, setInsightFilter, setClienteSelecionado, setSacadoSelecionado }) {
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const [sortConfig, setSortConfig] = useState(null);
 
   useEffect(() => { setSortConfig(null); }, [chartFilter]);
@@ -462,14 +731,18 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, chartFilter,
       sortableItems.sort((a, b) => {
         let aValue = a[activeSort.key] || ""; let bValue = b[activeSort.key] || "";
         const keyLower = activeSort.key.toLowerCase();
-        const isCurrency = keyLower === "entrada" || keyLower === "vl pgto" || keyLower.includes("valor");
-        const isDateColumn = !isCurrency && (keyLower.includes("emis") || keyLower.includes("vcto") || keyLower.includes("pgto") || keyLower.includes("data"));
+        
+        const isCurrency = keyLower === "entrada" || keyLower === "vl pgto" || keyLower.includes("valor") || keyLower === "desagio" || keyLower === "deságio";
+        const isRate = keyLower.includes("tx") || keyLower.includes("taxa");
+        const isDateColumn = !isCurrency && !isRate && (keyLower.includes("emis") || keyLower.includes("vcto") || keyLower.includes("pgto") || keyLower.includes("data"));
 
         if (isDateColumn) {
           const dateA = new Date(aValue).getTime() || 0; const dateB = new Date(bValue).getTime() || 0;
           return activeSort.direction === 'asc' ? dateA - dateB : dateB - dateA;
-        } else if (isCurrency) {
-          return activeSort.direction === 'asc' ? Number(aValue) - Number(bValue) : Number(bValue) - Number(aValue);
+        } else if (isCurrency || isRate) {
+          let numA = Number(String(aValue).replace('%', '').replace(',', '.')) || 0;
+          let numB = Number(String(bValue).replace('%', '').replace(',', '.')) || 0;
+          return activeSort.direction === 'asc' ? numA - numB : numB - numA;
         } else {
           const strA = String(aValue).toLowerCase(); const strB = String(bValue).toLowerCase();
           if (strA < strB) return activeSort.direction === 'asc' ? -1 : 1;
@@ -481,7 +754,70 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, chartFilter,
     return sortableItems;
   }, [rows, activeSort]);
 
-  const totalFace = useMemo(() => sortedRows.reduce((acc, row) => acc + (Number(row["Entrada"]) || 0), 0), [sortedRows]);
+  const { totalFace, totalDesagio } = useMemo(() => {
+    let f = 0; let d = 0;
+    const seenBorderos = new Set();
+    
+    sortedRows.forEach((row, idx) => {
+      const valKey = Object.keys(row).find(k => k.toLowerCase() === 'entrada' || (k.toLowerCase().includes('valor') && !k.toLowerCase().includes('pgto')));
+      f += (valKey ? (Number(row[valKey]) || 0) : 0);
+      
+      const borderoKey = Object.keys(row).find(k => k.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes("border"));
+      const bNum = (borderoKey && row[borderoKey]) ? String(row[borderoKey]).trim() : `avulso_${idx}`; 
+      const desagioKey = Object.keys(row).find(k => k.toLowerCase() === 'desagio' || k.toLowerCase() === 'deságio');
+      const desagioVal = desagioKey ? (Number(row[desagioKey]) || 0) : 0;
+
+      if (!seenBorderos.has(bNum)) {
+         seenBorderos.add(bNum);
+         d += desagioVal;
+      }
+    });
+    
+    return { totalFace: f, totalDesagio: d };
+  }, [sortedRows]);
+  
+  const taxaMedia = useMemo(() => {
+    if (!sortedRows || sortedRows.length === 0) return 0;
+    const borderoMap = new Map();
+
+    sortedRows.forEach((r, idx) => {
+      const borderoKey = Object.keys(r).find(k => k.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes("border"));
+      const valKey = Object.keys(r).find(k => k.toLowerCase() === 'entrada' || (k.toLowerCase().includes('valor') && !k.toLowerCase().includes('pgto')));
+      const rateKey = Object.keys(r).find(k => k.toLowerCase() === 'tx.efet' || k.toLowerCase().includes('tx.efet') || k.toLowerCase().includes('tx efet'));
+
+      const bNum = (borderoKey && r[borderoKey]) ? String(r[borderoKey]).trim() : `avulso_${idx}`; 
+      const val = valKey ? (Number(r[valKey]) || 0) : 0;
+      
+      const rawRate = rateKey ? r[rateKey] : null;
+      const hasRateVal = rawRate !== null && rawRate !== undefined && String(rawRate).trim() !== "";
+      const rate = hasRateVal ? (Number(String(rawRate).replace('%', '').replace(',', '.')) || 0) : 0;
+
+      if (!borderoMap.has(bNum)) {
+        borderoMap.set(bNum, { totalValue: 0, rate: 0, hasRate: false });
+      }
+      
+      const bData = borderoMap.get(bNum);
+      bData.totalValue += val;
+      
+      if (!bData.hasRate && hasRateVal) {
+        bData.rate = rate;
+        bData.hasRate = true;
+      }
+    });
+
+    let totalValueAll = 0;
+    let weightedRateSum = 0;
+
+    borderoMap.forEach(b => {
+      if (b.hasRate && b.totalValue > 0) {
+        weightedRateSum += (b.rate * b.totalValue);
+        totalValueAll += b.totalValue;
+      }
+    });
+
+    return totalValueAll > 0 ? (weightedRateSum / totalValueAll) : 0;
+  }, [sortedRows]);
+
   const requestSort = (key) => setSortConfig({ key, direction: activeSort?.key === key && activeSort.direction === 'asc' ? 'desc' : 'asc' });
 
   function getRowColors(status) {
@@ -498,66 +834,93 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, chartFilter,
   if (!rows.length) return null;
 
   return (
-    <div style={{ border: "1px solid #e5e7eb", borderRadius: "8px", background: "#fff", display: "flex", flexDirection: "column" }}>
-      <div style={{ overflowX: "auto", overflowY: "auto", maxHeight: "500px", borderRadius: "8px 8px 0 0" }}>
-        <table style={{ borderCollapse: "collapse", width: "100%", fontSize: "14px", whiteSpace: "nowrap" }}>
-          <thead>
-            <tr>
-              {columns.map((c) => {
-                let labelColuna = c === "Entrada" ? "Valor de Face" : c === "Cliente" ? "Cedente" : c.toLowerCase() === "vcto" ? "Dt.Vcto" : c.toLowerCase() === "pgto" ? "Dt.Pgto" : c.toLowerCase() === "vl pgto" ? "Valor Pgto" : c;
-                const isSorted = activeSort?.key === c;
-                return (
-                  <th key={c} onClick={() => requestSort(c)} style={{ borderBottom: "2px solid #e5e7eb", padding: "12px 16px", background: isSorted ? "#eff6ff" : "#f9fafb", color: isSorted ? "#1d4ed8" : "#374151", fontWeight: "600", textAlign: "left", position: "sticky", top: 0, zIndex: 10, cursor: "pointer", userSelect: "none" }}>
-                    {labelColuna}{isSorted ? (activeSort.direction === 'asc' ? ' ↑' : ' ↓') : ''}
-                  </th>
-                );
-              })}
-            </tr>
-          </thead>
-          <tbody>
-            {sortedRows.map((r, idx) => {
-              const { bg, hover } = getRowColors(r._status);
-              return (
-                <tr key={r.id ?? idx} style={{ background: bg, borderBottom: "1px solid #e5e7eb", transition: "background 0.2s" }} onMouseOver={(e) => e.currentTarget.style.background = hover} onMouseOut={(e) => e.currentTarget.style.background = bg}>
+    <div style={{ background: "#fff", borderRadius: "12px", boxShadow: "0 8px 20px rgba(0, 0, 0, 0.06)", border: "1px solid #e5e7eb", display: "flex", flexDirection: "column" }}>
+      
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "20px 24px", borderBottom: isCollapsed ? "none" : "1px solid #e5e7eb" }}>
+        <h2 style={{ margin: 0, fontSize: "16px", fontWeight: "700", color: "#374151" }}>Registos Detalhados</h2>
+        <button onClick={() => setIsCollapsed(!isCollapsed)} style={{ background: "transparent", border: "1px solid #d1d5db", padding: "4px 10px", borderRadius: "6px", color: "#4b5563", fontSize: "12px", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
+          {isCollapsed ? "▼ Expandir Tabela" : "▲ Ocultar Tabela"}
+        </button>
+      </div>
+
+      {!isCollapsed && (
+        <>
+          <div style={{ overflowX: "auto", overflowY: "auto", maxHeight: "500px" }}>
+            <table style={{ borderCollapse: "collapse", width: "100%", fontSize: "14px", whiteSpace: "nowrap" }}>
+              <thead>
+                <tr>
                   {columns.map((c) => {
-                    let valor = r[c];
-                    const cLower = c.toLowerCase();
-                    const isCurrency = cLower === "entrada" || cLower === "vl pgto" || cLower.includes("valor");
-                    const isDateColumn = !isCurrency && (cLower.includes("emis") || cLower.includes("vcto") || cLower.includes("pgto") || cLower.includes("data"));
-                    const isBorderoCol = cLower.normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes("border");
-                    const isThisBorderoFiltered = borderoFilter?.key === c && borderoFilter?.value === valor;
-                    const isDctoCol = cLower === "dcto" || cLower === "documento";
-                    const baseValor = String(valor || "").split(/[-/]/)[0].trim();
-                    const baseFiltered = dctoFilter ? String(dctoFilter.value).split(/[-/]/)[0].trim() : null;
-                    const isThisDctoFiltered = dctoFilter?.key === c && baseValor === baseFiltered;
-
-                    if (isDateColumn) valor = formatarData(valor);
-                    else if (isCurrency) valor = formatarMoeda(valor);
-
+                    let labelColuna = c === "Entrada" ? "Valor de Face" : c === "Cliente" ? "Cedente" : c.toLowerCase() === "vcto" ? "Dt.Vcto" : c.toLowerCase() === "pgto" ? "Dt.Pgto" : c.toLowerCase() === "vl pgto" ? "Valor Pgto" : c;
+                    const isSorted = activeSort?.key === c;
                     return (
-                      <td key={c} style={{ padding: "12px 16px", color: "#374151" }}>
-                        {isBorderoCol ? (
-                          <span onClick={(e) => { e.stopPropagation(); if (isThisBorderoFiltered) setBorderoFilter(null); else { setBorderoFilter({ key: c, value: valor }); setDctoFilter(null); if (setChartFilter) setChartFilter(null); if (setInsightFilter) setInsightFilter(null); } }} style={{ background: isThisBorderoFiltered ? "#4f46e5" : "rgba(79, 70, 229, 0.08)", color: isThisBorderoFiltered ? "#fff" : "#4f46e5", padding: "4px 8px", borderRadius: "6px", fontWeight: "600", cursor: "pointer" }}>{escapeText(valor)}</span>
-                        ) : isDctoCol ? (
-                          <span onClick={(e) => { e.stopPropagation(); if (isThisDctoFiltered) setDctoFilter(null); else { setDctoFilter({ key: c, value: valor }); setBorderoFilter(null); if (setChartFilter) setChartFilter(null); if (setInsightFilter) setInsightFilter(null); } }} style={{ background: isThisDctoFiltered ? "#0ea5e9" : "rgba(14, 165, 233, 0.08)", color: isThisDctoFiltered ? "#fff" : "#0ea5e9", padding: "4px 8px", borderRadius: "6px", fontWeight: "600", cursor: "pointer" }}>{escapeText(valor)}</span>
-                        ) : c === "Cliente" ? (
-                          <span onClick={(e) => { e.stopPropagation(); setClienteSelecionado(valor); }} style={{ cursor: "pointer", fontWeight: "600", color: "#374151" }} onMouseOver={(e) => e.currentTarget.style.color = '#4f46e5'} onMouseOut={(e) => e.currentTarget.style.color = '#374151'}>{escapeText(valor)}</span>
-                        ) : c === "Sacado" ? (
-                          <span onClick={(e) => { e.stopPropagation(); setSacadoSelecionado(valor); }} style={{ cursor: "pointer", fontWeight: "600", color: "#374151" }} onMouseOver={(e) => e.currentTarget.style.color = '#4f46e5'} onMouseOut={(e) => e.currentTarget.style.color = '#374151'}>{escapeText(valor)}</span>
-                        ) : ( escapeText(valor) )}
-                      </td>
+                      <th key={c} onClick={() => requestSort(c)} style={{ borderBottom: "2px solid #e5e7eb", padding: "12px 16px", background: isSorted ? "#eff6ff" : "#f9fafb", color: isSorted ? "#1d4ed8" : "#374151", fontWeight: "600", textAlign: "left", position: "sticky", top: 0, zIndex: 10, cursor: "pointer", userSelect: "none" }}>
+                        {labelColuna}{isSorted ? (activeSort.direction === 'asc' ? ' ↑' : ' ↓') : ''}
+                      </th>
                     );
                   })}
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-      <div style={{ padding: "16px 24px", background: "#f9fafb", borderTop: "1px solid #e5e7eb", textAlign: "right", borderRadius: "0 0 8px 8px" }}>
-        <span style={{ color: "#4b5563", fontWeight: "500", marginRight: "12px", fontSize: "14px" }}>Total de Valor de Face visível na tabela:</span>
-        <span style={{ color: "#111827", fontWeight: "700", fontSize: "18px" }}>{formatarMoeda(totalFace)}</span>
-      </div>
+              </thead>
+              <tbody>
+                {sortedRows.map((r, idx) => {
+                  const { bg, hover } = getRowColors(r._status);
+                  return (
+                    <tr key={r.id ?? idx} style={{ background: bg, borderBottom: "1px solid #e5e7eb", transition: "background 0.2s" }} onMouseOver={(e) => e.currentTarget.style.background = hover} onMouseOut={(e) => e.currentTarget.style.background = bg}>
+                      {columns.map((c) => {
+                        let valor = r[c];
+                        const cLower = c.toLowerCase();
+                        const isCurrency = cLower === "entrada" || cLower === "vl pgto" || cLower.includes("valor") || cLower === "desagio" || cLower === "deságio";
+                        const isRate = cLower.includes("tx") || cLower.includes("taxa");
+                        const isDateColumn = !isCurrency && !isRate && (cLower.includes("emis") || cLower.includes("vcto") || cLower.includes("pgto") || cLower.includes("data"));
+                        const isBorderoCol = cLower.normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes("border");
+                        const isThisBorderoFiltered = borderoFilter?.key === c && borderoFilter?.value === valor;
+                        const isDctoCol = cLower === "dcto" || cLower === "documento";
+                        const baseValor = String(valor || "").split(/[-/]/)[0].trim();
+                        const baseFiltered = dctoFilter ? String(dctoFilter.value).split(/[-/]/)[0].trim() : null;
+                        const isThisDctoFiltered = dctoFilter?.key === c && baseValor === baseFiltered;
+
+                        if (isDateColumn) valor = formatarData(valor);
+                        else if (isCurrency) valor = formatarMoeda(valor);
+                        else if (isRate) {
+                          const valNum = Number(String(valor).replace('%', '').replace(',', '.'));
+                          valor = !isNaN(valNum) && valor ? `${valNum.toFixed(2).replace('.', ',')}%` : escapeText(valor);
+                        }
+
+                        return (
+                          <td key={c} style={{ padding: "12px 16px", color: "#374151" }}>
+                            {isBorderoCol ? (
+                              <span onClick={(e) => { e.stopPropagation(); if (isThisBorderoFiltered) setBorderoFilter(null); else { setBorderoFilter({ key: c, value: valor }); setDctoFilter(null); if (setChartFilter) setChartFilter(null); if (setInsightFilter) setInsightFilter(null); } }} style={{ background: isThisBorderoFiltered ? "#4f46e5" : "rgba(79, 70, 229, 0.08)", color: isThisBorderoFiltered ? "#fff" : "#4f46e5", padding: "4px 8px", borderRadius: "6px", fontWeight: "600", cursor: "pointer" }}>{escapeText(valor)}</span>
+                            ) : isDctoCol ? (
+                              <span onClick={(e) => { e.stopPropagation(); if (isThisDctoFiltered) setDctoFilter(null); else { setDctoFilter({ key: c, value: valor }); setBorderoFilter(null); if (setChartFilter) setChartFilter(null); if (setInsightFilter) setInsightFilter(null); } }} style={{ background: isThisDctoFiltered ? "#0ea5e9" : "rgba(14, 165, 233, 0.08)", color: isThisDctoFiltered ? "#fff" : "#0ea5e9", padding: "4px 8px", borderRadius: "6px", fontWeight: "600", cursor: "pointer" }}>{escapeText(valor)}</span>
+                            ) : c === "Cliente" ? (
+                              <span onClick={(e) => { e.stopPropagation(); setClienteSelecionado(valor); }} style={{ cursor: "pointer", fontWeight: "600", color: "#374151" }} onMouseOver={(e) => e.currentTarget.style.color = '#4f46e5'} onMouseOut={(e) => e.currentTarget.style.color = '#374151'}>{escapeText(valor)}</span>
+                            ) : c === "Sacado" ? (
+                              <span onClick={(e) => { e.stopPropagation(); setSacadoSelecionado(valor); }} style={{ cursor: "pointer", fontWeight: "600", color: "#374151" }} onMouseOver={(e) => e.currentTarget.style.color = '#4f46e5'} onMouseOut={(e) => e.currentTarget.style.color = '#374151'}>{escapeText(valor)}</span>
+                            ) : ( escapeText(valor) )}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div style={{ padding: "16px 24px", background: "#f9fafb", borderTop: "1px solid #e5e7eb", borderRadius: "0 0 12px 12px", display: "flex", justifyContent: "flex-end", gap: "32px", flexWrap: "wrap" }}>
+            <div>
+              <span style={{ color: "#4b5563", fontWeight: "500", marginRight: "12px", fontSize: "14px" }}>Deságio Total:</span>
+              <span style={{ color: "#111827", fontWeight: "700", fontSize: "18px" }}>{formatarMoeda(totalDesagio)}</span>
+            </div>
+            <div>
+              <span style={{ color: "#4b5563", fontWeight: "500", marginRight: "12px", fontSize: "14px" }}>Taxa Média:</span>
+              <span style={{ color: "#111827", fontWeight: "700", fontSize: "18px" }}>{taxaMedia.toFixed(2).replace('.', ',')}%</span>
+            </div>
+            <div>
+              <span style={{ color: "#4b5563", fontWeight: "500", marginRight: "12px", fontSize: "14px" }}>Valor de Face Total:</span>
+              <span style={{ color: "#111827", fontWeight: "700", fontSize: "18px" }}>{formatarMoeda(totalFace)}</span>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -674,10 +1037,56 @@ export default function MicroDashboard({ session }) {
     return filtered;
   }, [rowsFilteredByChart, insightFilter, borderoFilter, dctoFilter]);
 
+  const taxaData = useMemo(() => {
+    if (!rowsParaTabela || rowsParaTabela.length === 0) return { media: 0, baseCalculo: 0 };
+
+    const borderoMap = new Map();
+
+    rowsParaTabela.forEach((r, idx) => {
+      const borderoKey = Object.keys(r).find(k => k.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes("border"));
+      const valKey = Object.keys(r).find(k => k.toLowerCase() === 'entrada' || (k.toLowerCase().includes('valor') && !k.toLowerCase().includes('pgto')));
+      const rateKey = Object.keys(r).find(k => k.toLowerCase() === 'tx.efet' || k.toLowerCase().includes('tx.efet') || k.toLowerCase().includes('tx efet'));
+
+      const bNum = (borderoKey && r[borderoKey]) ? String(r[borderoKey]).trim() : `avulso_${idx}`; 
+      const val = valKey ? (Number(r[valKey]) || 0) : 0;
+      
+      const rawRate = rateKey ? r[rateKey] : null;
+      const hasRateVal = rawRate !== null && rawRate !== undefined && String(rawRate).trim() !== "";
+      const rate = hasRateVal ? (Number(String(rawRate).replace('%', '').replace(',', '.')) || 0) : 0;
+
+      if (!borderoMap.has(bNum)) {
+        borderoMap.set(bNum, { totalValue: 0, rate: 0, hasRate: false });
+      }
+      
+      const bData = borderoMap.get(bNum);
+      bData.totalValue += val;
+      
+      if (!bData.hasRate && hasRateVal) {
+        bData.rate = rate;
+        bData.hasRate = true;
+      }
+    });
+
+    let totalValueAll = 0;
+    let weightedRateSum = 0;
+
+    borderoMap.forEach(b => {
+      if (b.hasRate && b.totalValue > 0) {
+        weightedRateSum += (b.rate * b.totalValue);
+        totalValueAll += b.totalValue;
+      }
+    });
+
+    return {
+      media: totalValueAll > 0 ? (weightedRateSum / totalValueAll) : 0,
+      baseCalculo: totalValueAll
+    };
+  }, [rowsParaTabela]);
+
   useEffect(() => {
     if (session) {
       async function buscarRelacionamentos() {
-        const { data, error } = await supabase.from("secInfo").select("Cliente, Sacado");
+        const { data } = await supabase.from("secInfo").select("Cliente, Sacado");
         if (data) setRelacionamentos(data.filter(r => sacadoValido(r.Sacado) && cedenteValido(r.Cliente)));
       }
       buscarRelacionamentos();
@@ -750,14 +1159,29 @@ export default function MicroDashboard({ session }) {
 
       {rowsFilteredByMode.length > 0 && (
         <div style={{ marginTop: "24px" }}>
-          <DashboardInsights 
-            processedRows={rowsFilteredByChart} insightFilter={insightFilter} setInsightFilter={setInsightFilter} 
-            setBorderoFilter={setBorderoFilter} setDctoFilter={setDctoFilter}
-          />
-          <EvolutionCharts 
-            rows={evolutionRows} chartFilter={chartFilter} setChartFilter={setChartFilter}
-            setBorderoFilter={setBorderoFilter} setDctoFilter={setDctoFilter}
-          />
+          
+          {rowsParaTabela.length > 0 && taxaData.baseCalculo > 0 && (
+            <div style={{ background: "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)", color: "#fff", padding: "20px 24px", borderRadius: "12px", display: "flex", alignItems: "center", justifyContent: "space-between", boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)", marginBottom: "24px", border: "1px solid #334155" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
+                <div style={{ background: "rgba(56, 189, 248, 0.1)", padding: "12px", borderRadius: "50%", border: "1px solid rgba(56, 189, 248, 0.2)" }}>
+                  <svg width="28" height="28" fill="none" stroke="#38bdf8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M23 6l-9.5 9.5-5-5L1 18"/><path d="M17 6h6v6"/></svg>
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: "14px", fontWeight: "500", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em" }}>Taxa Efetiva Média</h3>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: "8px", marginTop: "4px" }}>
+                    <span style={{ fontSize: "32px", fontWeight: "700", color: "#f8fafc", lineHeight: "1" }}>{taxaData.media.toFixed(2).replace('.', ',')}% a.m.</span>
+                  </div>
+                </div>
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontSize: "12px", color: "#64748b", marginBottom: "4px" }}>Base de Cálculo</div>
+                <div style={{ fontSize: "15px", fontWeight: "600", color: "#cbd5e1" }}>{formatarMoeda(taxaData.baseCalculo)}</div>
+              </div>
+            </div>
+          )}
+          
+          <DashboardInsights processedRows={rowsFilteredByChart} insightFilter={insightFilter} setInsightFilter={setInsightFilter} setBorderoFilter={setBorderoFilter} setDctoFilter={setDctoFilter} />
+          <EvolutionCharts rows={evolutionRows} chartFilter={chartFilter} setChartFilter={setChartFilter} setBorderoFilter={setBorderoFilter} setDctoFilter={setDctoFilter} />
         </div>
       )}
 
@@ -780,12 +1204,7 @@ export default function MicroDashboard({ session }) {
           </div>
         ) : (
           (!loading || rowsParaTabela.length > 0) && (
-            <SimpleTable 
-              rows={rowsParaTabela} clienteSelecionado={clienteSelecionado} sacadoSelecionado={sacadoSelecionado} 
-              chartFilter={chartFilter} borderoFilter={borderoFilter} setBorderoFilter={setBorderoFilter}
-              dctoFilter={dctoFilter} setDctoFilter={setDctoFilter} setChartFilter={setChartFilter} setInsightFilter={setInsightFilter}
-              setClienteSelecionado={setClienteSelecionado} setSacadoSelecionado={setSacadoSelecionado}
-            />
+            <SimpleTable rows={rowsParaTabela} clienteSelecionado={clienteSelecionado} sacadoSelecionado={sacadoSelecionado} chartFilter={chartFilter} borderoFilter={borderoFilter} setBorderoFilter={setBorderoFilter} dctoFilter={dctoFilter} setDctoFilter={setDctoFilter} setChartFilter={setChartFilter} setInsightFilter={setInsightFilter} setClienteSelecionado={setClienteSelecionado} setSacadoSelecionado={setSacadoSelecionado} />
           )
         )}
       </div>
