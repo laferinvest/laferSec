@@ -257,16 +257,52 @@ function DashboardInsights({ processedRows, insightFilter, setInsightFilter, set
   const stats = useMemo(() => {
     const counts = { liquidado: 0, liquidadoAtraso: 0, atraso: 0, aVencer: 0, recompra: 0, total: 0 };
     const values = { liquidado: 0, liquidadoAtraso: 0, atraso: 0, aVencer: 0, recompra: 0, total: 0 };
+    const delayDaysTotal = { liquidadoAtraso: 0, atraso: 0 };
     
+    const today = new Date(); 
+    today.setHours(0, 0, 0, 0);
+
     processedRows.forEach(r => {
       if (r._status !== 'invalido') {
         counts[r._status]++; counts.total++;
         const entradaKey = Object.keys(r).find(k => k.toLowerCase() === 'entrada' || k.toLowerCase().includes('valor'));
         const val = entradaKey ? (Number(r[entradaKey]) || 0) : 0;
         values[r._status] += val; values.total += val;
+
+        // --- CÁLCULO DOS DIAS DE ATRASO ---
+        if (r._status === 'liquidadoAtraso' || r._status === 'atraso') {
+          const vctoKey = Object.keys(r).find(k => k.toLowerCase() === 'vcto' || (k.toLowerCase().includes('vcto') && !k.toLowerCase().includes('vl')));
+          if (vctoKey && r[vctoKey]) {
+            const effectiveVcto = new Date(String(r[vctoKey]).split("T")[0] + "T00:00:00");
+            if (effectiveVcto.getDay() === 6) effectiveVcto.setDate(effectiveVcto.getDate() + 2);
+            else if (effectiveVcto.getDay() === 0) effectiveVcto.setDate(effectiveVcto.getDate() + 1);
+
+            if (r._status === 'liquidadoAtraso') {
+              const pgtoKey = Object.keys(r).find(k => k.toLowerCase() === 'pgto' || (k.toLowerCase().includes('pgto') && !k.toLowerCase().includes('vl')));
+              if (pgtoKey && r[pgtoKey]) {
+                const pgtoDate = new Date(String(r[pgtoKey]).split("T")[0] + "T00:00:00");
+                const diffTime = pgtoDate - effectiveVcto;
+                if (diffTime > 0) delayDaysTotal.liquidadoAtraso += Math.floor(diffTime / (1000 * 60 * 60 * 24));
+              }
+            } else if (r._status === 'atraso') {
+              const diffTime = today - effectiveVcto;
+              if (diffTime > 0) delayDaysTotal.atraso += Math.floor(diffTime / (1000 * 60 * 60 * 24));
+            }
+          }
+        }
       }
     });
-    return { counts, values };
+
+    const avgDelays = {
+          liquidadoAtraso: counts.liquidadoAtraso > 0 
+            ? (delayDaysTotal.liquidadoAtraso / counts.liquidadoAtraso).toFixed(1).replace('.', ',') 
+            : 0,
+          atraso: counts.atraso > 0 
+            ? (delayDaysTotal.atraso / counts.atraso).toFixed(1).replace('.', ',') 
+            : 0
+        };
+
+    return { counts, values, avgDelays };
   }, [processedRows]);
 
   if (stats.counts.total === 0) return null;
@@ -292,7 +328,7 @@ function DashboardInsights({ processedRows, insightFilter, setInsightFilter, set
 
   let cumulativePercent = 0;
 
-  const renderCard = (key, corPura, titulo, contagem, valorReal) => {
+  const renderCard = (key, corPura, titulo, contagem, valorReal, mediaAtraso = null) => {
     const isZero = contagem === 0;
     const isActive = insightFilter === key;
     const isDimmed = insightFilter && !isActive;
@@ -322,6 +358,19 @@ function DashboardInsights({ processedRows, insightFilter, setInsightFilter, set
             <div style={{ fontSize: "11px", color: "#9ca3af" }}>do Capital Total</div>
           </div>
         </div>
+        
+        {/* NOVO DIVIDER COM A MÉDIA DE ATRASO */}
+        {mediaAtraso !== null && (
+          <>
+            <hr style={{ border: 0, borderTop: "1px dashed #d1d5db", margin: "14px 0", width: "100%" }} />
+            <div>
+              <div style={{ display: "flex", alignItems: "baseline", gap: "6px" }}>
+                <div style={{ fontSize: "16px", fontWeight: "700", color: "#111827", lineHeight: "1" }}>{mediaAtraso} <span style={{fontSize: "12px", fontWeight: "600", color: "#6b7280"}}>dias</span></div>
+              </div>
+              <div style={{ fontSize: "11px", color: "#9ca3af", marginTop: "4px" }}>Média de Atraso</div>
+            </div>
+          </>
+        )}
       </div>
     );
   };
@@ -353,9 +402,10 @@ function DashboardInsights({ processedRows, insightFilter, setInsightFilter, set
           </div>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "16px", flex: 1 }}>
+          {/* Note a passagem do stats.avgDelays nos dois cards correspondentes abaixo */}
           {renderCard('liquidado', "#22c55e", "Liquidado em dia", stats.counts.liquidado, stats.values.liquidado)}
-          {renderCard('liquidadoAtraso', "#f59e0b", "Liquidado c/ atraso", stats.counts.liquidadoAtraso, stats.values.liquidadoAtraso)}
-          {renderCard('atraso', "#ef4444", "Em atraso", stats.counts.atraso, stats.values.atraso)}
+          {renderCard('liquidadoAtraso', "#f59e0b", "Liquidado c/ atraso", stats.counts.liquidadoAtraso, stats.values.liquidadoAtraso, stats.avgDelays.liquidadoAtraso)}
+          {renderCard('atraso', "#ef4444", "Em atraso", stats.counts.atraso, stats.values.atraso, stats.avgDelays.atraso)}
           {renderCard('recompra', "#8b5cf6", "Recompra", stats.counts.recompra, stats.values.recompra)}
           {renderCard('aVencer', "#94a3b8", "A Vencer", stats.counts.aVencer, stats.values.aVencer)}
         </div>
