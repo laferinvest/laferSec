@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useRef } from "react";
 import { supabase } from "./supabaseClient";
 
-// --- FUNÇÕES DE FORMATAÇÃO ---
+// --- FUNÇÕES DE FORMATAÇÃO E DATAS ---
 function formatarData(dataString) {
   if (!dataString) return "";
   if (String(dataString).includes("/")) return dataString;
@@ -28,6 +28,20 @@ function formatarMesAno(ym) {
   const monthsNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
   return `${monthsNames[parseInt(m, 10) - 1]}/${y}`;
 }
+
+const formatToLocalISO = (d) => {
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+};
+
+const getInitDateStr = () => {
+  const end = new Date();
+  const start = new Date();
+  start.setFullYear(end.getFullYear() - 1);
+  return { start: formatToLocalISO(start), end: formatToLocalISO(end) };
+};
 
 const CEDENTES_IGNORADOS = ["12 -", "23 -", "2 -"];
 function cedenteValido(cedente) {
@@ -58,7 +72,6 @@ function EvolutionCharts({ rows, dateFilter, setDateFilter, setBorderoFilter, se
 
     if (rows.length === 0) return { chartData: [], chartDataRate: [], chartDataDesagio: [] };
 
-    // OTIMIZAÇÃO: Extrair as chaves apenas uma vez
     const firstRow = rows[0];
     const emisKey = Object.keys(firstRow).find(k => k.toLowerCase().includes('emis'));
     const vctoKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'vcto' || (k.toLowerCase().includes('vcto') && !k.toLowerCase().includes('vl')));
@@ -506,7 +519,6 @@ function DashboardInsights({ processedRows, insightFilter, setInsightFilter, set
     const seenBorderosTotal = new Set();
     const today = new Date(); today.setHours(0, 0, 0, 0);
 
-    // OTIMIZAÇÃO: Extrair as chaves apenas uma vez
     const firstRow = processedRows[0];
     const entradaKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'entrada' || k.toLowerCase().includes('valor'));
     const borderoKey = Object.keys(firstRow).find(k => k.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes("border"));
@@ -710,17 +722,14 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [sortConfig, setSortConfig] = useState(null);
   
-  // ESTADOS DA PAGINAÇÃO
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 50;
 
-  // Volta para a página 1 ao alterar os dados
   useEffect(() => { setCurrentPage(1); }, [rows, dateFilter, sortConfig]);
 
   const colunasOcultas = ["id", "created_at", "Cód.Red", "UF", "Banco", "Rec.", "Estado", "_status"];
   const columns = useMemo(() => {
     if (!rows.length) return [];
-    // Otimização: ler apenas os atributos do primeiro item, evitando loop completo sobre Set
     const firstRowKeys = Object.keys(rows[0]);
     let cols = firstRowKeys.filter(c => !colunasOcultas.includes(c));
     if (clienteSelecionado) cols = cols.filter(c => c !== "Cliente");
@@ -775,7 +784,6 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
     return sortableItems;
   }, [rows, activeSort]);
 
-  // FATIAR PARA PAGINAÇÃO
   const currentItems = sortedRows.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
   const totalPages = Math.ceil(sortedRows.length / itemsPerPage);
 
@@ -788,7 +796,6 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
     const seenBorderosDesagio = new Set();
     const borderoMapTaxa = new Map();
 
-    // OTIMIZAÇÃO: extração de chaves antes do loop
     const firstRow = sortedRows[0];
     const borderoKey = Object.keys(firstRow).find(k => k.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes("border"));
     const valKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'entrada' || (k.toLowerCase().includes('valor') && !k.toLowerCase().includes('pgto')));
@@ -888,7 +895,6 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
               <tbody>
                 {currentItems.map((r, idx) => {
                   return (
-                    // OTIMIZAÇÃO: classes CSS injetadas evitam gargalo de reflows
                     <tr key={r.id ?? idx} className={`table-row-${r._status || 'default'}`} style={{ borderBottom: "1px solid #e5e7eb", transition: "background 0.2s" }}>
                       {columns.map((c) => {
                         let valor = r[c];
@@ -931,7 +937,6 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
             </table>
           </div>
 
-          {/* OTIMIZAÇÃO: Controles de Paginação */}
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 24px', background: '#fff', borderTop: '1px solid #e5e7eb', alignItems: 'center' }}>
              <span style={{ fontSize: '13px', color: '#6b7280' }}>
                Mostrando {sortedRows.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0} a {Math.min(currentPage * itemsPerPage, sortedRows.length)} de {sortedRows.length} registos
@@ -1017,12 +1022,6 @@ export default function MicroDashboard({ session }) {
   
   const [viewMode, setViewMode] = useState('all'); 
   const [insightFilter, setInsightFilter] = useState(null);
-  
-  const [dateFilter, setDateFilter] = useState({ type: 'emis', start: '', end: '' });
-  const [inputDateStart, setInputDateStart] = useState("");
-  const [inputDateEnd, setInputDateEnd] = useState("");
-  const [inputType, setInputType] = useState("emis");
-
   const [borderoFilter, setBorderoFilter] = useState(null); 
   const [dctoFilter, setDctoFilter] = useState(null); 
   
@@ -1030,23 +1029,107 @@ export default function MicroDashboard({ session }) {
   const [clienteSelecionado, setClienteSelecionado] = useState("");
   const [sacadoSelecionado, setSacadoSelecionado] = useState("");
 
+  // ESTADOS DE DATA
+  const [dateFilter, setDateFilter] = useState(() => {
+    const init = getInitDateStr();
+    return { type: 'emis', start: init.start, end: init.end };
+  });
+  const [activeQuickDate, setActiveQuickDate] = useState('ult_ano');
+  
+  const [inputType, setInputType] = useState("emis");
+  const [inputDateStart, setInputDateStart] = useState(() => getInitDateStr().start);
+  const [inputDateEnd, setInputDateEnd] = useState(() => getInitDateStr().end);
+
+  // MEMÓRIA PARA ESTADO DE DATAS (LÓGICA DE UX)
+  const latestDateFilter = useRef(dateFilter);
+  const latestQuickDate = useRef(activeQuickDate);
+  const savedDateFilter = useRef(null);
+  const savedQuickDate = useRef(null);
+  const prevHasEntity = useRef(false);
+
+  // Mantém a ref atualizada com a última escolha manual do utilizador
+  useEffect(() => {
+    latestDateFilter.current = dateFilter;
+    latestQuickDate.current = activeQuickDate;
+  }, [dateFilter, activeQuickDate]);
+
+  // Função centralizadora para atualizar a data e limpar o estado do botão rápido
+  const handleSetDateFilter = (newFilter) => {
+    setActiveQuickDate(null);
+    setDateFilter(newFilter);
+  };
+
   useEffect(() => {
     setInputDateStart(dateFilter.start);
     setInputDateEnd(dateFilter.end);
     setInputType(dateFilter.type);
   }, [dateFilter]);
 
+  // Lógica principal: Limpar data ao selecionar Entidade e Restaurar ao limpar a Entidade
   useEffect(() => {
+    const currentlyHasEntity = !!(clienteSelecionado || sacadoSelecionado);
+
+    if (currentlyHasEntity && !prevHasEntity.current) {
+      // Saiu de 0 Entidades para 1+: Memoriza e Limpa a Data
+      savedDateFilter.current = latestDateFilter.current;
+      savedQuickDate.current = latestQuickDate.current;
+      
+      setDateFilter(prev => ({ ...prev, start: '', end: '' }));
+      setActiveQuickDate(null);
+    } 
+    else if (!currentlyHasEntity && prevHasEntity.current) {
+      // Saiu de 1+ Entidades para 0: Restaura a Data Memorizada
+      if (savedDateFilter.current) {
+        setDateFilter(savedDateFilter.current);
+        setActiveQuickDate(savedQuickDate.current);
+      }
+    }
+
+    prevHasEntity.current = currentlyHasEntity;
+
+    // Independentemente, limpamos os filtros de detalhe visual
     setInsightFilter(null); 
-    setDateFilter({ type: 'emis', start: '', end: '' });
     setBorderoFilter(null); 
     setDctoFilter(null);
   }, [clienteSelecionado, sacadoSelecionado]);
 
+
+  // Lógica dos Botões Rápidos
+const applyQuickDate = (quickType) => {
+    if (activeQuickDate === quickType) {
+      // Toggle off
+      setActiveQuickDate(null);
+      setDateFilter({ type: inputType, start: '', end: '' });
+      return;
+    }
+
+    const end = new Date();
+    let start = new Date();
+
+    if (quickType === 'mes_atual') {
+      start = new Date(end.getFullYear(), end.getMonth(), 1);
+    } else if (quickType === 'ult_30') {
+      start.setDate(end.getDate() - 30);
+    } else if (quickType === 'ytd') {
+      start = new Date(end.getFullYear(), 0, 1);
+    } else if (quickType === 'ult_semestre') { // <--- NOVA LÓGICA AQUI
+      start.setMonth(end.getMonth() - 6);
+    } else if (quickType === 'ult_ano') {
+      start.setFullYear(end.getFullYear() - 1);
+    }
+
+    const startStr = formatToLocalISO(start);
+    const endStr = formatToLocalISO(end);
+
+    setActiveQuickDate(quickType);
+    setDateFilter({ type: inputType, start: startStr, end: endStr });
+    setBorderoFilter(null);
+    setDctoFilter(null);
+  };
+
   const processedRows = useMemo(() => {
     if (rows.length === 0) return [];
     
-    // OTIMIZAÇÃO: Extrair as chaves apenas uma vez
     const firstRow = rows[0];
     const vctoKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'vcto' || (k.toLowerCase().includes('vcto') && !k.toLowerCase().includes('vl')));
     const pgtoKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'pgto' || (k.toLowerCase().includes('pgto') && !k.toLowerCase().includes('vl')));
@@ -1085,7 +1168,6 @@ export default function MicroDashboard({ session }) {
     let base = rowsFilteredByMode;
     if (dateFilter.start || dateFilter.end) {
        if (base.length === 0) return base;
-       // OTIMIZAÇÃO
        const firstRow = base[0];
        const key = dateFilter.type === 'emis' 
          ? Object.keys(firstRow).find(k => k.toLowerCase().includes('emis'))
@@ -1128,7 +1210,6 @@ export default function MicroDashboard({ session }) {
     let sumPrazoWeighted = 0;
     let countTitulos = 0;
 
-    // OTIMIZAÇÃO
     const firstRow = rowsParaTabela[0];
     const borderoKey = Object.keys(firstRow).find(k => k.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes("border"));
     const valKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'entrada' || (k.toLowerCase().includes('valor') && !k.toLowerCase().includes('pgto')));
@@ -1230,7 +1311,7 @@ export default function MicroDashboard({ session }) {
   };
 
   const limparFiltroData = () => {
-    setDateFilter({ type: inputType, start: '', end: '' }); 
+    handleSetDateFilter({ type: inputType, start: '', end: '' }); 
   };
 
   const hasEntityFilter = !!(clienteSelecionado || sacadoSelecionado);
@@ -1243,9 +1324,21 @@ export default function MicroDashboard({ session }) {
     fontWeight: "600", fontSize: "13px", cursor: "pointer", transition: "all 0.2s"
   });
 
+  const getQuickBtnStyle = (isActive) => ({
+    padding: "6px 14px",
+    borderRadius: "6px",
+    border: "1px solid",
+    borderColor: isActive ? "#4f46e5" : "#d1d5db",
+    background: isActive ? "#e0e7ff" : "#fff",
+    color: isActive ? "#4f46e5" : "#4b5563",
+    fontWeight: "600",
+    fontSize: "12px",
+    cursor: "pointer",
+    transition: "all 0.2s"
+  });
+
   return (
     <div style={{ background: "#fff", padding: "24px", borderRadius: "12px", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)" }}>
-      {/* OTIMIZAÇÃO CSS: Bloco de estilo global para os eventos de Hover nativos no browser */}
       <style>
         {`
           .table-row-liquidado { background: rgba(34, 197, 94, 0.08); }
@@ -1282,25 +1375,39 @@ export default function MicroDashboard({ session }) {
         </div>
       </div>
 
-      <div style={{ display: "flex", flexWrap: "wrap", gap: "16px", marginTop: "16px", alignItems: "flex-end", padding: "16px", background: "#f9fafb", borderRadius: "8px", border: "1px solid #e5e7eb" }}>
-        <div style={{ flex: "1 1 150px" }}>
-          <label style={{ display: "block", marginBottom: 6, fontSize: "13px", fontWeight: "600", color: "#4b5563" }}>Data Base</label>
-          <select value={inputType} onChange={e => setInputType(e.target.value)} style={{ width: "100%", padding: "10px", borderRadius: "6px", border: "1px solid #d1d5db", background: "#fff", fontSize: "14px", color: "#111827", outline: "none" }}>
-            <option value="emis">Emissão</option>
-            <option value="vcto">Vencimento</option>
-          </select>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "16px", marginTop: "16px", alignItems: "flex-start", padding: "16px", background: "#f9fafb", borderRadius: "8px", border: "1px solid #e5e7eb" }}>
+        
+        {/* ROW: Botões Rápidos */}
+        <div style={{ width: "100%", display: "flex", gap: "8px", flexWrap: "wrap", borderBottom: "1px solid #e5e7eb", paddingBottom: "12px", marginBottom: "4px", alignItems: "center" }}>
+          <span style={{ fontSize: "13px", fontWeight: "600", color: "#4b5563", marginRight: "8px" }}>Períodos Rápidos:</span>
+          <button onClick={() => applyQuickDate('mes_atual')} style={getQuickBtnStyle(activeQuickDate === 'mes_atual')}>Mês Atual</button>
+          <button onClick={() => applyQuickDate('ult_30')} style={getQuickBtnStyle(activeQuickDate === 'ult_30')}>Últ. 30 Dias</button>
+          <button onClick={() => applyQuickDate('ytd')} style={getQuickBtnStyle(activeQuickDate === 'ytd')}>YTD</button>
+          <button onClick={() => applyQuickDate('ult_semestre')} style={getQuickBtnStyle(activeQuickDate === 'ult_semestre')}>Últ. Semestre</button> {/* <--- NOVO BOTÃO AQUI */}
+          <button onClick={() => applyQuickDate('ult_ano')} style={getQuickBtnStyle(activeQuickDate === 'ult_ano')}>Últ. Ano</button>
         </div>
-        <div style={{ flex: "1 1 180px" }}>
-          <label style={{ display: "block", marginBottom: 6, fontSize: "13px", fontWeight: "600", color: "#4b5563" }}>Data Inicial</label>
-          <input type="date" value={inputDateStart} onChange={e => setInputDateStart(e.target.value)} style={{ width: "100%", padding: "9px", borderRadius: "6px", border: "1px solid #d1d5db", background: "#fff", fontSize: "14px", color: "#111827", outline: "none", boxSizing: "border-box" }} />
-        </div>
-        <div style={{ flex: "1 1 180px" }}>
-          <label style={{ display: "block", marginBottom: 6, fontSize: "13px", fontWeight: "600", color: "#4b5563" }}>Data Final</label>
-          <input type="date" value={inputDateEnd} onChange={e => setInputDateEnd(e.target.value)} style={{ width: "100%", padding: "9px", borderRadius: "6px", border: "1px solid #d1d5db", background: "#fff", fontSize: "14px", color: "#111827", outline: "none", boxSizing: "border-box" }} />
-        </div>
-        <div style={{ display: "flex", gap: "12px" }}>
-          <button onClick={() => { setDateFilter({ type: inputType, start: inputDateStart, end: inputDateEnd }); setBorderoFilter(null); setDctoFilter(null); }} style={{ padding: "10px 16px", borderRadius: "6px", border: "none", background: "#4f46e5", color: "#fff", fontWeight: "600", fontSize: "13px", cursor: "pointer", transition: "all 0.2s" }}>Aplicar Data</button>
-          <button onClick={limparFiltroData} disabled={!hasDateFilter} style={{ padding: "10px 16px", borderRadius: "6px", border: "1px solid #d1d5db", background: (!hasDateFilter) ? "#f3f4f6" : "#fff", color: (!hasDateFilter) ? "#9ca3af" : "#ef4444", fontWeight: "600", fontSize: "13px", cursor: (!hasDateFilter) ? "not-allowed" : "pointer", transition: "all 0.2s" }}>Limpar Data</button>
+
+        {/* Linha dos Inputs Manuais */}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "16px", width: "100%", alignItems: "flex-end" }}>
+          <div style={{ flex: "1 1 150px" }}>
+            <label style={{ display: "block", marginBottom: 6, fontSize: "13px", fontWeight: "600", color: "#4b5563" }}>Data Base</label>
+            <select value={inputType} onChange={e => setInputType(e.target.value)} style={{ width: "100%", padding: "10px", borderRadius: "6px", border: "1px solid #d1d5db", background: "#fff", fontSize: "14px", color: "#111827", outline: "none" }}>
+              <option value="emis">Emissão</option>
+              <option value="vcto">Vencimento</option>
+            </select>
+          </div>
+          <div style={{ flex: "1 1 180px" }}>
+            <label style={{ display: "block", marginBottom: 6, fontSize: "13px", fontWeight: "600", color: "#4b5563" }}>Data Inicial</label>
+            <input type="date" value={inputDateStart} onChange={e => setInputDateStart(e.target.value)} style={{ width: "100%", padding: "9px", borderRadius: "6px", border: "1px solid #d1d5db", background: "#fff", fontSize: "14px", color: "#111827", outline: "none", boxSizing: "border-box" }} />
+          </div>
+          <div style={{ flex: "1 1 180px" }}>
+            <label style={{ display: "block", marginBottom: 6, fontSize: "13px", fontWeight: "600", color: "#4b5563" }}>Data Final</label>
+            <input type="date" value={inputDateEnd} onChange={e => setInputDateEnd(e.target.value)} style={{ width: "100%", padding: "9px", borderRadius: "6px", border: "1px solid #d1d5db", background: "#fff", fontSize: "14px", color: "#111827", outline: "none", boxSizing: "border-box" }} />
+          </div>
+          <div style={{ display: "flex", gap: "12px" }}>
+            <button onClick={() => { handleSetDateFilter({ type: inputType, start: inputDateStart, end: inputDateEnd }); setBorderoFilter(null); setDctoFilter(null); }} style={{ padding: "10px 16px", borderRadius: "6px", border: "none", background: "#4f46e5", color: "#fff", fontWeight: "600", fontSize: "13px", cursor: "pointer", transition: "all 0.2s" }}>Aplicar Data</button>
+            <button onClick={limparFiltroData} disabled={!hasDateFilter} style={{ padding: "10px 16px", borderRadius: "6px", border: "1px solid #d1d5db", background: (!hasDateFilter) ? "#f3f4f6" : "#fff", color: (!hasDateFilter) ? "#9ca3af" : "#ef4444", fontWeight: "600", fontSize: "13px", cursor: (!hasDateFilter) ? "not-allowed" : "pointer", transition: "all 0.2s" }}>Limpar Data</button>
+          </div>
         </div>
       </div>
 
@@ -1314,9 +1421,9 @@ export default function MicroDashboard({ session }) {
       )}
 
       <div style={{ display: "flex", gap: "10px", marginTop: "16px", flexWrap: "wrap" }}>
-        <button onClick={() => { setViewMode('all'); setInsightFilter(null); setDateFilter({ type: 'emis', start: '', end: '' }); setBorderoFilter(null); setDctoFilter(null); }} style={getTabStyle(viewMode === 'all')}>Visão Geral</button>
-        <button onClick={() => { setViewMode(prev => prev === 'finalized' ? 'all' : 'finalized'); setInsightFilter(null); setDateFilter({ type: 'emis', start: '', end: '' }); setBorderoFilter(null); setDctoFilter(null); }} style={getTabStyle(viewMode === 'finalized')}>Operações Já Finalizadas</button>
-        <button onClick={() => { setViewMode(prev => prev === 'open' ? 'all' : 'open'); setInsightFilter(null); setDateFilter({ type: 'emis', start: '', end: '' }); setBorderoFilter(null); setDctoFilter(null); }} style={getTabStyle(viewMode === 'open')}>Mostrar Em Aberto</button>
+        <button onClick={() => { setViewMode('all'); setInsightFilter(null); handleSetDateFilter({ type: 'emis', start: '', end: '' }); setBorderoFilter(null); setDctoFilter(null); }} style={getTabStyle(viewMode === 'all')}>Visão Geral</button>
+        <button onClick={() => { setViewMode(prev => prev === 'finalized' ? 'all' : 'finalized'); setInsightFilter(null); handleSetDateFilter({ type: 'emis', start: '', end: '' }); setBorderoFilter(null); setDctoFilter(null); }} style={getTabStyle(viewMode === 'finalized')}>Operações Já Finalizadas</button>
+        <button onClick={() => { setViewMode(prev => prev === 'open' ? 'all' : 'open'); setInsightFilter(null); handleSetDateFilter({ type: 'emis', start: '', end: '' }); setBorderoFilter(null); setDctoFilter(null); }} style={getTabStyle(viewMode === 'open')}>Mostrar Em Aberto</button>
       </div>
 
       {rowsFilteredByMode.length > 0 && (
@@ -1399,7 +1506,7 @@ export default function MicroDashboard({ session }) {
           
           <DashboardInsights processedRows={rowsFilteredByDate} insightFilter={insightFilter} setInsightFilter={setInsightFilter} setBorderoFilter={setBorderoFilter} setDctoFilter={setDctoFilter} />
           
-          <EvolutionCharts rows={evolutionRows} dateFilter={dateFilter} setDateFilter={setDateFilter} setBorderoFilter={setBorderoFilter} setDctoFilter={setDctoFilter} />
+          <EvolutionCharts rows={evolutionRows} dateFilter={dateFilter} setDateFilter={handleSetDateFilter} setBorderoFilter={setBorderoFilter} setDctoFilter={setDctoFilter} />
         </div>
       )}
 
@@ -1422,7 +1529,7 @@ export default function MicroDashboard({ session }) {
           </div>
         ) : (
           (!loading || rowsParaTabela.length > 0) && (
-            <SimpleTable rows={rowsParaTabela} clienteSelecionado={clienteSelecionado} sacadoSelecionado={sacadoSelecionado} dateFilter={dateFilter} borderoFilter={borderoFilter} setBorderoFilter={setBorderoFilter} dctoFilter={dctoFilter} setDctoFilter={setDctoFilter} setDateFilter={setDateFilter} setInsightFilter={setInsightFilter} setClienteSelecionado={setClienteSelecionado} setSacadoSelecionado={setSacadoSelecionado} />
+            <SimpleTable rows={rowsParaTabela} clienteSelecionado={clienteSelecionado} sacadoSelecionado={sacadoSelecionado} dateFilter={dateFilter} borderoFilter={borderoFilter} setBorderoFilter={setBorderoFilter} dctoFilter={dctoFilter} setDctoFilter={setDctoFilter} setDateFilter={handleSetDateFilter} setInsightFilter={setInsightFilter} setClienteSelecionado={setClienteSelecionado} setSacadoSelecionado={setSacadoSelecionado} />
           )
         )}
       </div>
