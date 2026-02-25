@@ -41,7 +41,6 @@ function sacadoValido(sacado) {
 }
 
 // --- COMPONENTE DE EVOLUÇÃO ---
-// --- COMPONENTE DE EVOLUÇÃO ---
 function EvolutionCharts({ rows, chartFilter, setChartFilter, setBorderoFilter, setDctoFilter }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
 
@@ -754,68 +753,81 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, chartFilter,
     return sortableItems;
   }, [rows, activeSort]);
 
-  const { totalFace, totalDesagio } = useMemo(() => {
+  // Cálculo Unificado do Rodapé
+  const { totalFace, totalDesagio, taxaMedia, valorMedio, prazoMedio } = useMemo(() => {
     let f = 0; let d = 0;
-    const seenBorderos = new Set();
-    
+    let countTitulos = 0;
+    let sumPrazoWeighted = 0;
+
+    const seenBorderosDesagio = new Set();
+    const borderoMapTaxa = new Map();
+
     sortedRows.forEach((row, idx) => {
-      const valKey = Object.keys(row).find(k => k.toLowerCase() === 'entrada' || (k.toLowerCase().includes('valor') && !k.toLowerCase().includes('pgto')));
-      f += (valKey ? (Number(row[valKey]) || 0) : 0);
-      
       const borderoKey = Object.keys(row).find(k => k.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes("border"));
       const bNum = (borderoKey && row[borderoKey]) ? String(row[borderoKey]).trim() : `avulso_${idx}`; 
+
+      const valKey = Object.keys(row).find(k => k.toLowerCase() === 'entrada' || (k.toLowerCase().includes('valor') && !k.toLowerCase().includes('pgto')));
+      const val = valKey ? (Number(row[valKey]) || 0) : 0;
+      
+      // Face Total, Ticket Médio, Prazo Médio (TODAS AS ENTRADAS)
+      f += val;
+      if (val > 0) {
+        countTitulos += 1;
+        
+        const emisKey = Object.keys(row).find(k => k.toLowerCase().includes('emis'));
+        const vctoKey = Object.keys(row).find(k => k.toLowerCase() === 'vcto' || (k.toLowerCase().includes('vcto') && !k.toLowerCase().includes('vl')));
+        
+        let prazo = 0;
+        if (emisKey && row[emisKey] && vctoKey && row[vctoKey]) {
+          const eDate = new Date(String(row[emisKey]).split("T")[0] + "T00:00:00");
+          const vDate = new Date(String(row[vctoKey]).split("T")[0] + "T00:00:00");
+          const diff = vDate - eDate;
+          if (diff > 0) prazo = Math.round(diff / (1000 * 60 * 60 * 24));
+        }
+        sumPrazoWeighted += (prazo * val);
+      }
+
+      // Deságio (ÚNICO POR BORDERÔ)
       const desagioKey = Object.keys(row).find(k => k.toLowerCase() === 'desagio' || k.toLowerCase() === 'deságio');
       const desagioVal = desagioKey ? (Number(row[desagioKey]) || 0) : 0;
-
-      if (!seenBorderos.has(bNum)) {
-         seenBorderos.add(bNum);
+      if (!seenBorderosDesagio.has(bNum)) {
+         seenBorderosDesagio.add(bNum);
          d += desagioVal;
       }
-    });
-    
-    return { totalFace: f, totalDesagio: d };
-  }, [sortedRows]);
-  
-  const taxaMedia = useMemo(() => {
-    if (!sortedRows || sortedRows.length === 0) return 0;
-    const borderoMap = new Map();
 
-    sortedRows.forEach((r, idx) => {
-      const borderoKey = Object.keys(r).find(k => k.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes("border"));
-      const valKey = Object.keys(r).find(k => k.toLowerCase() === 'entrada' || (k.toLowerCase().includes('valor') && !k.toLowerCase().includes('pgto')));
-      const rateKey = Object.keys(r).find(k => k.toLowerCase() === 'tx.efet' || k.toLowerCase().includes('tx.efet') || k.toLowerCase().includes('tx efet'));
-
-      const bNum = (borderoKey && r[borderoKey]) ? String(r[borderoKey]).trim() : `avulso_${idx}`; 
-      const val = valKey ? (Number(r[valKey]) || 0) : 0;
-      
-      const rawRate = rateKey ? r[rateKey] : null;
+      // Taxa Efetiva Ponderada (ÚNICA POR BORDERÔ)
+      const rateKey = Object.keys(row).find(k => k.toLowerCase() === 'tx.efet' || k.toLowerCase().includes('tx.efet') || k.toLowerCase().includes('tx efet'));
+      const rawRate = rateKey ? row[rateKey] : null;
       const hasRateVal = rawRate !== null && rawRate !== undefined && String(rawRate).trim() !== "";
       const rate = hasRateVal ? (Number(String(rawRate).replace('%', '').replace(',', '.')) || 0) : 0;
 
-      if (!borderoMap.has(bNum)) {
-        borderoMap.set(bNum, { totalValue: 0, rate: 0, hasRate: false });
+      if (!borderoMapTaxa.has(bNum)) {
+        borderoMapTaxa.set(bNum, { totalValue: 0, rate: 0, hasRate: false });
       }
-      
-      const bData = borderoMap.get(bNum);
+      const bData = borderoMapTaxa.get(bNum);
       bData.totalValue += val;
-      
       if (!bData.hasRate && hasRateVal) {
         bData.rate = rate;
         bData.hasRate = true;
       }
     });
 
-    let totalValueAll = 0;
+    let totalValueTaxa = 0;
     let weightedRateSum = 0;
-
-    borderoMap.forEach(b => {
+    borderoMapTaxa.forEach(b => {
       if (b.hasRate && b.totalValue > 0) {
         weightedRateSum += (b.rate * b.totalValue);
-        totalValueAll += b.totalValue;
+        totalValueTaxa += b.totalValue;
       }
     });
 
-    return totalValueAll > 0 ? (weightedRateSum / totalValueAll) : 0;
+    return { 
+      totalFace: f, 
+      totalDesagio: d, 
+      taxaMedia: totalValueTaxa > 0 ? (weightedRateSum / totalValueTaxa) : 0,
+      valorMedio: countTitulos > 0 ? f / countTitulos : 0,
+      prazoMedio: f > 0 ? (sumPrazoWeighted / f) : 0
+    };
   }, [sortedRows]);
 
   const requestSort = (key) => setSortConfig({ key, direction: activeSort?.key === key && activeSort.direction === 'asc' ? 'desc' : 'asc' });
@@ -905,18 +917,39 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, chartFilter,
               </tbody>
             </table>
           </div>
-          <div style={{ padding: "16px 24px", background: "#f9fafb", borderTop: "1px solid #e5e7eb", borderRadius: "0 0 12px 12px", display: "flex", justifyContent: "flex-end", gap: "32px", flexWrap: "wrap" }}>
+          
+          {/* RODAPÉ ELEGANTE DESTACADO */}
+          <div style={{ 
+            padding: "18px 24px", 
+            background: "#f8fafc", 
+            borderTop: "2px solid #cbd5e1", 
+            boxShadow: "inset 0px 4px 6px -4px rgba(0,0,0,0.05)",
+            borderRadius: "0 0 12px 12px", 
+            display: "flex", 
+            justifyContent: "flex-end", 
+            alignItems: "center",
+            gap: "32px", 
+            flexWrap: "wrap" 
+          }}>
             <div>
-              <span style={{ color: "#4b5563", fontWeight: "500", marginRight: "12px", fontSize: "14px" }}>Deságio Total:</span>
-              <span style={{ color: "#111827", fontWeight: "700", fontSize: "18px" }}>{formatarMoeda(totalDesagio)}</span>
+              <span style={{ color: "#4b5563", fontWeight: "500", marginRight: "8px", fontSize: "14px" }}>Deságio Total:</span>
+              <span style={{ color: "#0f172a", fontWeight: "700", fontSize: "18px" }}>{formatarMoeda(totalDesagio)}</span>
             </div>
             <div>
-              <span style={{ color: "#4b5563", fontWeight: "500", marginRight: "12px", fontSize: "14px" }}>Taxa Média:</span>
-              <span style={{ color: "#111827", fontWeight: "700", fontSize: "18px" }}>{taxaMedia.toFixed(2).replace('.', ',')}%</span>
+              <span style={{ color: "#4b5563", fontWeight: "500", marginRight: "8px", fontSize: "14px" }}>Ticket Médio:</span>
+              <span style={{ color: "#0f172a", fontWeight: "700", fontSize: "18px" }}>{formatarMoeda(valorMedio)}</span>
             </div>
             <div>
-              <span style={{ color: "#4b5563", fontWeight: "500", marginRight: "12px", fontSize: "14px" }}>Valor de Face Total:</span>
-              <span style={{ color: "#111827", fontWeight: "700", fontSize: "18px" }}>{formatarMoeda(totalFace)}</span>
+              <span style={{ color: "#4b5563", fontWeight: "500", marginRight: "8px", fontSize: "14px" }}>Prazo Médio:</span>
+              <span style={{ color: "#0f172a", fontWeight: "700", fontSize: "18px" }}>{prazoMedio.toFixed(0)} <span style={{fontSize: "14px", fontWeight: "600", color: "#64748b"}}>dias</span></span>
+            </div>
+            <div>
+              <span style={{ color: "#4b5563", fontWeight: "500", marginRight: "8px", fontSize: "14px" }}>Taxa Média:</span>
+              <span style={{ color: "#0f172a", fontWeight: "700", fontSize: "18px" }}>{taxaMedia.toFixed(2).replace('.', ',')}%</span>
+            </div>
+            <div>
+              <span style={{ color: "#4b5563", fontWeight: "500", marginRight: "8px", fontSize: "14px" }}>Valor de Face Total:</span>
+              <span style={{ color: "#0f172a", fontWeight: "700", fontSize: "18px" }}>{formatarMoeda(totalFace)}</span>
             </div>
           </div>
         </>
@@ -925,7 +958,7 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, chartFilter,
   );
 }
 
-// --- DROPDOWN CUSTOMIZADO ---
+// ... manter a função CustomDropdown exatamente igual
 function CustomDropdown({ value, options, onChange, placeholder }) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -1037,10 +1070,14 @@ export default function MicroDashboard({ session }) {
     return filtered;
   }, [rowsFilteredByChart, insightFilter, borderoFilter, dctoFilter]);
 
-  const taxaData = useMemo(() => {
-    if (!rowsParaTabela || rowsParaTabela.length === 0) return { media: 0, baseCalculo: 0 };
+  // --- NOVA ESTRUTURA GLOBAL DE KPIs (Taxa, Ticket e Prazo) ---
+  const kpiData = useMemo(() => {
+    if (!rowsParaTabela || rowsParaTabela.length === 0) return { taxaMedia: 0, baseCalculo: 0, valorMedio: 0, prazoMedio: 0 };
 
     const borderoMap = new Map();
+    let sumFaceTotal = 0;
+    let sumPrazoWeighted = 0;
+    let countTitulos = 0;
 
     rowsParaTabela.forEach((r, idx) => {
       const borderoKey = Object.keys(r).find(k => k.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes("border"));
@@ -1054,32 +1091,51 @@ export default function MicroDashboard({ session }) {
       const hasRateVal = rawRate !== null && rawRate !== undefined && String(rawRate).trim() !== "";
       const rate = hasRateVal ? (Number(String(rawRate).replace('%', '').replace(',', '.')) || 0) : 0;
 
+      // Unico por Borderô (apenas para a Taxa)
       if (!borderoMap.has(bNum)) {
         borderoMap.set(bNum, { totalValue: 0, rate: 0, hasRate: false });
       }
-      
       const bData = borderoMap.get(bNum);
       bData.totalValue += val;
-      
       if (!bData.hasRate && hasRateVal) {
         bData.rate = rate;
         bData.hasRate = true;
       }
+
+      // Ticket Médio e Prazo (Todas as entradas)
+      if (val > 0) {
+        sumFaceTotal += val;
+        countTitulos += 1;
+        
+        const emisKey = Object.keys(r).find(k => k.toLowerCase().includes('emis'));
+        const vctoKey = Object.keys(r).find(k => k.toLowerCase() === 'vcto' || (k.toLowerCase().includes('vcto') && !k.toLowerCase().includes('vl')));
+        
+        let prazo = 0;
+        if (emisKey && r[emisKey] && vctoKey && r[vctoKey]) {
+          const eDate = new Date(String(r[emisKey]).split("T")[0] + "T00:00:00");
+          const vDate = new Date(String(r[vctoKey]).split("T")[0] + "T00:00:00");
+          const diffTime = vDate - eDate;
+          if (diffTime > 0) prazo = Math.round(diffTime / (1000 * 60 * 60 * 24));
+        }
+        sumPrazoWeighted += (prazo * val);
+      }
     });
 
-    let totalValueAll = 0;
-    let weightedRateSum = 0;
+    let baseCalculoTaxa = 0;
+    let sumTaxaWeighted = 0;
 
     borderoMap.forEach(b => {
       if (b.hasRate && b.totalValue > 0) {
-        weightedRateSum += (b.rate * b.totalValue);
-        totalValueAll += b.totalValue;
+        sumTaxaWeighted += (b.rate * b.totalValue);
+        baseCalculoTaxa += b.totalValue;
       }
     });
 
     return {
-      media: totalValueAll > 0 ? (weightedRateSum / totalValueAll) : 0,
-      baseCalculo: totalValueAll
+      taxaMedia: baseCalculoTaxa > 0 ? (sumTaxaWeighted / baseCalculoTaxa) : 0,
+      baseCalculo: baseCalculoTaxa,
+      valorMedio: countTitulos > 0 ? sumFaceTotal / countTitulos : 0,
+      prazoMedio: sumFaceTotal > 0 ? sumPrazoWeighted / sumFaceTotal : 0
     };
   }, [rowsParaTabela]);
 
@@ -1160,23 +1216,52 @@ export default function MicroDashboard({ session }) {
       {rowsFilteredByMode.length > 0 && (
         <div style={{ marginTop: "24px" }}>
           
-          {rowsParaTabela.length > 0 && taxaData.baseCalculo > 0 && (
-            <div style={{ background: "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)", color: "#fff", padding: "20px 24px", borderRadius: "12px", display: "flex", alignItems: "center", justifyContent: "space-between", boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)", marginBottom: "24px", border: "1px solid #334155" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
+          {rowsParaTabela.length > 0 && kpiData.baseCalculo > 0 && (
+            <div style={{ background: "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)", color: "#fff", padding: "20px 24px", borderRadius: "12px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "24px", boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)", marginBottom: "24px", border: "1px solid #334155" }}>
+              
+              {/* BLOCO 1: Taxa Média */}
+              <div style={{ display: "flex", alignItems: "center", gap: "16px", flex: "1 1 200px" }}>
                 <div style={{ background: "rgba(56, 189, 248, 0.1)", padding: "12px", borderRadius: "50%", border: "1px solid rgba(56, 189, 248, 0.2)" }}>
-                  <svg width="28" height="28" fill="none" stroke="#38bdf8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M23 6l-9.5 9.5-5-5L1 18"/><path d="M17 6h6v6"/></svg>
+                  <svg width="24" height="24" fill="none" stroke="#38bdf8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M23 6l-9.5 9.5-5-5L1 18"/><path d="M17 6h6v6"/></svg>
                 </div>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: "14px", fontWeight: "500", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em" }}>Taxa Efetiva Média</h3>
+                  <h3 style={{ margin: 0, fontSize: "13px", fontWeight: "600", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em" }}>Taxa Média Ponderada</h3>
                   <div style={{ display: "flex", alignItems: "baseline", gap: "8px", marginTop: "4px" }}>
-                    <span style={{ fontSize: "32px", fontWeight: "700", color: "#f8fafc", lineHeight: "1" }}>{taxaData.media.toFixed(2).replace('.', ',')}% a.m.</span>
+                    <span style={{ fontSize: "24px", fontWeight: "700", color: "#f8fafc", lineHeight: "1" }}>{kpiData.taxaMedia.toFixed(2).replace('.', ',')}%</span>
                   </div>
+                  <div style={{ fontSize: "11px", color: "#64748b", marginTop: "4px" }}>Base: {formatarMoeda(kpiData.baseCalculo)}</div>
                 </div>
               </div>
-              <div style={{ textAlign: "right" }}>
-                <div style={{ fontSize: "12px", color: "#64748b", marginBottom: "4px" }}>Base de Cálculo</div>
-                <div style={{ fontSize: "15px", fontWeight: "600", color: "#cbd5e1" }}>{formatarMoeda(taxaData.baseCalculo)}</div>
+
+              {/* BLOCO 2: Ticket Médio */}
+              <div style={{ display: "flex", alignItems: "center", gap: "16px", flex: "1 1 200px" }}>
+                <div style={{ background: "rgba(244, 63, 94, 0.1)", padding: "12px", borderRadius: "50%", border: "1px solid rgba(244, 63, 94, 0.2)" }}>
+                  <svg width="24" height="24" fill="none" stroke="#fb7185" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: "13px", fontWeight: "600", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em" }}>Ticket Médio</h3>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: "8px", marginTop: "4px" }}>
+                    <span style={{ fontSize: "24px", fontWeight: "700", color: "#f8fafc", lineHeight: "1" }}>{formatarMoeda(kpiData.valorMedio)}</span>
+                  </div>
+                  <div style={{ fontSize: "11px", color: "#64748b", marginTop: "4px" }}>Considerando todos os títulos</div>
+                </div>
               </div>
+
+              {/* BLOCO 3: Prazo Médio */}
+              <div style={{ display: "flex", alignItems: "center", gap: "16px", flex: "1 1 200px" }}>
+                <div style={{ background: "rgba(16, 185, 129, 0.1)", padding: "12px", borderRadius: "50%", border: "1px solid rgba(16, 185, 129, 0.2)" }}>
+                  <svg width="24" height="24" fill="none" stroke="#34d399" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: "13px", fontWeight: "600", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em" }}>Prazo Médio</h3>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: "6px", marginTop: "4px" }}>
+                    <span style={{ fontSize: "24px", fontWeight: "700", color: "#f8fafc", lineHeight: "1" }}>{kpiData.prazoMedio.toFixed(0)}</span>
+                    <span style={{ fontSize: "14px", color: "#94a3b8", fontWeight: "500" }}>dias</span>
+                  </div>
+                  <div style={{ fontSize: "11px", color: "#64748b", marginTop: "4px" }}>Ponderado pelo valor de face</div>
+                </div>
+              </div>
+
             </div>
           )}
           
