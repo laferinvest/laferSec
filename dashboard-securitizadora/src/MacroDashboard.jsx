@@ -39,17 +39,23 @@ function sacadoValido(sacado) {
   return !(s === "0" || s.startsWith("0 -") || s.startsWith("0-"));
 }
 
-// --- COMPONENTE DA TABELA DETALHADA DO MACRO ---
+// --- COMPONENTE DA TABELA DETALHADA DO MACRO (OTIMIZADA) ---
 function MacroDetailedTable({ rows, focus, setFocus, setSelectedSlice }) {
   const [sortConfig, setSortConfig] = useState(null);
+  
+  // OTIMIZAÇÃO: Paginação
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 50;
+
+  useEffect(() => { setCurrentPage(1); }, [rows, focus, sortConfig]);
 
   const colunasOcultas = ["id", "created_at", "Cód.Red", "UF", "Banco", "Rec.", "Estado", "_status"];
 
   const columns = useMemo(() => {
-    const set = new Set();
-    for (const r of rows) Object.keys(r).forEach((k) => set.add(k));
-    
-    let cols = Array.from(set).filter(c => !colunasOcultas.includes(c));
+    if (!rows.length) return [];
+    // OTIMIZAÇÃO: Ler apenas as chaves da primeira linha em vez de iterar sobre todas
+    const firstRowKeys = Object.keys(rows[0]);
+    let cols = firstRowKeys.filter(c => !colunasOcultas.includes(c));
 
     if (focus === 'cedente') cols = cols.filter(c => c !== "Cliente");
     if (focus === 'sacado') cols = cols.filter(c => c !== "Sacado");
@@ -109,74 +115,87 @@ function MacroDetailedTable({ rows, focus, setFocus, setSelectedSlice }) {
     setSortConfig({ key, direction });
   };
 
-  function getRowColors(status) {
-    if (status === 'atraso') return { bg: 'rgba(239, 68, 68, 0.08)', hover: 'rgba(239, 68, 68, 0.15)' };
-    if (status === 'aVencer') return { bg: 'rgba(148, 163, 184, 0.05)', hover: 'rgba(148, 163, 184, 0.12)' };
-    return { bg: '#fff', hover: '#f9fafb' };
-  }
+  // FATIAR PARA PAGINAÇÃO
+  const currentItems = sortedRows.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const totalPages = Math.ceil(sortedRows.length / itemsPerPage);
+
+  if (!rows.length) return null;
 
   return (
-    <div style={{ overflowX: "auto", border: "1px solid #e5e7eb", borderRadius: "8px" }}>
-      <table style={{ borderCollapse: "collapse", width: "100%", fontSize: "14px", whiteSpace: "nowrap", textAlign: "left" }}>
-        <thead>
-          <tr style={{ background: "#f9fafb", color: "#374151" }}>
-            {columns.map((c) => {
-              let labelColuna = c === "Entrada" ? "Valor de Face" : c === "Cliente" ? "Cedente" : c.toLowerCase() === "vcto" ? "Dt.Vcto" : c;
-              const isSorted = activeSort?.key === c;
+    <div style={{ border: "1px solid #e5e7eb", borderRadius: "8px", display: "flex", flexDirection: "column" }}>
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ borderCollapse: "collapse", width: "100%", fontSize: "14px", whiteSpace: "nowrap", textAlign: "left" }}>
+          <thead>
+            <tr style={{ background: "#f9fafb", color: "#374151" }}>
+              {columns.map((c) => {
+                let labelColuna = c === "Entrada" ? "Valor de Face" : c === "Cliente" ? "Cedente" : c.toLowerCase() === "vcto" ? "Dt.Vcto" : c;
+                const isSorted = activeSort?.key === c;
+                return (
+                  <th key={c} onClick={() => requestSort(c)} style={{ padding: "12px 16px", borderBottom: "2px solid #e5e7eb", cursor: "pointer", fontWeight: "600", userSelect: "none" }}>
+                    {labelColuna}{isSorted ? (activeSort.direction === 'asc' ? ' ↑' : ' ↓') : ''}
+                  </th>
+                );
+              })}
+            </tr>
+          </thead>
+          <tbody>
+            {currentItems.map((r, idx) => {
               return (
-                <th key={c} onClick={() => requestSort(c)} style={{ padding: "12px 16px", borderBottom: "2px solid #e5e7eb", cursor: "pointer", fontWeight: "600", userSelect: "none" }}>
-                  {labelColuna}{isSorted ? (activeSort.direction === 'asc' ? ' ↑' : ' ↓') : ''}
-                </th>
+                // OTIMIZAÇÃO: Utilizando classe CSS em vez de inline onMouseOver
+                <tr key={r.id || idx} className={`macro-table-row-${r._status || 'default'}`} style={{ borderBottom: "1px solid #e5e7eb", transition: "background 0.2s" }}>
+                  {columns.map((c) => {
+                    let valor = r[c];
+                    const cLower = c.toLowerCase();
+                    const isCurrency = cLower === "entrada" || cLower === "vl pgto" || cLower.includes("valor") || cLower === "desagio" || cLower === "deságio";
+                    const isRate = cLower.includes("tx") || cLower.includes("taxa");
+                    const isDateColumn = !isCurrency && !isRate && (cLower.includes("emis") || cLower.includes("vcto") || cLower.includes("pgto") || cLower.includes("data"));
+                    
+                    if (isDateColumn) valor = formatarData(valor);
+                    else if (isCurrency) valor = formatarMoeda(valor);
+                    else if (isRate) {
+                      const valNum = Number(String(valor).replace('%', '').replace(',', '.'));
+                      valor = !isNaN(valNum) && valor ? `${valNum.toFixed(2).replace('.', ',')}%` : escapeText(valor);
+                    }
+
+                    // Cross-Navigation Otimizado (Sem JavaScript Inline Styles)
+                    if (c === "Cliente" && focus === 'sacado') {
+                      return (
+                        <td key={c} style={{ padding: "12px 16px", color: "#374151" }}>
+                          <span onClick={() => { setFocus('cedente'); setSelectedSlice(r[c]); }} className="cross-nav-cedente">
+                            {escapeText(valor)}
+                          </span>
+                        </td>
+                      );
+                    }
+                    if (c === "Sacado" && focus === 'cedente') {
+                      return (
+                        <td key={c} style={{ padding: "12px 16px", color: "#374151" }}>
+                          <span onClick={() => { setFocus('sacado'); setSelectedSlice(r[c]); }} className="cross-nav-sacado">
+                            {escapeText(valor)}
+                          </span>
+                        </td>
+                      );
+                    }
+
+                    return <td key={c} style={{ padding: "12px 16px", color: "#374151" }}>{escapeText(valor)}</td>;
+                  })}
+                </tr>
               );
             })}
-          </tr>
-        </thead>
-        <tbody>
-          {sortedRows.map((r, idx) => {
-            const { bg, hover } = getRowColors(r._status);
-            return (
-              <tr key={r.id || idx} style={{ background: bg, borderBottom: "1px solid #e5e7eb", transition: "background 0.2s" }} onMouseOver={(e) => e.currentTarget.style.background = hover} onMouseOut={(e) => e.currentTarget.style.background = bg}>
-                {columns.map((c) => {
-                  let valor = r[c];
-                  const cLower = c.toLowerCase();
-                  const isCurrency = cLower === "entrada" || cLower === "vl pgto" || cLower.includes("valor") || cLower === "desagio" || cLower === "deságio";
-                  const isRate = cLower.includes("tx") || cLower.includes("taxa");
-                  const isDateColumn = !isCurrency && !isRate && (cLower.includes("emis") || cLower.includes("vcto") || cLower.includes("pgto") || cLower.includes("data"));
-                  
-                  if (isDateColumn) valor = formatarData(valor);
-                  else if (isCurrency) valor = formatarMoeda(valor);
-                  else if (isRate) {
-                    const valNum = Number(String(valor).replace('%', '').replace(',', '.'));
-                    valor = !isNaN(valNum) && valor ? `${valNum.toFixed(2).replace('.', ',')}%` : escapeText(valor);
-                  }
-
-                  // Cross-Navigation
-                  if (c === "Cliente" && focus === 'sacado') {
-                    return (
-                      <td key={c} style={{ padding: "12px 16px", color: "#374151" }}>
-                        <span onClick={() => { setFocus('cedente'); setSelectedSlice(r[c]); }} style={{ cursor: "pointer", fontWeight: "600", color: "#4f46e5", textDecoration: "underline", textDecorationColor: "transparent", transition: "all 0.2s" }} onMouseOver={(e) => e.currentTarget.style.textDecorationColor = "#4f46e5"} onMouseOut={(e) => e.currentTarget.style.textDecorationColor = "transparent"}>
-                          {escapeText(valor)}
-                        </span>
-                      </td>
-                    );
-                  }
-                  if (c === "Sacado" && focus === 'cedente') {
-                    return (
-                      <td key={c} style={{ padding: "12px 16px", color: "#374151" }}>
-                        <span onClick={() => { setFocus('sacado'); setSelectedSlice(r[c]); }} style={{ cursor: "pointer", fontWeight: "600", color: "#0ea5e9", textDecoration: "underline", textDecorationColor: "transparent", transition: "all 0.2s" }} onMouseOver={(e) => e.currentTarget.style.textDecorationColor = "#0ea5e9"} onMouseOut={(e) => e.currentTarget.style.textDecorationColor = "transparent"}>
-                          {escapeText(valor)}
-                        </span>
-                      </td>
-                    );
-                  }
-
-                  return <td key={c} style={{ padding: "12px 16px", color: "#374151" }}>{escapeText(valor)}</td>;
-                })}
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+          </tbody>
+        </table>
+      </div>
+      
+      {/* Controlos de Paginação */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', background: '#fff', borderTop: '1px solid #e5e7eb', alignItems: 'center', borderRadius: "0 0 8px 8px" }}>
+          <span style={{ fontSize: '13px', color: '#6b7280' }}>
+            Mostrando {sortedRows.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0} a {Math.min(currentPage * itemsPerPage, sortedRows.length)} de {sortedRows.length} registos
+          </span>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #d1d5db', background: currentPage === 1 ? '#f3f4f6' : '#fff', color: currentPage === 1 ? '#9ca3af' : '#374151', cursor: currentPage === 1 ? 'not-allowed' : 'pointer', fontSize: '13px' }}>Anterior</button>
+            <button disabled={currentPage === totalPages || totalPages === 0} onClick={() => setCurrentPage(p => p + 1)} style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #d1d5db', background: currentPage === totalPages || totalPages === 0 ? '#f3f4f6' : '#fff', color: currentPage === totalPages || totalPages === 0 ? '#9ca3af' : '#374151', cursor: currentPage === totalPages || totalPages === 0 ? 'not-allowed' : 'pointer', fontSize: '13px' }}>Próxima</button>
+          </div>
+      </div>
     </div>
   );
 }
@@ -208,6 +227,8 @@ export default function MacroDashboard() {
 
   // 1. Processa todos os registos (Em Aberto e Variação Mensal Rolling Window)
   const { openRows, stats } = useMemo(() => {
+    if (rows.length === 0) return { openRows: [], stats: { totalVal: 0, sorted: [], pieData: [] } };
+
     const today = new Date();
     today.setHours(23, 59, 59, 999);
 
@@ -224,13 +245,16 @@ export default function MacroDashboard() {
     const monthlyVolume = {};
     let totalVal = 0;
 
+    // OTIMIZAÇÃO: Extrair as chaves apenas uma vez na primeira linha
+    const firstRow = rows[0];
+    const vctoKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'vcto' || (k.toLowerCase().includes('vcto') && !k.toLowerCase().includes('vl')));
+    const pgtoKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'pgto' || (k.toLowerCase().includes('pgto') && !k.toLowerCase().includes('vl')));
+    const statusKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'status' || k.toLowerCase() === 'estado');
+    const emisKey = Object.keys(firstRow).find(k => k.toLowerCase().includes('emis'));
+    const valKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'entrada' || (k.toLowerCase().includes('valor') && !k.toLowerCase().includes('pgto')));
+
     rows.forEach(r => {
       let status = 'invalido';
-      const vctoKey = Object.keys(r).find(k => k.toLowerCase() === 'vcto' || (k.toLowerCase().includes('vcto') && !k.toLowerCase().includes('vl')));
-      const pgtoKey = Object.keys(r).find(k => k.toLowerCase() === 'pgto' || (k.toLowerCase().includes('pgto') && !k.toLowerCase().includes('vl')));
-      const statusKey = Object.keys(r).find(k => k.toLowerCase() === 'status' || k.toLowerCase() === 'estado');
-      const emisKey = Object.keys(r).find(k => k.toLowerCase().includes('emis'));
-      const valKey = Object.keys(r).find(k => k.toLowerCase() === 'entrada' || (k.toLowerCase().includes('valor') && !k.toLowerCase().includes('pgto')));
       
       const vctoVal = vctoKey ? r[vctoKey] : null;
       const pgtoVal = pgtoKey ? r[pgtoKey] : null;
@@ -339,16 +363,20 @@ export default function MacroDashboard() {
     
     if (!kpiRows || kpiRows.length === 0) return { taxaMedia: 0, baseCalculo: 0, valorMedio: 0, prazoMedio: 0 };
 
+    // OTIMIZAÇÃO: Extração de chaves antes do loop
+    const firstRow = kpiRows[0];
+    const borderoKey = Object.keys(firstRow).find(k => k.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes("border"));
+    const valKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'entrada' || (k.toLowerCase().includes('valor') && !k.toLowerCase().includes('pgto')));
+    const rateKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'tx.efet' || k.toLowerCase().includes('tx.efet') || k.toLowerCase().includes('tx efet'));
+    const emisKey = Object.keys(firstRow).find(k => k.toLowerCase().includes('emis'));
+    const vctoKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'vcto' || (k.toLowerCase().includes('vcto') && !k.toLowerCase().includes('vl')));
+
     const borderoMap = new Map();
     let sumFaceTotal = 0;
     let sumPrazoWeighted = 0;
     let countTitulos = 0;
 
     kpiRows.forEach((r, idx) => {
-      const borderoKey = Object.keys(r).find(k => k.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes("border"));
-      const valKey = Object.keys(r).find(k => k.toLowerCase() === 'entrada' || (k.toLowerCase().includes('valor') && !k.toLowerCase().includes('pgto')));
-      const rateKey = Object.keys(r).find(k => k.toLowerCase() === 'tx.efet' || k.toLowerCase().includes('tx.efet') || k.toLowerCase().includes('tx efet'));
-
       const bNum = (borderoKey && r[borderoKey]) ? String(r[borderoKey]).trim() : `avulso_${idx}`; 
       const val = valKey ? (Number(r[valKey]) || 0) : 0;
       
@@ -369,9 +397,6 @@ export default function MacroDashboard() {
       if (val > 0) {
         sumFaceTotal += val;
         countTitulos += 1;
-        
-        const emisKey = Object.keys(r).find(k => k.toLowerCase().includes('emis'));
-        const vctoKey = Object.keys(r).find(k => k.toLowerCase() === 'vcto' || (k.toLowerCase().includes('vcto') && !k.toLowerCase().includes('vl')));
         
         let prazo = 0;
         if (emisKey && r[emisKey] && vctoKey && r[vctoKey]) {
@@ -432,7 +457,32 @@ export default function MacroDashboard() {
 
   return (
     <div style={{ background: "#fff", padding: "32px", borderRadius: "12px", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1)" }}>
-      
+      {/* OTIMIZAÇÃO CSS: Bloco de estilo global para os eventos de Hover do MacroDashboard */}
+      <style>
+        {`
+          .macro-table-row-atraso { background: rgba(239, 68, 68, 0.08); }
+          .macro-table-row-atraso:hover { background: rgba(239, 68, 68, 0.15); }
+          .macro-table-row-aVencer { background: rgba(148, 163, 184, 0.05); }
+          .macro-table-row-aVencer:hover { background: rgba(148, 163, 184, 0.12); }
+          .macro-table-row-default { background: #fff; }
+          .macro-table-row-default:hover { background: #f9fafb; }
+          
+          .cross-nav-cedente { cursor: pointer; font-weight: 600; color: #4f46e5; text-decoration: underline; text-decoration-color: transparent; transition: all 0.2s; }
+          .cross-nav-cedente:hover { text-decoration-color: #4f46e5; }
+          
+          .cross-nav-sacado { cursor: pointer; font-weight: 600; color: #0ea5e9; text-decoration: underline; text-decoration-color: transparent; transition: all 0.2s; }
+          .cross-nav-sacado:hover { text-decoration-color: #0ea5e9; }
+
+          .ranking-row { border-bottom: 1px solid #e5e7eb; transition: background 0.2s; cursor: pointer; }
+          .ranking-row-even { background: #fff; }
+          .ranking-row-odd { background: #fafafa; }
+          .ranking-row:hover { background: #eff6ff !important; }
+
+          .btn-voltar { padding: 8px 16px; border-radius: 8px; border: 1px solid #d1d5db; background: #fff; cursor: pointer; font-size: 13px; font-weight: 600; color: #374151; transition: all 0.2s; }
+          .btn-voltar:hover { background: #f9fafb; }
+        `}
+      </style>
+
       {/* Cabeçalho Macro */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "32px", flexWrap: "wrap", gap: "16px" }}>
         <div>
@@ -520,21 +570,20 @@ export default function MacroDashboard() {
             </div>
           </div>
 
-          {/* BANNER DE KPIs INTELIGENTE - CORPORATIVO ELEVADO COM LEVE DESTAQUE */}
+          {/* BANNER DE KPIs INTELIGENTE */}
           {kpiData.baseCalculo > 0 && (
             <div style={{
-              background: "#d1d5db", // Fundo cinza cria a borda do grid internamente
+              background: "#d1d5db",
               borderRadius: "12px",
               display: "grid",
               gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
               gap: "1px",
-              boxShadow: "0 14px 28px -6px rgba(0, 0, 0, 0.12), 0 4px 10px -4px rgba(0, 0, 0, 0.08)", // Sombreado elevado
+              boxShadow: "0 14px 28px -6px rgba(0, 0, 0, 0.12), 0 4px 10px -4px rgba(0, 0, 0, 0.08)",
               marginBottom: "36px",
               border: "1px solid #d1d5db",
               overflow: "hidden"
             }}>
               
-              {/* BLOCO 1: Taxa Média */}
               <div style={{ background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #4f46e5", padding: "24px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
                   <div style={{ background: "rgba(79, 70, 229, 0.1)", padding: "6px", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -553,7 +602,6 @@ export default function MacroDashboard() {
                 </div>
               </div>
 
-              {/* BLOCO 2: Ticket Médio */}
               <div style={{ background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #0ea5e9", padding: "24px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
                   <div style={{ background: "rgba(14, 165, 233, 0.1)", padding: "6px", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -573,7 +621,6 @@ export default function MacroDashboard() {
                 </div>
               </div>
 
-              {/* BLOCO 3: Prazo Médio */}
               <div style={{ background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #10b981", padding: "24px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
                   <div style={{ background: "rgba(16, 185, 129, 0.1)", padding: "6px", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -608,7 +655,7 @@ export default function MacroDashboard() {
                     <strong>{detailedRows.length}</strong> registo(s) encontrado(s) totalizando <strong>{formatarMoeda(detailedRows.reduce((acc, row) => { const vk = Object.keys(row).find(k => k.toLowerCase() === 'entrada' || k.toLowerCase().includes('valor')); return acc + (vk ? Number(row[vk]) || 0 : 0) }, 0))}</strong>
                   </div>
                 </div>
-                <button onClick={() => setSelectedSlice(null)} style={{ padding: "8px 16px", borderRadius: "8px", border: "1px solid #d1d5db", background: "#fff", cursor: "pointer", fontSize: "13px", fontWeight: "600", color: "#374151", transition: "all 0.2s" }} onMouseOver={(e) => e.currentTarget.style.background = "#f9fafb"} onMouseOut={(e) => e.currentTarget.style.background = "#fff"}>
+                <button onClick={() => setSelectedSlice(null)} className="btn-voltar">
                   Voltar ao Ranking
                 </button>
               </div>
@@ -644,9 +691,7 @@ export default function MacroDashboard() {
                       <tr 
                         key={item.name} 
                         onClick={() => handleSliceClick(item.name)}
-                        style={{ borderBottom: "1px solid #e5e7eb", background: idx % 2 === 0 ? "#fff" : "#fafafa", transition: "background 0.2s", cursor: "pointer" }} 
-                        onMouseOver={(e) => e.currentTarget.style.background = "#eff6ff"} 
-                        onMouseOut={(e) => e.currentTarget.style.background = idx % 2 === 0 ? "#fff" : "#fafafa"}
+                        className={`ranking-row ${idx % 2 === 0 ? 'ranking-row-even' : 'ranking-row-odd'}`}
                         title="Clique para ver os títulos detalhados"
                       >
                         <td style={{ padding: "14px 16px", fontWeight: "600", color: "#6b7280" }}>{item.rank}º</td>

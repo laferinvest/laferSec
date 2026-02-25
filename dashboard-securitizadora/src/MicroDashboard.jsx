@@ -49,7 +49,6 @@ function EvolutionCharts({ rows, dateFilter, setDateFilter, setBorderoFilter, se
   const [hoveredIndex3, setHoveredIndex3] = useState(null);
   const [hoveredIndex4, setHoveredIndex4] = useState(null);
 
-  // Estado para controlar a seleção de arrasto (Brush Selection)
   const [dragState, setDragState] = useState({ isDragging: false, startIndex: null, currentIndex: null, type: null });
 
   const { chartData, chartDataRate, chartDataDesagio } = useMemo(() => {
@@ -57,15 +56,18 @@ function EvolutionCharts({ rows, dateFilter, setDateFilter, setBorderoFilter, se
     const groupedRate = {};
     const groupedDesagio = {};
 
+    if (rows.length === 0) return { chartData: [], chartDataRate: [], chartDataDesagio: [] };
+
+    // OTIMIZAÇÃO: Extrair as chaves apenas uma vez
+    const firstRow = rows[0];
+    const emisKey = Object.keys(firstRow).find(k => k.toLowerCase().includes('emis'));
+    const vctoKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'vcto' || (k.toLowerCase().includes('vcto') && !k.toLowerCase().includes('vl')));
+    const valKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'entrada' || (k.toLowerCase().includes('valor') && !k.toLowerCase().includes('pgto')));
+    const borderoKey = Object.keys(firstRow).find(k => k.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes("border"));
+    const rateKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'tx.efet' || k.toLowerCase().includes('tx.efet') || k.toLowerCase().includes('tx efet'));
+    const desagioKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'desagio' || k.toLowerCase() === 'deságio');
+
     rows.forEach((r, idx) => {
-      const emisKey = Object.keys(r).find(k => k.toLowerCase().includes('emis'));
-      const vctoKey = Object.keys(r).find(k => k.toLowerCase() === 'vcto' || (k.toLowerCase().includes('vcto') && !k.toLowerCase().includes('vl')));
-      const valKey = Object.keys(r).find(k => k.toLowerCase() === 'entrada' || (k.toLowerCase().includes('valor') && !k.toLowerCase().includes('pgto')));
-      
-      const borderoKey = Object.keys(r).find(k => k.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes("border"));
-      const rateKey = Object.keys(r).find(k => k.toLowerCase() === 'tx.efet' || k.toLowerCase().includes('tx.efet') || k.toLowerCase().includes('tx efet'));
-      const desagioKey = Object.keys(r).find(k => k.toLowerCase() === 'desagio' || k.toLowerCase() === 'deságio');
-      
       const bNum = (borderoKey && r[borderoKey]) ? String(r[borderoKey]).trim() : `avulso_${idx}`; 
       const val = valKey ? (Number(r[valKey]) || 0) : 0;
       const desagioVal = desagioKey ? (Number(r[desagioKey]) || 0) : 0;
@@ -151,7 +153,6 @@ function EvolutionCharts({ rows, dateFilter, setDateFilter, setBorderoFilter, se
     return { chartData: cData, chartDataRate: cDataRate, chartDataDesagio: cDataDesagio };
   }, [rows]);
 
-  // Lógica de finalização do arrasto para selecionar período
   useEffect(() => {
     const handleMouseUp = () => {
        if (dragState.isDragging) {
@@ -169,7 +170,6 @@ function EvolutionCharts({ rows, dateFilter, setDateFilter, setBorderoFilter, se
              const lastDay = new Date(ey, em, 0).getDate();
              const endDate = `${ey}-${em}-${String(lastDay).padStart(2, '0')}`;
              
-             // Se clicar exatamente no mesmo intervalo que já está ativo, remove o filtro
              if (dateFilter.start === startDate && dateFilter.end === endDate && dateFilter.type === dragState.type) {
                 setDateFilter({ type: 'emis', start: '', end: '' });
              } else {
@@ -239,7 +239,6 @@ function EvolutionCharts({ rows, dateFilter, setDateFilter, setBorderoFilter, se
   const pathD4 = points4.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
   const areaD4 = points4.length > 1 ? `${pathD4} L ${points4[points4.length - 1].x} ${svgHeight - paddingBottom} L ${points4[0].x} ${svgHeight - paddingBottom} Z` : "";
 
-  // Função para desenhar a área de seleção cinza/colorida
   const renderHighlight = (points, type, rgb) => {
     if (dateFilter.type === type && (dateFilter.start || dateFilter.end)) {
        const dsStr = dateFilter.start ? dateFilter.start.substring(0,7) : "0000-00";
@@ -279,10 +278,7 @@ function EvolutionCharts({ rows, dateFilter, setDateFilter, setBorderoFilter, se
 
       {!isCollapsed && (
         <div>
-          {/* PRIMEIRA LINHA */}
           <div style={{ display: "flex", flexWrap: "wrap", gap: "24px", marginBottom: "24px" }}>
-            
-            {/* GRÁFICO 1: Valores (Emissão) */}
             <div style={chartBoxStyle}>
               <h3 style={{ margin: "0 0 16px 0", color: "#111827", fontSize: "16px", fontWeight: "600" }}>
                 Evolução de Valores <span style={{fontSize: "12px", color:"#9ca3af", fontWeight: "400"}}>(Emissão)</span>
@@ -333,7 +329,6 @@ function EvolutionCharts({ rows, dateFilter, setDateFilter, setBorderoFilter, se
               </div>
             </div>
 
-            {/* GRÁFICO 2: Atraso (Vencimento) */}
             <div style={chartBoxStyle}>
               <h3 style={{ margin: "0 0 16px 0", color: "#111827", fontSize: "16px", fontWeight: "600" }}>
                 Percentual de Atraso <span style={{fontSize: "12px", color:"#9ca3af", fontWeight: "400"}}>(Vencimento)</span>
@@ -383,13 +378,9 @@ function EvolutionCharts({ rows, dateFilter, setDateFilter, setBorderoFilter, se
                 </svg>
               </div>
             </div>
-
           </div>
 
-          {/* --- SEGUNDA LINHA --- */}
           <div style={{ display: "flex", flexWrap: "wrap", gap: "24px" }}>
-            
-            {/* GRÁFICO 3: Taxa Efetiva */}
             <div style={chartBoxStyle}>
               <h3 style={{ margin: "0 0 16px 0", color: "#111827", fontSize: "16px", fontWeight: "600" }}>
                 Evolução da Taxa Média <span style={{fontSize: "12px", color:"#9ca3af", fontWeight: "400"}}>(Emissão)</span>
@@ -440,7 +431,6 @@ function EvolutionCharts({ rows, dateFilter, setDateFilter, setBorderoFilter, se
               </div>
             </div>
 
-            {/* GRÁFICO 4: Deságio */}
             <div style={chartBoxStyle}>
               <h3 style={{ margin: "0 0 16px 0", color: "#111827", fontSize: "16px", fontWeight: "600" }}>
                 Evolução do Deságio <span style={{fontSize: "12px", color:"#9ca3af", fontWeight: "400"}}>(Emissão)</span>
@@ -498,7 +488,7 @@ function EvolutionCharts({ rows, dateFilter, setDateFilter, setBorderoFilter, se
   );
 }
 
-// --- COMPONENTE DE INSIGHTS (Cards e Pizza) ---
+// --- COMPONENTE DE INSIGHTS ---
 function DashboardInsights({ processedRows, insightFilter, setInsightFilter, setBorderoFilter, setDctoFilter }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [hoveredSlice, setHoveredSlice] = useState(null);
@@ -510,22 +500,27 @@ function DashboardInsights({ processedRows, insightFilter, setInsightFilter, set
     const delayDaysTotal = { liquidadoAtraso: 0, atraso: 0, recompra: 0 };
     const desagioValues = { liquidado: 0, liquidadoAtraso: 0, atraso: 0, aVencer: 0, recompra: 0, total: 0 };
     
+    if (processedRows.length === 0) return { counts, values, avgDelays: { liquidadoAtraso: 0, atraso: 0, recompra: 0 }, desagioValues };
+
     const seenBorderosStatus = { liquidado: new Set(), liquidadoAtraso: new Set(), atraso: new Set(), aVencer: new Set(), recompra: new Set(), invalido: new Set() };
     const seenBorderosTotal = new Set();
-    
-    const today = new Date(); 
-    today.setHours(0, 0, 0, 0);
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+
+    // OTIMIZAÇÃO: Extrair as chaves apenas uma vez
+    const firstRow = processedRows[0];
+    const entradaKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'entrada' || k.toLowerCase().includes('valor'));
+    const borderoKey = Object.keys(firstRow).find(k => k.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes("border"));
+    const desagioKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'desagio' || k.toLowerCase() === 'deságio');
+    const vctoKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'vcto' || (k.toLowerCase().includes('vcto') && !k.toLowerCase().includes('vl')));
+    const pgtoKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'pgto' || (k.toLowerCase().includes('pgto') && !k.toLowerCase().includes('vl')));
 
     processedRows.forEach((r, idx) => {
       if (r._status !== 'invalido') {
         counts[r._status]++; counts.total++;
-        const entradaKey = Object.keys(r).find(k => k.toLowerCase() === 'entrada' || k.toLowerCase().includes('valor'));
         const val = entradaKey ? (Number(r[entradaKey]) || 0) : 0;
         values[r._status] += val; values.total += val;
 
-        const borderoKey = Object.keys(r).find(k => k.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes("border"));
         const bNum = (borderoKey && r[borderoKey]) ? String(r[borderoKey]).trim() : `avulso_${idx}`; 
-        const desagioKey = Object.keys(r).find(k => k.toLowerCase() === 'desagio' || k.toLowerCase() === 'deságio');
         const desagioVal = desagioKey ? (Number(r[desagioKey]) || 0) : 0;
 
         if (!seenBorderosStatus[r._status].has(bNum)) {
@@ -538,14 +533,12 @@ function DashboardInsights({ processedRows, insightFilter, setInsightFilter, set
         }
 
         if (r._status === 'liquidadoAtraso' || r._status === 'atraso' || r._status === 'recompra') {
-          const vctoKey = Object.keys(r).find(k => k.toLowerCase() === 'vcto' || (k.toLowerCase().includes('vcto') && !k.toLowerCase().includes('vl')));
           if (vctoKey && r[vctoKey]) {
             const effectiveVcto = new Date(String(r[vctoKey]).split("T")[0] + "T00:00:00");
             if (effectiveVcto.getDay() === 6) effectiveVcto.setDate(effectiveVcto.getDate() + 2);
             else if (effectiveVcto.getDay() === 0) effectiveVcto.setDate(effectiveVcto.getDate() + 1);
 
             if (r._status === 'liquidadoAtraso') {
-              const pgtoKey = Object.keys(r).find(k => k.toLowerCase() === 'pgto' || (k.toLowerCase().includes('pgto') && !k.toLowerCase().includes('vl')));
               if (pgtoKey && r[pgtoKey]) {
                 const pgtoDate = new Date(String(r[pgtoKey]).split("T")[0] + "T00:00:00");
                 const diffTime = pgtoDate - effectiveVcto;
@@ -555,7 +548,6 @@ function DashboardInsights({ processedRows, insightFilter, setInsightFilter, set
               const diffTime = today - effectiveVcto;
               if (diffTime > 0) delayDaysTotal.atraso += Math.floor(diffTime / (1000 * 60 * 60 * 24));
             } else if (r._status === 'recompra') {
-              const pgtoKey = Object.keys(r).find(k => k.toLowerCase() === 'pgto' || (k.toLowerCase().includes('pgto') && !k.toLowerCase().includes('vl')));
               if (pgtoKey && r[pgtoKey]) {
                 const pgtoDate = new Date(String(r[pgtoKey]).split("T")[0] + "T00:00:00");
                 const diffTime = pgtoDate - effectiveVcto;
@@ -571,10 +563,10 @@ function DashboardInsights({ processedRows, insightFilter, setInsightFilter, set
     });
 
     const avgDelays = {
-          liquidadoAtraso: counts.liquidadoAtraso > 0 ? (delayDaysTotal.liquidadoAtraso / counts.liquidadoAtraso).toFixed(1).replace('.', ',') : 0,
-          atraso: counts.atraso > 0 ? (delayDaysTotal.atraso / counts.atraso).toFixed(1).replace('.', ',') : 0,
-          recompra: counts.recompra > 0 ? (delayDaysTotal.recompra / counts.recompra).toFixed(1).replace('.', ',') : 0
-        };
+      liquidadoAtraso: counts.liquidadoAtraso > 0 ? (delayDaysTotal.liquidadoAtraso / counts.liquidadoAtraso).toFixed(1).replace('.', ',') : 0,
+      atraso: counts.atraso > 0 ? (delayDaysTotal.atraso / counts.atraso).toFixed(1).replace('.', ',') : 0,
+      recompra: counts.recompra > 0 ? (delayDaysTotal.recompra / counts.recompra).toFixed(1).replace('.', ',') : 0
+    };
 
     return { counts, values, avgDelays, desagioValues };
   }, [processedRows]);
@@ -713,18 +705,24 @@ function DashboardInsights({ processedRows, insightFilter, setInsightFilter, set
   );
 }
 
-// --- COMPONENTE DA TABELA ---
+// --- COMPONENTE DA TABELA (OTIMIZADA COM PAGINAÇÃO) ---
 function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, borderoFilter, setBorderoFilter, dctoFilter, setDctoFilter, setDateFilter, setInsightFilter, setClienteSelecionado, setSacadoSelecionado }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [sortConfig, setSortConfig] = useState(null);
+  
+  // ESTADOS DA PAGINAÇÃO
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 50;
 
-  useEffect(() => { setSortConfig(null); }, [dateFilter]);
+  // Volta para a página 1 ao alterar os dados
+  useEffect(() => { setCurrentPage(1); }, [rows, dateFilter, sortConfig]);
 
   const colunasOcultas = ["id", "created_at", "Cód.Red", "UF", "Banco", "Rec.", "Estado", "_status"];
   const columns = useMemo(() => {
-    const set = new Set();
-    for (const r of rows) Object.keys(r).forEach((k) => set.add(k));
-    let cols = Array.from(set).filter(c => !colunasOcultas.includes(c));
+    if (!rows.length) return [];
+    // Otimização: ler apenas os atributos do primeiro item, evitando loop completo sobre Set
+    const firstRowKeys = Object.keys(rows[0]);
+    let cols = firstRowKeys.filter(c => !colunasOcultas.includes(c));
     if (clienteSelecionado) cols = cols.filter(c => c !== "Cliente");
     if (sacadoSelecionado) cols = cols.filter(c => c !== "Sacado");
     if (clienteSelecionado && !sacadoSelecionado && cols.includes("Sacado")) cols = ["Sacado", ...cols.filter(c => c !== "Sacado")];
@@ -777,7 +775,12 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
     return sortableItems;
   }, [rows, activeSort]);
 
+  // FATIAR PARA PAGINAÇÃO
+  const currentItems = sortedRows.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const totalPages = Math.ceil(sortedRows.length / itemsPerPage);
+
   const { totalFace, totalDesagio, taxaMedia, valorMedio, prazoMedio } = useMemo(() => {
+    if (sortedRows.length === 0) return { totalFace: 0, totalDesagio: 0, taxaMedia: 0, valorMedio: 0, prazoMedio: 0 };
     let f = 0; let d = 0;
     let countTitulos = 0;
     let sumPrazoWeighted = 0;
@@ -785,20 +788,22 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
     const seenBorderosDesagio = new Set();
     const borderoMapTaxa = new Map();
 
-    sortedRows.forEach((row, idx) => {
-      const borderoKey = Object.keys(row).find(k => k.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes("border"));
-      const bNum = (borderoKey && row[borderoKey]) ? String(row[borderoKey]).trim() : `avulso_${idx}`; 
+    // OTIMIZAÇÃO: extração de chaves antes do loop
+    const firstRow = sortedRows[0];
+    const borderoKey = Object.keys(firstRow).find(k => k.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes("border"));
+    const valKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'entrada' || (k.toLowerCase().includes('valor') && !k.toLowerCase().includes('pgto')));
+    const emisKey = Object.keys(firstRow).find(k => k.toLowerCase().includes('emis'));
+    const vctoKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'vcto' || (k.toLowerCase().includes('vcto') && !k.toLowerCase().includes('vl')));
+    const desagioKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'desagio' || k.toLowerCase() === 'deságio');
+    const rateKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'tx.efet' || k.toLowerCase().includes('tx.efet') || k.toLowerCase().includes('tx efet'));
 
-      const valKey = Object.keys(row).find(k => k.toLowerCase() === 'entrada' || (k.toLowerCase().includes('valor') && !k.toLowerCase().includes('pgto')));
+    sortedRows.forEach((row, idx) => {
+      const bNum = (borderoKey && row[borderoKey]) ? String(row[borderoKey]).trim() : `avulso_${idx}`; 
       const val = valKey ? (Number(row[valKey]) || 0) : 0;
       
       f += val;
       if (val > 0) {
         countTitulos += 1;
-        
-        // PRAZO MÉDIO (AGORA CALCULA PARA TODOS OS TÍTULOS DA TABELA)
-        const emisKey = Object.keys(row).find(k => k.toLowerCase().includes('emis'));
-        const vctoKey = Object.keys(row).find(k => k.toLowerCase() === 'vcto' || (k.toLowerCase().includes('vcto') && !k.toLowerCase().includes('vl')));
         
         let prazo = 0;
         if (emisKey && row[emisKey] && vctoKey && row[vctoKey]) {
@@ -810,14 +815,12 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
         sumPrazoWeighted += (prazo * val);
       }
 
-      const desagioKey = Object.keys(row).find(k => k.toLowerCase() === 'desagio' || k.toLowerCase() === 'deságio');
       const desagioVal = desagioKey ? (Number(row[desagioKey]) || 0) : 0;
       if (!seenBorderosDesagio.has(bNum)) {
          seenBorderosDesagio.add(bNum);
          d += desagioVal;
       }
 
-      const rateKey = Object.keys(row).find(k => k.toLowerCase() === 'tx.efet' || k.toLowerCase().includes('tx.efet') || k.toLowerCase().includes('tx efet'));
       const rawRate = rateKey ? row[rateKey] : null;
       const hasRateVal = rawRate !== null && rawRate !== undefined && String(rawRate).trim() !== "";
       const rate = hasRateVal ? (Number(String(rawRate).replace('%', '').replace(',', '.')) || 0) : 0;
@@ -853,17 +856,6 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
 
   const requestSort = (key) => setSortConfig({ key, direction: activeSort?.key === key && activeSort.direction === 'asc' ? 'desc' : 'asc' });
 
-  function getRowColors(status) {
-    switch(status) {
-      case 'liquidado': return { bg: 'rgba(34, 197, 94, 0.08)', hover: 'rgba(34, 197, 94, 0.15)' };
-      case 'liquidadoAtraso': return { bg: 'rgba(245, 158, 11, 0.08)', hover: 'rgba(245, 158, 11, 0.15)' };
-      case 'atraso': return { bg: 'rgba(239, 68, 68, 0.08)', hover: 'rgba(239, 68, 68, 0.15)' };
-      case 'recompra': return { bg: 'rgba(139, 92, 246, 0.08)', hover: 'rgba(139, 92, 246, 0.15)' };
-      case 'aVencer': return { bg: 'rgba(148, 163, 184, 0.05)', hover: 'rgba(148, 163, 184, 0.12)' };
-      default: return { bg: '#fff', hover: '#f9fafb' };
-    }
-  }
-
   if (!rows.length) return null;
 
   return (
@@ -894,10 +886,10 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
                 </tr>
               </thead>
               <tbody>
-                {sortedRows.map((r, idx) => {
-                  const { bg, hover } = getRowColors(r._status);
+                {currentItems.map((r, idx) => {
                   return (
-                    <tr key={r.id ?? idx} style={{ background: bg, borderBottom: "1px solid #e5e7eb", transition: "background 0.2s" }} onMouseOver={(e) => e.currentTarget.style.background = hover} onMouseOut={(e) => e.currentTarget.style.background = bg}>
+                    // OTIMIZAÇÃO: classes CSS injetadas evitam gargalo de reflows
+                    <tr key={r.id ?? idx} className={`table-row-${r._status || 'default'}`} style={{ borderBottom: "1px solid #e5e7eb", transition: "background 0.2s" }}>
                       {columns.map((c) => {
                         let valor = r[c];
                         const cLower = c.toLowerCase();
@@ -925,9 +917,9 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
                             ) : isDctoCol ? (
                               <span onClick={(e) => { e.stopPropagation(); if (isThisDctoFiltered) setDctoFilter(null); else { setDctoFilter({ key: c, value: valor }); setBorderoFilter(null); setDateFilter({ type: 'emis', start: '', end: '' }); if (setInsightFilter) setInsightFilter(null); } }} style={{ background: isThisDctoFiltered ? "#0ea5e9" : "rgba(14, 165, 233, 0.08)", color: isThisDctoFiltered ? "#fff" : "#0ea5e9", padding: "4px 8px", borderRadius: "6px", fontWeight: "600", cursor: "pointer" }}>{escapeText(valor)}</span>
                             ) : c === "Cliente" ? (
-                              <span onClick={(e) => { e.stopPropagation(); setClienteSelecionado(valor); }} style={{ cursor: "pointer", fontWeight: "600", color: "#374151" }} onMouseOver={(e) => e.currentTarget.style.color = '#4f46e5'} onMouseOut={(e) => e.currentTarget.style.color = '#374151'}>{escapeText(valor)}</span>
+                              <span onClick={(e) => { e.stopPropagation(); setClienteSelecionado(valor); }} className="clickable-entity">{escapeText(valor)}</span>
                             ) : c === "Sacado" ? (
-                              <span onClick={(e) => { e.stopPropagation(); setSacadoSelecionado(valor); }} style={{ cursor: "pointer", fontWeight: "600", color: "#374151" }} onMouseOver={(e) => e.currentTarget.style.color = '#4f46e5'} onMouseOut={(e) => e.currentTarget.style.color = '#374151'}>{escapeText(valor)}</span>
+                              <span onClick={(e) => { e.stopPropagation(); setSacadoSelecionado(valor); }} className="clickable-entity">{escapeText(valor)}</span>
                             ) : ( escapeText(valor) )}
                           </td>
                         );
@@ -937,6 +929,17 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
                 })}
               </tbody>
             </table>
+          </div>
+
+          {/* OTIMIZAÇÃO: Controles de Paginação */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 24px', background: '#fff', borderTop: '1px solid #e5e7eb', alignItems: 'center' }}>
+             <span style={{ fontSize: '13px', color: '#6b7280' }}>
+               Mostrando {sortedRows.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0} a {Math.min(currentPage * itemsPerPage, sortedRows.length)} de {sortedRows.length} registos
+             </span>
+             <div style={{ display: 'flex', gap: '8px' }}>
+               <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #d1d5db', background: currentPage === 1 ? '#f3f4f6' : '#fff', color: currentPage === 1 ? '#9ca3af' : '#374151', cursor: currentPage === 1 ? 'not-allowed' : 'pointer', fontSize: '13px' }}>Anterior</button>
+               <button disabled={currentPage === totalPages || totalPages === 0} onClick={() => setCurrentPage(p => p + 1)} style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #d1d5db', background: currentPage === totalPages || totalPages === 0 ? '#f3f4f6' : '#fff', color: currentPage === totalPages || totalPages === 0 ? '#9ca3af' : '#374151', cursor: currentPage === totalPages || totalPages === 0 ? 'not-allowed' : 'pointer', fontSize: '13px' }}>Próxima</button>
+             </div>
           </div>
           
           <div style={{ 
@@ -1041,13 +1044,17 @@ export default function MicroDashboard({ session }) {
   }, [clienteSelecionado, sacadoSelecionado]);
 
   const processedRows = useMemo(() => {
+    if (rows.length === 0) return [];
+    
+    // OTIMIZAÇÃO: Extrair as chaves apenas uma vez
+    const firstRow = rows[0];
+    const vctoKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'vcto' || (k.toLowerCase().includes('vcto') && !k.toLowerCase().includes('vl')));
+    const pgtoKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'pgto' || (k.toLowerCase().includes('pgto') && !k.toLowerCase().includes('vl')));
+    const statusKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'status' || k.toLowerCase() === 'estado');
     const today = new Date(); today.setHours(0, 0, 0, 0);
+
     return rows.map(r => {
       let status = 'invalido';
-      const vctoKey = Object.keys(r).find(k => k.toLowerCase() === 'vcto' || (k.toLowerCase().includes('vcto') && !k.toLowerCase().includes('vl')));
-      const pgtoKey = Object.keys(r).find(k => k.toLowerCase() === 'pgto' || (k.toLowerCase().includes('pgto') && !k.toLowerCase().includes('vl')));
-      const statusKey = Object.keys(r).find(k => k.toLowerCase() === 'status' || k.toLowerCase() === 'estado');
-
       const vctoVal = vctoKey ? r[vctoKey] : null; const pgtoVal = pgtoKey ? r[pgtoKey] : null;
       const statusVal = statusKey ? String(r[statusKey]).trim().toUpperCase() : "";
 
@@ -1077,11 +1084,14 @@ export default function MicroDashboard({ session }) {
   const rowsFilteredByDate = useMemo(() => {
     let base = rowsFilteredByMode;
     if (dateFilter.start || dateFilter.end) {
+       if (base.length === 0) return base;
+       // OTIMIZAÇÃO
+       const firstRow = base[0];
+       const key = dateFilter.type === 'emis' 
+         ? Object.keys(firstRow).find(k => k.toLowerCase().includes('emis'))
+         : Object.keys(firstRow).find(k => k.toLowerCase() === 'vcto' || (k.toLowerCase().includes('vcto') && !k.toLowerCase().includes('vl')));
+       
        base = base.filter(r => {
-          const key = dateFilter.type === 'emis' 
-            ? Object.keys(r).find(k => k.toLowerCase().includes('emis'))
-            : Object.keys(r).find(k => k.toLowerCase() === 'vcto' || (k.toLowerCase().includes('vcto') && !k.toLowerCase().includes('vl')));
-          
           if (!key || !r[key]) return false;
           const dStr = String(r[key]).split("T")[0];
           
@@ -1118,11 +1128,15 @@ export default function MicroDashboard({ session }) {
     let sumPrazoWeighted = 0;
     let countTitulos = 0;
 
-    rowsParaTabela.forEach((r, idx) => {
-      const borderoKey = Object.keys(r).find(k => k.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes("border"));
-      const valKey = Object.keys(r).find(k => k.toLowerCase() === 'entrada' || (k.toLowerCase().includes('valor') && !k.toLowerCase().includes('pgto')));
-      const rateKey = Object.keys(r).find(k => k.toLowerCase() === 'tx.efet' || k.toLowerCase().includes('tx.efet') || k.toLowerCase().includes('tx efet'));
+    // OTIMIZAÇÃO
+    const firstRow = rowsParaTabela[0];
+    const borderoKey = Object.keys(firstRow).find(k => k.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes("border"));
+    const valKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'entrada' || (k.toLowerCase().includes('valor') && !k.toLowerCase().includes('pgto')));
+    const rateKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'tx.efet' || k.toLowerCase().includes('tx.efet') || k.toLowerCase().includes('tx efet'));
+    const emisKey = Object.keys(firstRow).find(k => k.toLowerCase().includes('emis'));
+    const vctoKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'vcto' || (k.toLowerCase().includes('vcto') && !k.toLowerCase().includes('vl')));
 
+    rowsParaTabela.forEach((r, idx) => {
       const bNum = (borderoKey && r[borderoKey]) ? String(r[borderoKey]).trim() : `avulso_${idx}`; 
       const val = valKey ? (Number(r[valKey]) || 0) : 0;
       
@@ -1143,9 +1157,6 @@ export default function MicroDashboard({ session }) {
       if (val > 0) {
         sumFaceTotal += val;
         countTitulos += 1;
-        
-        const emisKey = Object.keys(r).find(k => k.toLowerCase().includes('emis'));
-        const vctoKey = Object.keys(r).find(k => k.toLowerCase() === 'vcto' || (k.toLowerCase().includes('vcto') && !k.toLowerCase().includes('vl')));
         
         let prazo = 0;
         if (emisKey && r[emisKey] && vctoKey && r[vctoKey]) {
@@ -1213,7 +1224,6 @@ export default function MicroDashboard({ session }) {
     return () => clearTimeout(delayDebounceFn);
   }, [clienteSelecionado, sacadoSelecionado, session?.user?.id]);
 
-  // Funções de limpeza separadas
   const limparFiltroEntidades = () => {
     setClienteSelecionado(""); 
     setSacadoSelecionado(""); 
@@ -1235,6 +1245,27 @@ export default function MicroDashboard({ session }) {
 
   return (
     <div style={{ background: "#fff", padding: "24px", borderRadius: "12px", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)" }}>
+      {/* OTIMIZAÇÃO CSS: Bloco de estilo global para os eventos de Hover nativos no browser */}
+      <style>
+        {`
+          .table-row-liquidado { background: rgba(34, 197, 94, 0.08); }
+          .table-row-liquidado:hover { background: rgba(34, 197, 94, 0.15); }
+          .table-row-liquidadoAtraso { background: rgba(245, 158, 11, 0.08); }
+          .table-row-liquidadoAtraso:hover { background: rgba(245, 158, 11, 0.15); }
+          .table-row-atraso { background: rgba(239, 68, 68, 0.08); }
+          .table-row-atraso:hover { background: rgba(239, 68, 68, 0.15); }
+          .table-row-recompra { background: rgba(139, 92, 246, 0.08); }
+          .table-row-recompra:hover { background: rgba(139, 92, 246, 0.15); }
+          .table-row-aVencer { background: rgba(148, 163, 184, 0.05); }
+          .table-row-aVencer:hover { background: rgba(148, 163, 184, 0.12); }
+          .table-row-default { background: #fff; }
+          .table-row-default:hover { background: #f9fafb; }
+          
+          .clickable-entity { cursor: pointer; font-weight: 600; color: #374151; transition: color 0.2s; }
+          .clickable-entity:hover { color: #4f46e5; }
+        `}
+      </style>
+
       <h2 style={{ margin: "0 0 20px 0", color: "#111827", fontSize: "18px" }}>Filtro de Registos</h2>
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: "20px", marginBottom: "8px", alignItems: "flex-end" }}>
@@ -1251,7 +1282,6 @@ export default function MicroDashboard({ session }) {
         </div>
       </div>
 
-      {/* NOVA BARRA DE FILTRO DE DATA */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: "16px", marginTop: "16px", alignItems: "flex-end", padding: "16px", background: "#f9fafb", borderRadius: "8px", border: "1px solid #e5e7eb" }}>
         <div style={{ flex: "1 1 150px" }}>
           <label style={{ display: "block", marginBottom: 6, fontSize: "13px", fontWeight: "600", color: "#4b5563" }}>Data Base</label>
@@ -1292,7 +1322,6 @@ export default function MicroDashboard({ session }) {
       {rowsFilteredByMode.length > 0 && (
         <div style={{ marginTop: "24px" }}>
           
-          {/* BANNER DE KPIs INTELIGENTE - CORPORATIVO ELEVADO COM LEVE DESTAQUE */}
           {rowsParaTabela.length > 0 && kpiData.baseCalculo > 0 && (
             <div style={{
               background: "#d1d5db", 
