@@ -47,6 +47,9 @@ export default function App() {
     boxShadow: isActive ? "0 4px 6px -1px rgba(79, 70, 229, 0.3)" : "none"
   });
 
+  // Validação de acesso autorizado
+  const isAuthorized = session?.user?.email === 'lafersec@lafersec.com.br';
+
   return (
     <div style={{ fontFamily: "'Inter', system-ui, Arial, sans-serif", minHeight: "100vh", width: "100%", backgroundColor: "#f3f4f6", padding: "40px 0", boxSizing: "border-box" }}>
       <div style={{ width: "90%", maxWidth: "1400px", margin: "0 auto" }}>
@@ -70,6 +73,16 @@ export default function App() {
               <button type="submit" style={{ marginTop: "8px", padding: "12px", borderRadius: "8px", border: 0, background: "#4f46e5", color: "#fff", fontWeight: "600", fontSize: "15px", cursor: "pointer" }}>Entrar no Dashboard</button>
             </form>
             {msg && <div style={{ marginTop: 16, padding: "12px", background: "#fef2f2", color: "#991b1b", borderRadius: "8px", fontSize: "14px", border: "1px solid #fecaca" }}>{msg}</div>}
+          </div>
+        ) : !isAuthorized ? (
+          <div style={{ background: "#fff", padding: "40px", borderRadius: "12px", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)", maxWidth: 400, margin: "0 auto", marginTop: "60px", textAlign: "center" }}>
+            <h2 style={{ margin: "0 0 16px 0", color: "#ef4444", fontSize: "22px" }}>Entrada não autorizada</h2>
+            <p style={{ color: "#6b7280", margin: "0 0 8px 0", fontSize: "15px" }}>
+              A conta <strong style={{ color: "#111827" }}>{session.user.email}</strong> não possui permissões para visualizar este painel.
+            </p>
+            <button onClick={() => supabase.auth.signOut()} style={{ marginTop: "24px", padding: "10px 24px", borderRadius: "8px", border: 0, background: "#111827", color: "#fff", fontWeight: "600", fontSize: "15px", cursor: "pointer", transition: "background 0.2s" }} onMouseOver={(e) => e.currentTarget.style.background = "#374151"} onMouseOut={(e) => e.currentTarget.style.background = "#111827"}>
+              Sair
+            </button>
           </div>
         ) : (
           <div>
