@@ -341,7 +341,7 @@ export default function UploadData() {
           Exportar para Excel
         </div>
         <div>
-          <strong style={{ color: "#0f172a", fontSize: "14px" }}>📊 Arquivo de Taxas:</strong><br />
+          <strong style={{ color: "#0f172a", fontSize: "14px" }}>📊 Arquivo de Taxas (Método Muito Lento):</strong><br />
           Ir em Gerência <span style={{ color: "#94a3b8", margin: "0 4px" }}>➔</span> 
           Operações <span style={{ color: "#94a3b8", margin: "0 4px" }}>➔</span> 
           C. Própria <span style={{ color: "#94a3b8", margin: "0 4px" }}>➔</span> 
