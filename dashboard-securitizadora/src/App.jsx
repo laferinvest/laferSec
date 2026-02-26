@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "./supabaseClient";
 import MicroDashboard from "./MicroDashboard";
 import MacroDashboard from "./MacroDashboard";
+import UploadData from "./UploadData"; 
 
 export default function App() {
   const [session, setSession] = useState(null);
@@ -118,18 +119,31 @@ export default function App() {
               </div>
 
               {/* Botões Micro/Macro */}
-              <div style={{ display: "flex", gap: "16px", marginBottom: "24px", justifyContent: "center" }}>
-                <button onClick={() => setActiveTab('micro')} style={getTabStyle(activeTab === 'micro')}>
-                  Dados Micro (Detalhes de Operações)
-                </button>
-                <button onClick={() => { setActiveTab('macro'); setIsSidebarOpen(false); }} style={getTabStyle(activeTab === 'macro')}>
-                  Dados Macro (Visão de Risco)
-                </button>
-              </div>
+            <div style={{ display: "flex", gap: "16px", marginBottom: "24px", justifyContent: "center", flexWrap: "wrap" }}>
+              <button onClick={() => setActiveTab('micro')} style={getTabStyle(activeTab === 'micro')}>
+                Dados Micro (Detalhes de Operações)
+              </button>
+              <button onClick={() => { setActiveTab('macro'); setIsSidebarOpen(false); }} style={getTabStyle(activeTab === 'macro')}>
+                Dados Macro (Visão de Risco)
+              </button>
+              
+              {/* NOVO BOTÃO AQUI */}
+              <button onClick={() => { setActiveTab('upload'); setIsSidebarOpen(false); }} style={getTabStyle(activeTab === 'upload')}>
+                Atualizar Base de Dados
+              </button>
+            </div>
             </div>
 
             {/* MicroDashboard fora do wrapper — translada sozinho */}
-            {activeTab === 'micro' ? <MicroDashboard session={session} onSidebarToggle={handleSidebarToggle} hideValues={hideValues} setHideValues={setHideValues} /> : <MacroDashboard session={session} hideValues={hideValues} setHideValues={setHideValues} />}
+            {activeTab === 'micro' && (
+              <MicroDashboard session={session} onSidebarToggle={handleSidebarToggle} hideValues={hideValues} setHideValues={setHideValues} />
+            )}
+            {activeTab === 'macro' && (
+              <MacroDashboard session={session} hideValues={hideValues} setHideValues={setHideValues} />
+            )}
+            {activeTab === 'upload' && (
+              <UploadData />
+            )}
           </div>
         )}
 
