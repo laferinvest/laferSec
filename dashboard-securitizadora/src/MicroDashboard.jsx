@@ -995,7 +995,15 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
 function CustomDropdown({ value, options, onChange, placeholder }) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [isMobileDevice, setIsMobileDevice] = useState(false);
   const wrapperRef = useRef(null);
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobileDevice(window.innerWidth < 640);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   useEffect(() => {
     function handleClickOutside(event) { if (wrapperRef.current && !wrapperRef.current.contains(event.target)) { setIsOpen(false); setSearchTerm(""); } }
@@ -1005,6 +1013,23 @@ function CustomDropdown({ value, options, onChange, placeholder }) {
   const filteredOptions = options.filter(opt => opt.toLowerCase().includes(searchTerm.toLowerCase()));
   const handleKeyDown = (e) => { if (e.key === 'Enter') { e.preventDefault(); if (isOpen && filteredOptions.length > 0) { onChange(filteredOptions[0]); setSearchTerm(""); setIsOpen(false); } } };
   const displayValue = isOpen ? searchTerm : value;
+
+  // Em mobile, usa select nativo para evitar que o teclado virtual cause resize e feche o sidebar
+  if (isMobileDevice) {
+    return (
+      <div style={{ position: "relative", width: "100%" }}>
+        <select
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          style={{ width: "100%", padding: "11px", paddingRight: "32px", borderRadius: "6px", border: "1px solid #d1d5db", background: "#fff", fontSize: "14px", color: value ? "#111827" : "#9ca3af", outline: "none", boxSizing: "border-box", appearance: "none", WebkitAppearance: "none" }}
+        >
+          <option value="">{placeholder}</option>
+          {options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+        </select>
+        <div style={{ position: "absolute", right: "12px", top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: "#6b7280", fontSize: "12px" }}>▼</div>
+      </div>
+    );
+  }
 
   return (
     <div ref={wrapperRef} style={{ position: "relative", width: "100%" }}>
@@ -1055,9 +1080,14 @@ export default function MicroDashboard({ session, onSidebarToggle }) {
       const tablet = w >= 640 && w < 1824; // 640–1023px: sidebar empurra conteúdo sem translado
       setIsMobile(mobile);
       setIsTablet(tablet);
-      const newOpen = !mobile;
-      setIsSidebarOpen(newOpen);
-      if (onSidebarToggle) onSidebarToggle(mobile ? false : newOpen, mobile, tablet);
+      // Em mobile, não altera o estado do sidebar durante resize (evita fechar ao abrir teclado virtual)
+      if (!mobile) {
+        setIsSidebarOpen(true);
+        if (onSidebarToggle) onSidebarToggle(true, mobile, tablet);
+      } else {
+        // Só atualiza o App sobre o estado mobile, sem fechar o sidebar
+        if (onSidebarToggle) onSidebarToggle(false, mobile, tablet);
+      }
     };
 
     if (typeof window !== 'undefined') {

@@ -40,7 +40,7 @@ function sacadoValido(sacado) {
 }
 
 // --- COMPONENTE DA TABELA DETALHADA DO MACRO (OTIMIZADA) ---
-function MacroDetailedTable({ rows, focus, setFocus, setSelectedSlice }) {
+function MacroDetailedTable({ rows, focus, setFocus, setSelectedSlice, hideValues }) {
   const [sortConfig, setSortConfig] = useState(null);
   
   // OTIMIZAÇÃO: Paginação
@@ -151,7 +151,7 @@ function MacroDetailedTable({ rows, focus, setFocus, setSelectedSlice }) {
                     const isDateColumn = !isCurrency && !isRate && (cLower.includes("emis") || cLower.includes("vcto") || cLower.includes("pgto") || cLower.includes("data"));
                     
                     if (isDateColumn) valor = formatarData(valor);
-                    else if (isCurrency) valor = formatarMoeda(valor);
+                    else if (isCurrency) valor = hideValues ? "R$ -" : formatarMoeda(valor);
                     else if (isRate) {
                       const valNum = Number(String(valor).replace('%', '').replace(',', '.'));
                       valor = !isNaN(valNum) && valor ? `${valNum.toFixed(2).replace('.', ',')}%` : escapeText(valor);
@@ -206,6 +206,8 @@ export default function MacroDashboard() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [focus, setFocus] = useState('cedente'); 
+  const [hideValues, setHideValues] = useState(false);
+  const fmtM = (valor) => hideValues ? "R$ -" : formatarMoeda(valor);
   
   const [hoveredSlice, setHoveredSlice] = useState(null);
   const [selectedSlice, setSelectedSlice] = useState(null); 
@@ -499,7 +501,25 @@ export default function MacroDashboard() {
           <h2 style={{ margin: "0 0 8px 0", color: "#111827", fontSize: "22px" }}>Visão Macroscópica de Risco</h2>
           <p style={{ margin: 0, color: "#6b7280", fontSize: "15px" }}>Concentração de Capital em títulos <strong>Em Aberto</strong> (A Vencer e Em Atraso).</p>
         </div>
-        <div style={{ display: "flex", gap: "12px" }}>
+        <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+          <button
+            onClick={() => setHideValues(v => !v)}
+            title={hideValues ? "Mostrar valores" : "Ocultar valores"}
+            style={{ padding: "8px 10px", borderRadius: "6px", border: "1px solid #d1d5db", background: hideValues ? "#f3f4f6" : "#fff", color: hideValues ? "#4f46e5" : "#6b7280", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.2s" }}
+          >
+            {hideValues ? (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+                <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+                <line x1="1" y1="1" x2="23" y2="23"/>
+              </svg>
+            ) : (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                <circle cx="12" cy="12" r="3"/>
+              </svg>
+            )}
+          </button>
           <button onClick={() => { setFocus('cedente'); setSelectedSlice(null); }} style={getTabStyle(focus === 'cedente')}>Concentração Cedente</button>
           <button onClick={() => { setFocus('sacado'); setSelectedSlice(null); }} style={getTabStyle(focus === 'sacado')}>Concentração Sacado</button>
         </div>
@@ -572,7 +592,7 @@ export default function MacroDashboard() {
                     <div style={{ width: "16px", height: "16px", borderRadius: "4px", background: slice.color, flexShrink: 0 }} />
                     <div style={{ display: "flex", flexDirection: "column", overflow: "hidden" }}>
                       <span style={{ fontSize: "14px", fontWeight: "600", color: "#374151", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={slice.name}>{slice.name}</span>
-                      <span style={{ fontSize: "13px", color: "#6b7280" }}>{formatarMoeda(slice.val)} • <strong>{(slice.percent * 100).toFixed(1)}%</strong></span>
+                      <span style={{ fontSize: "13px", color: "#6b7280" }}>{fmtM(slice.val)} • <strong>{(slice.percent * 100).toFixed(1)}%</strong></span>
                     </div>
                   </div>
                 )
@@ -608,7 +628,7 @@ export default function MacroDashboard() {
                   <span style={{ fontSize: "36px", fontWeight: "700", color: "#111827", lineHeight: "1", letterSpacing: "-0.02em" }}>{kpiData.taxaMedia.toFixed(2).replace('.', ',')}%</span>
                 </div>
                 <div style={{ fontSize: "13px", color: "#6b7280", marginTop: "12px", fontWeight: "500" }}>
-                  Base: <span style={{color: "#374151", fontWeight: "600"}}>{formatarMoeda(kpiData.baseCalculo)}</span> {selectedSlice && <span style={{color: "#4f46e5", background: "#e0e7ff", padding: "2px 6px", borderRadius: "4px", marginLeft: "4px", fontSize: "11px", fontWeight: "700"}}>FILTRO ATIVO</span>}
+                  Base: <span style={{color: "#374151", fontWeight: "600"}}>{fmtM(kpiData.baseCalculo)}</span> {selectedSlice && <span style={{color: "#4f46e5", background: "#e0e7ff", padding: "2px 6px", borderRadius: "4px", marginLeft: "4px", fontSize: "11px", fontWeight: "700"}}>FILTRO ATIVO</span>}
                 </div>
               </div>
 
@@ -624,7 +644,7 @@ export default function MacroDashboard() {
                   <h3 style={{ margin: 0, fontSize: "12px", fontWeight: "700", color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em" }}>Ticket Médio</h3>
                 </div>
                 <div style={{ display: "flex", alignItems: "baseline", gap: "4px" }}>
-                  <span style={{ fontSize: "36px", fontWeight: "700", color: "#111827", lineHeight: "1", letterSpacing: "-0.02em" }}>{formatarMoeda(kpiData.valorMedio)}</span>
+                  <span style={{ fontSize: "36px", fontWeight: "700", color: "#111827", lineHeight: "1", letterSpacing: "-0.02em" }}>{fmtM(kpiData.valorMedio)}</span>
                 </div>
                 <div style={{ fontSize: "13px", color: "#6b7280", marginTop: "12px", fontWeight: "500" }}>
                   Média por título na visualização
@@ -661,7 +681,7 @@ export default function MacroDashboard() {
                   <h3 style={{ margin: 0, fontSize: "12px", fontWeight: "700", color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em" }}>Deságio Total</h3>
                 </div>
                 <div style={{ display: "flex", alignItems: "baseline", gap: "4px" }}>
-                  <span style={{ fontSize: "36px", fontWeight: "700", color: "#111827", lineHeight: "1", letterSpacing: "-0.02em" }}>{formatarMoeda(kpiData.desagioTotal)}</span>
+                  <span style={{ fontSize: "36px", fontWeight: "700", color: "#111827", lineHeight: "1", letterSpacing: "-0.02em" }}>{fmtM(kpiData.desagioTotal)}</span>
                 </div>
                 <div style={{ fontSize: "13px", color: "#6b7280", marginTop: "12px", fontWeight: "500" }}>
                   Total apurado na visualização {selectedSlice && <span style={{color: "#4f46e5", background: "#e0e7ff", padding: "2px 6px", borderRadius: "4px", marginLeft: "4px", fontSize: "11px", fontWeight: "700"}}>FILTRO ATIVO</span>}
@@ -680,14 +700,14 @@ export default function MacroDashboard() {
                     Títulos em Aberto de: <span style={{ color: "#4f46e5" }}>{selectedSlice}</span>
                   </h3>
                   <div style={{ fontSize: "13px", color: "#6b7280" }}>
-                    <strong>{detailedRows.length}</strong> registo(s) encontrado(s) totalizando <strong>{formatarMoeda(detailedRows.reduce((acc, row) => { const vk = Object.keys(row).find(k => k.toLowerCase() === 'entrada' || k.toLowerCase().includes('valor')); return acc + (vk ? Number(row[vk]) || 0 : 0) }, 0))}</strong>
+                    <strong>{detailedRows.length}</strong> registo(s) encontrado(s) totalizando <strong>{fmtM(detailedRows.reduce((acc, row) => { const vk = Object.keys(row).find(k => k.toLowerCase() === 'entrada' || k.toLowerCase().includes('valor')); return acc + (vk ? Number(row[vk]) || 0 : 0) }, 0))}</strong>
                   </div>
                 </div>
                 <button onClick={() => setSelectedSlice(null)} className="btn-voltar">
                   Voltar ao Ranking
                 </button>
               </div>
-              <MacroDetailedTable rows={detailedRows} focus={focus} setFocus={setFocus} setSelectedSlice={setSelectedSlice} />
+              <MacroDetailedTable rows={detailedRows} focus={focus} setFocus={setFocus} setSelectedSlice={setSelectedSlice} hideValues={hideValues} />
             </div>
           ) : (
             <div>
@@ -728,7 +748,7 @@ export default function MacroDashboard() {
                           {item.hasVar ? `${item.varPct > 0 ? '+' : ''}${item.varPct.toFixed(1).replace('.', ',')}%` : '-'}
                         </td>
                         <td style={{ padding: "14px 16px", color: "#4b5563" }}>{item.count}</td>
-                        <td style={{ padding: "14px 16px", fontWeight: "700", color: "#059669" }}>{formatarMoeda(item.val)}</td>
+                        <td style={{ padding: "14px 16px", fontWeight: "700", color: "#059669" }}>{fmtM(item.val)}</td>
                         <td style={{ padding: "14px 16px", fontWeight: "600", color: "#3b82f6" }}>{(item.percent * 100).toFixed(2)}%</td>
                       </tr>
                     ))}
@@ -744,7 +764,7 @@ export default function MacroDashboard() {
       {tooltip.show && (
         <div style={{ position: 'fixed', top: tooltip.y + 15, left: tooltip.x + 15, background: 'rgba(17, 24, 39, 0.95)', color: '#fff', padding: '12px 16px', borderRadius: '8px', pointerEvents: 'none', zIndex: 9999, boxShadow: '0 10px 15px -3px rgba(0,0,0,0.3)' }}>
           <div style={{ fontWeight: 700, fontSize: "14px", color: '#f3f4f6', marginBottom: "4px" }}>{tooltip.label}</div>
-          <div style={{ fontSize: '18px', fontWeight: 700, color: '#10b981' }}>{formatarMoeda(tooltip.value)}</div>
+          <div style={{ fontSize: '18px', fontWeight: 700, color: '#10b981' }}>{fmtM(tooltip.value)}</div>
           <div style={{ marginTop: '2px', fontSize: '13px', color: '#9ca3af' }}>Representa {(tooltip.percent * 100).toFixed(1)}% do capital em aberto</div>
           <div style={{ marginTop: '6px', fontSize: '11px', color: '#60a5fa', fontStyle: 'italic' }}>Clique para ver os detalhes</div>
         </div>
