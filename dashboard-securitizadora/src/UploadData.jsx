@@ -346,7 +346,7 @@ export default function UploadData() {
           Operações <span style={{ color: "#94a3b8", margin: "0 4px" }}>➔</span> 
           C. Própria <span style={{ color: "#94a3b8", margin: "0 4px" }}>➔</span> 
           Aquisições no Período - Resumo <span style={{ color: "#94a3b8", margin: "0 4px" }}>➔</span> 
-          Seleciona o Período Desejado <span style={{ color: "#94a3b8", margin: "0 4px" }}>➔</span> 
+          Seleciona APENAS Período Desejado (Método Muito Lento)<span style={{ color: "#94a3b8", margin: "0 4px" }}>➔</span> 
           Exportar para Planilha do Excel (Penúltimo Ícone)
         </div>
       </div>
