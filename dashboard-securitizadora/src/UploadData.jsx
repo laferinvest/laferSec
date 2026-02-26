@@ -324,9 +324,32 @@ export default function UploadData() {
   return (
     <div style={{ background: "#fff", padding: "32px", borderRadius: "12px", boxShadow: "0 8px 20px rgba(0,0,0,0.06)", maxWidth: "600px", margin: "0 auto", border: "1px solid #e5e7eb" }}>
       <h2 style={{ marginTop: 0, color: "#111827", fontSize: "20px" }}>Atualização de Dados</h2>
-      <p style={{ color: "#6b7280", fontSize: "14px", marginBottom: "24px" }}>
+      <p style={{ color: "#6b7280", fontSize: "14px", marginBottom: "20px" }}>
         Selecione todos os arquivos de dados do Borderô e/ou dados de Taxas.
       </p>
+
+      {/* BOX DE INSTRUÇÕES DE EXTRAÇÃO */}
+      <div style={{ background: "#f8fafc", padding: "16px", borderRadius: "8px", border: "1px solid #e2e8f0", marginBottom: "24px", fontSize: "13px", color: "#334155", lineHeight: "1.5" }}>
+        <div style={{ marginBottom: "12px" }}>
+          <strong style={{ color: "#0f172a", fontSize: "14px" }}>📄 Arquivo de Operações:</strong><br />
+          Ir em Contas <span style={{ color: "#94a3b8", margin: "0 4px" }}>➔</span> 
+          Lançamentos <span style={{ color: "#94a3b8", margin: "0 4px" }}>➔</span> 
+          Busca Avançada <span style={{ color: "#94a3b8", margin: "0 4px" }}>➔</span> 
+          Vencimento = Todos ; a Receber ; OK <span style={{ color: "#94a3b8", margin: "0 4px" }}>➔</span> 
+          Imprimir (Primeiro Ícone) <span style={{ color: "#94a3b8", margin: "0 4px" }}>➔</span> 
+          Resumido - Modelo 2 <span style={{ color: "#94a3b8", margin: "0 4px" }}>➔</span> 
+          Exportar para Excel
+        </div>
+        <div>
+          <strong style={{ color: "#0f172a", fontSize: "14px" }}>📊 Arquivo de Taxas:</strong><br />
+          Ir em Gerência <span style={{ color: "#94a3b8", margin: "0 4px" }}>➔</span> 
+          Operações <span style={{ color: "#94a3b8", margin: "0 4px" }}>➔</span> 
+          C. Própria <span style={{ color: "#94a3b8", margin: "0 4px" }}>➔</span> 
+          Aquisições no Período - Resumo <span style={{ color: "#94a3b8", margin: "0 4px" }}>➔</span> 
+          Seleciona o Período Desejado <span style={{ color: "#94a3b8", margin: "0 4px" }}>➔</span> 
+          Exportar para Planilha do Excel (Penúltimo Ícone)
+        </div>
+      </div>
 
       <div style={{ marginBottom: "20px" }}>
         <input
@@ -336,7 +359,15 @@ export default function UploadData() {
           accept=".xlsx, .xls"
           onChange={(e) => setFiles(Array.from(e.target.files))}
           disabled={loading}
-          style={{ width: "100%", padding: "12px", border: "2px dashed #cbd5e1", borderRadius: "8px", background: "#f8fafc", cursor: "pointer" }}
+          style={{ 
+            boxSizing: "border-box", // <-- Correção da largura adicionada aqui
+            width: "100%", 
+            padding: "12px", 
+            border: "2px dashed #cbd5e1", 
+            borderRadius: "8px", 
+            background: "#f8fafc", 
+            cursor: "pointer" 
+          }}
         />
         <div style={{ fontSize: "13px", color: "#64748b", marginTop: "8px", fontWeight: "500" }}>
           {files.length} arquivo(s) selecionado(s).
@@ -347,9 +378,16 @@ export default function UploadData() {
         onClick={processAllFiles}
         disabled={loading || files.length === 0}
         style={{
-          width: "100%", padding: "12px", borderRadius: "8px", border: "none",
+          boxSizing: "border-box", // <-- Correção da largura adicionada aqui
+          width: "100%", 
+          padding: "12px", 
+          borderRadius: "8px", 
+          border: "none",
           background: (loading || files.length === 0) ? "#9ca3af" : "#4f46e5",
-          color: "#fff", fontWeight: "600", fontSize: "15px", cursor: (loading || files.length === 0) ? "not-allowed" : "pointer",
+          color: "#fff", 
+          fontWeight: "600", 
+          fontSize: "15px", 
+          cursor: (loading || files.length === 0) ? "not-allowed" : "pointer",
           transition: "background 0.2s"
         }}
       >

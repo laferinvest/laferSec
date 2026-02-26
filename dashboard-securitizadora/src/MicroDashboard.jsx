@@ -1,6 +1,44 @@
 import React, { useEffect, useMemo, useState, useRef } from "react";
 import { supabase } from "./supabaseClient";
 
+// --- COLLAPSE ANIMADO ---
+function CollapsePanel({ isCollapsed, children }) {
+  const ref = useRef(null);
+  const [maxHeight, setMaxHeight] = useState(isCollapsed ? "0px" : "none");
+  const [overflow, setOverflow] = useState(isCollapsed ? "hidden" : "visible");
+  const prevCollapsed = useRef(isCollapsed);
+
+  useEffect(() => {
+    if (prevCollapsed.current === isCollapsed) return;
+    prevCollapsed.current = isCollapsed;
+    const el = ref.current;
+    if (!el) return;
+
+    if (isCollapsed) {
+      setOverflow("hidden");
+      setMaxHeight(el.scrollHeight + "px");
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => { setMaxHeight("0px"); });
+      });
+    } else {
+      setOverflow("hidden");
+      setMaxHeight(el.scrollHeight + "px");
+      const onEnd = () => {
+        setMaxHeight("none");
+        setOverflow("visible");
+        el.removeEventListener("transitionend", onEnd);
+      };
+      el.addEventListener("transitionend", onEnd);
+    }
+  }, [isCollapsed]);
+
+  return (
+    <div ref={ref} style={{ maxHeight, overflow, transition: "max-height 0.35s cubic-bezier(0.4, 0, 0.2, 1)" }}>
+      {children}
+    </div>
+  );
+}
+
 // --- FUNÇÕES DE FORMATAÇÃO E DATAS ---
 function formatarData(dataString) {
   if (!dataString) return "";
@@ -309,18 +347,19 @@ function EvolutionCharts({ rows, dateFilter, setDateFilter, setBorderoFilter, se
 const chartBoxStyle = { flex: "1 1 400px", minWidth: "250px", maxWidth: "100%", background: "#fff", padding: "20px", borderRadius: "10px", border: "1px solid #e5e7eb", boxShadow: "0 4px 12px rgba(0,0,0,0.05)", boxSizing: "border-box" };
 return (
     <div style={{ background: "#fff", padding: "24px", borderRadius: "12px", boxShadow: "0 8px 20px rgba(0, 0, 0, 0.06)", border: "1px solid #e5e7eb" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: isCollapsed ? "0" : "24px" }}>
+      <div onClick={() => setIsCollapsed(!isCollapsed)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", userSelect: "none" }}>
         <div>
            <h2 style={{ margin: 0, fontSize: "16px", fontWeight: "700", color: "#374151" }}>Análise Gráfica Evolutiva</h2>
            <p style={{ margin: 0, fontSize: "12px", color: "#6b7280" }}>Arraste o mouse sobre os gráficos para selecionar um período.</p>
         </div>
-        <button onClick={() => setIsCollapsed(!isCollapsed)} style={{ background: "transparent", border: "1px solid #d1d5db", padding: "4px 10px", borderRadius: "6px", color: "#4b5563", fontSize: "12px", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
-          {isCollapsed ? "▼ Expandir Gráficos" : "▲ Ocultar Gráficos"}
-        </button>
+        <span style={{ background: "transparent", border: "1px solid #d1d5db", padding: "4px 10px", borderRadius: "6px", color: "#4b5563", fontSize: "12px", fontWeight: "600", display: "flex", alignItems: "center", gap: "6px" }}>
+          Gráficos
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{transition:"transform 0.35s cubic-bezier(0.4,0,0.2,1)",transform:isCollapsed?"rotate(0deg)":"rotate(180deg)"}}><polyline points="6 9 12 15 18 9"/></svg>
+        </span>
       </div>
 
-      {!isCollapsed && (
-        <div>
+      <CollapsePanel isCollapsed={isCollapsed}>
+        <div style={{ paddingTop: "24px" }}>
           <div style={{ display: "flex", flexWrap: "wrap", gap: "24px", marginBottom: "24px" }}>
             <div style={chartBoxStyle}>
               <h3 style={{ margin: "0 0 16px 0", color: "#111827", fontSize: "16px", fontWeight: "600" }}>
@@ -510,7 +549,7 @@ return (
 
           </div>
         </div>
-      )}
+      </CollapsePanel>
     </div>
   );
 }
@@ -712,15 +751,16 @@ function DashboardInsights({ processedRows, insightFilter, setInsightFilter, set
 
 return (
     <div style={{ background: "#fff", padding: "24px", borderRadius: "12px", boxShadow: "0 8px 20px rgba(0, 0, 0, 0.06)", border: "1px solid #e5e7eb" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: isCollapsed ? "0" : "24px" }}>
+      <div onClick={() => setIsCollapsed(!isCollapsed)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", userSelect: "none" }}>
         <h2 style={{ margin: 0, fontSize: "16px", fontWeight: "700", color: "#374151" }}>Visão Geral (Insights)</h2>
-        <button onClick={() => setIsCollapsed(!isCollapsed)} style={{ background: "transparent", border: "1px solid #d1d5db", padding: "4px 10px", borderRadius: "6px", color: "#4b5563", fontSize: "12px", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
-          {isCollapsed ? "▼ Expandir Insights" : "▲ Ocultar Insights"}
-        </button>
+        <span style={{ background: "transparent", border: "1px solid #d1d5db", padding: "4px 10px", borderRadius: "6px", color: "#4b5563", fontSize: "12px", fontWeight: "600", display: "flex", alignItems: "center", gap: "6px" }}>
+          Insights
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{transition:"transform 0.35s cubic-bezier(0.4,0,0.2,1)",transform:isCollapsed?"rotate(0deg)":"rotate(180deg)"}}><polyline points="6 9 12 15 18 9"/></svg>
+        </span>
       </div>
 
-      {!isCollapsed && (
-        <>
+      <CollapsePanel isCollapsed={isCollapsed}>
+        <div style={{ paddingTop: "24px" }}>
           <div style={{ display: "flex", flexWrap: "wrap", gap: "32px", alignItems: "center" }}>
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "12px" }}>
               <div style={{ width: "170px", height: "170px", position: "relative" }}>
@@ -761,8 +801,8 @@ return (
               <div style={{ marginTop: '2px', fontSize: '13px', color: '#10b981' }}>{fmtM(tooltip.value)}</div>
             </div>
           )}
-        </>
-      )}
+        </div>
+      </CollapsePanel>
     </div>
   );
 }
@@ -941,15 +981,15 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
   return (
     <div style={{ background: "#fff", borderRadius: "12px", boxShadow: "0 8px 20px rgba(0, 0, 0, 0.06)", border: "1px solid #e5e7eb", display: "flex", flexDirection: "column" }}>
       
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "20px 24px", borderBottom: isCollapsed ? "none" : "1px solid #e5e7eb" }}>
+      <div onClick={() => setIsCollapsed(!isCollapsed)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "20px 24px", borderBottom: isCollapsed ? "none" : "1px solid #e5e7eb", cursor: "pointer", userSelect: "none", transition: "border-bottom 0.35s ease" }}>
         <h2 style={{ margin: 0, fontSize: "16px", fontWeight: "700", color: "#374151" }}>Registos Detalhados</h2>
-        <button onClick={() => setIsCollapsed(!isCollapsed)} style={{ background: "transparent", border: "1px solid #d1d5db", padding: "4px 10px", borderRadius: "6px", color: "#4b5563", fontSize: "12px", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
-          {isCollapsed ? "▼ Expandir Tabela" : "▲ Ocultar Tabela"}
-        </button>
+        <span style={{ background: "transparent", border: "1px solid #d1d5db", padding: "4px 10px", borderRadius: "6px", color: "#4b5563", fontSize: "12px", fontWeight: "600", display: "flex", alignItems: "center", gap: "6px" }}>
+          Tabela
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{transition:"transform 0.35s cubic-bezier(0.4,0,0.2,1)",transform:isCollapsed?"rotate(0deg)":"rotate(180deg)"}}><polyline points="6 9 12 15 18 9"/></svg>
+        </span>
       </div>
 
-      {!isCollapsed && (
-        <>
+      <CollapsePanel isCollapsed={isCollapsed}>
           <div style={{ overflowX: "auto", overflowY: "auto", maxHeight: "500px" }}>
             <table style={{ borderCollapse: "collapse", width: "100%", fontSize: "14px", whiteSpace: "nowrap" }}>
               <thead>
@@ -1076,8 +1116,7 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
               <span style={{ color: "#0f172a", fontWeight: "700", fontSize: "18px" }}>{fmtM(totalFace)}</span>
             </div>
           </div>
-        </>
-      )}
+      </CollapsePanel>
     </div>
   );
 }
@@ -1351,8 +1390,8 @@ export default function MicroDashboard({ session, onSidebarToggle, hideValues, s
     return filtered;
   }, [rowsFilteredByDate, insightFilter, borderoFilter, dctoFilter]);
 
-  const kpiData = useMemo(() => {
-    if (!rowsParaTabela || rowsParaTabela.length === 0) return { taxaMedia: 0, baseCalculo: 0, valorMedio: 0, prazoMedio: 0, desagioTotal: 0, encargosTotal: 0 };
+const kpiData = useMemo(() => {
+    if (!rowsParaTabela || rowsParaTabela.length === 0) return { taxaMedia: 0, baseCalculo: 0, valorMedio: 0, prazoMedio: 0, desagioTotal: 0, encargosTotal: 0, diasOperacao: 0 };
 
     const borderoMap = new Map();
     let sumFaceTotal = 0;
@@ -1372,6 +1411,10 @@ export default function MicroDashboard({ session, onSidebarToggle, hideValues, s
     const seenBorderosDesagio = new Set();
     let totalDesagio = 0;
     let totalEncargos = 0;
+    
+    // Variáveis para rastrear os dias de operação
+    let minDate = null;
+    let maxDate = null;
 
     rowsParaTabela.forEach((r, idx) => {
       const bNum = (borderoKey && r[borderoKey]) ? String(r[borderoKey]).trim() : `avulso_${idx}`; 
@@ -1390,9 +1433,7 @@ export default function MicroDashboard({ session, onSidebarToggle, hideValues, s
 
       // Encargo por título (não deduplicado por borderô)
       const temPgto = pgtoKey && r[pgtoKey] && String(r[pgtoKey]).trim() !== "";
-      // Se vlPgto > 170% do valor de face, considera que não houve encargo (provavelmente dado inconsistente)
       const encargoPossivel = temPgto && vlPgto > 0 && val > 0 && vlPgto !== val;
-      // Se vlPgto > 140% do valor de face, considera que não houve encargo (provavelmente dado inconsistente)
       if (encargoPossivel && vlPgto <= val * 1.4) {
         const encargoCalculado = vlPgto - val;
         if (encargoCalculado > 0) totalEncargos += encargoCalculado;
@@ -1413,11 +1454,17 @@ export default function MicroDashboard({ session, onSidebarToggle, hideValues, s
         countTitulos += 1;
         
         let prazo = 0;
-        if (emisKey && r[emisKey] && vctoKey && r[vctoKey]) {
+        if (emisKey && r[emisKey]) {
           const eDate = new Date(String(r[emisKey]).split("T")[0] + "T00:00:00");
-          const vDate = new Date(String(r[vctoKey]).split("T")[0] + "T00:00:00");
-          const diffTime = vDate - eDate;
-          if (diffTime > 0) prazo = Math.round(diffTime / (1000 * 60 * 60 * 24));
+          // Atualiza minDate e maxDate
+          if (!minDate || eDate < minDate) minDate = eDate;
+          if (!maxDate || eDate > maxDate) maxDate = eDate;
+
+          if (vctoKey && r[vctoKey]) {
+            const vDate = new Date(String(r[vctoKey]).split("T")[0] + "T00:00:00");
+            const diffTime = vDate - eDate;
+            if (diffTime > 0) prazo = Math.round(diffTime / (1000 * 60 * 60 * 24));
+          }
         }
         sumPrazoWeighted += (prazo * val);
       }
@@ -1433,13 +1480,21 @@ export default function MicroDashboard({ session, onSidebarToggle, hideValues, s
       }
     });
 
+    // Calcula os dias de operação
+    let diasOperacao = 1; // Mínimo de 1 dia para evitar "em 0 dias"
+    if (minDate && maxDate) {
+      const diff = Math.round((maxDate - minDate) / (1000 * 60 * 60 * 24));
+      diasOperacao = Math.max(1, diff);
+    }
+
     return {
       taxaMedia: baseCalculoTaxa > 0 ? (sumTaxaWeighted / baseCalculoTaxa) : 0,
       baseCalculo: baseCalculoTaxa,
       valorMedio: countTitulos > 0 ? sumFaceTotal / countTitulos : 0,
       prazoMedio: sumFaceTotal > 0 ? sumPrazoWeighted / sumFaceTotal : 0,
       desagioTotal: totalDesagio,
-      encargosTotal: totalEncargos
+      encargosTotal: totalEncargos,
+      diasOperacao
     };
   }, [rowsParaTabela]);
 
@@ -1645,7 +1700,18 @@ return (
 
           <div>
             <label style={{ display: "block", marginBottom: 6, fontSize: "12px", fontWeight: "600", color: "#6b7280" }}>Referência de Data</label>
-            <select value={inputType} onChange={e => setInputType(e.target.value)} style={{ width: "100%", padding: "10px", borderRadius: "6px", border: "1px solid #d1d5db", background: "#f9fafb", fontSize: "13px", color: "#111827", outline: "none" }}>
+            <select 
+              value={inputType} 
+              onChange={e => {
+                const newType = e.target.value;
+                setInputType(newType);
+                // Já aplica o filtro automaticamente com as datas que estiverem nos inputs
+                handleSetDateFilter({ type: newType, start: inputDateStart, end: inputDateEnd }); 
+                setBorderoFilter(null); 
+                setDctoFilter(null);
+              }} 
+              style={{ width: "100%", padding: "10px", borderRadius: "6px", border: "1px solid #d1d5db", background: "#f9fafb", fontSize: "13px", color: "#111827", outline: "none" }}
+            >
               <option value="emis">Data de Emissão</option>
               <option value="vcto">Data de Vencimento</option>
             </select>
@@ -1788,7 +1854,7 @@ return (
                   </div>
                 </div>
 
-                {/* INFO 4: Deságio Total */}
+{/* INFO 4: Deságio Total */}
                 <div style={{ background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #f59e0b", padding: "20px 16px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
                     <div style={{ background: "rgba(245, 158, 11, 0.1)", padding: "6px", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -1800,7 +1866,11 @@ return (
                     <span style={{ fontSize: "28px", fontWeight: "700", color: "#111827", lineHeight: "1", letterSpacing: "-0.02em", wordBreak: "break-word" }}>{fmtM(kpiData.desagioTotal + kpiData.encargosTotal)}</span>
                   </div>
                   <div style={{ fontSize: "12px", color: "#6b7280", marginTop: "12px", fontWeight: "500", whiteSpace: "normal" }}>
-                    Total apurado na visualização
+                    Apurado em <span style={{color: "#374151", fontWeight: "600"}}>
+                      {kpiData.diasOperacao > 90 
+                        ? (kpiData.diasOperacao / 30).toFixed(1).replace('.', ',') 
+                        : kpiData.diasOperacao}
+                    </span> {kpiData.diasOperacao > 90 ? "meses" : "dias"}
                   </div>
                 </div>
 
