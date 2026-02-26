@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useRef } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
 import { supabase } from "./supabaseClient";
 
 // --- FUNÇÕES DE FORMATAÇÃO E DATAS ---
@@ -44,6 +44,17 @@ const getInitDateStr = () => {
 };
 
 const CEDENTES_IGNORADOS = ["12 -", "23 -", "2 -"];
+
+const GRUPOS_ECONOMICOS = [
+  {
+    label: "BDP Broadcast",
+    prefixos: ["466 -", "479 -"]
+  },
+  {
+    label: "JL & D Confecções",
+    prefixos: ["613 -", "614 -", "615 -", "617 -", "605 -"]
+  }
+];
 function cedenteValido(cedente) {
   if (!cedente) return false;
   return !CEDENTES_IGNORADOS.some(ignorado => String(cedente).trim().startsWith(ignorado));
@@ -51,7 +62,7 @@ function cedenteValido(cedente) {
 function sacadoValido(sacado) {
   if (!sacado) return false;
   const s = String(sacado).trim();
-  return !(s === "0" || s.startsWith("0 -") || s.startsWith("0-"));
+  return !(s === "0s" || s.startsWith("0 s-") || s.startsWith("0s-"));
 }
 
 // --- COMPONENTE DE EVOLUÇÃO ---
@@ -516,8 +527,10 @@ function DashboardInsights({ processedRows, insightFilter, setInsightFilter, set
     const values = { liquidado: 0, liquidadoAtraso: 0, atraso: 0, aVencer: 0, recompra: 0, total: 0 };
     const delayDaysTotal = { liquidadoAtraso: 0, atraso: 0, recompra: 0 };
     const desagioValues = { liquidado: 0, liquidadoAtraso: 0, atraso: 0, aVencer: 0, recompra: 0, total: 0 };
+    let sumWeightedDiasAVencer = 0;
+    let sumValAVencer = 0;
     
-    if (processedRows.length === 0) return { counts, values, avgDelays: { liquidadoAtraso: 0, atraso: 0, recompra: 0 }, desagioValues };
+    if (processedRows.length === 0) return { counts, values, avgDelays: { liquidadoAtraso: 0, atraso: 0, recompra: 0 }, desagioValues, prazoMedioAVencer: 0 };
 
     const seenBorderosStatus = { liquidado: new Set(), liquidadoAtraso: new Set(), atraso: new Set(), aVencer: new Set(), recompra: new Set(), invalido: new Set() };
     const seenBorderosTotal = new Set();
@@ -575,6 +588,23 @@ function DashboardInsights({ processedRows, insightFilter, setInsightFilter, set
             }
           }
         }
+
+        if (r._status === 'aVencer' && vctoKey && r[vctoKey]) {
+          const effectiveVcto = new Date(String(r[vctoKey]).split("T")[0] + "T00:00:00");
+          if (effectiveVcto.getDay() === 6) effectiveVcto.setDate(effectiveVcto.getDate() + 2);
+          else if (effectiveVcto.getDay() === 0) effectiveVcto.setDate(effectiveVcto.getDate() + 1);
+          
+          const diffTime = effectiveVcto - today;
+          if (diffTime > 0) {
+            const diasRestantes = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+            const val = entradaKey ? (Number(r[entradaKey]) || 0) : 0;
+            
+            if (val > 0) {
+              sumWeightedDiasAVencer += (diasRestantes * val);
+              sumValAVencer += val;
+            }
+          }
+        }
       }
     });
 
@@ -584,7 +614,12 @@ function DashboardInsights({ processedRows, insightFilter, setInsightFilter, set
       recompra: counts.recompra > 0 ? (delayDaysTotal.recompra / counts.recompra).toFixed(1).replace('.', ',') : 0
     };
 
-    return { counts, values, avgDelays, desagioValues };
+        // Substitua o Math.round por esta lógica:
+    const prazoMedioAVencer = sumValAVencer > 0 
+      ? (sumWeightedDiasAVencer / sumValAVencer).toFixed(1).replace('.', ',') 
+      : "0,0";
+
+    return { counts, values, avgDelays, desagioValues, prazoMedioAVencer };
   }, [processedRows]);
 
   if (stats.counts.total === 0) return null;
@@ -610,7 +645,7 @@ function DashboardInsights({ processedRows, insightFilter, setInsightFilter, set
 
   let cumulativePercent = 0;
 
-  const renderCard = (key, corPura, titulo, contagem, valorReal, mediaAtraso = null, desagioVal = 0) => {
+  const renderCard = (key, corPura, titulo, contagem, valorReal, mediaAtraso = null, desagioVal = 0, prazoMedio = null, prazoLabel = "Prazo Médio") => {
     const isZero = contagem === 0;
     const isActive = insightFilter === key;
     const isDimmed = insightFilter && !isActive;
@@ -660,6 +695,17 @@ function DashboardInsights({ processedRows, insightFilter, setInsightFilter, set
             </div>
           </>
         )}
+        {prazoMedio !== null && (
+          <>
+            <hr style={{ border: 0, borderTop: "1px dashed #d1d5db", margin: "14px 0", width: "100%" }} />
+            <div>
+              <div style={{ display: "flex", alignItems: "baseline", gap: "6px" }}>
+                <div style={{ fontSize: "16px", fontWeight: "700", color: "#111827", lineHeight: "1" }}>{prazoMedio} <span style={{fontSize: "12px", fontWeight: "600", color: "#6b7280"}}>dias</span></div>
+              </div>
+              <div style={{ fontSize: "11px", color: "#9ca3af", marginTop: "4px" }}>{prazoLabel}</div>
+            </div>
+          </>
+        )}
       </div>
     );
   };
@@ -704,7 +750,7 @@ return (
               {renderCard('liquidadoAtraso', "#f59e0b", "Liquidado c/ atraso", stats.counts.liquidadoAtraso, stats.values.liquidadoAtraso, stats.avgDelays.liquidadoAtraso, stats.desagioValues.liquidadoAtraso)}
               {renderCard('atraso', "#ef4444", "Em atraso", stats.counts.atraso, stats.values.atraso, stats.avgDelays.atraso, stats.desagioValues.atraso)}
               {renderCard('recompra', "#8b5cf6", "Recompra", stats.counts.recompra, stats.values.recompra, stats.avgDelays.recompra, stats.desagioValues.recompra)}
-              {renderCard('aVencer', "#94a3b8", "A Vencer", stats.counts.aVencer, stats.values.aVencer, null, stats.desagioValues.aVencer)}
+              {renderCard('aVencer', "#94a3b8", "A Vencer", stats.counts.aVencer, stats.values.aVencer, null, stats.desagioValues.aVencer, stats.prazoMedioAVencer, "Dias p/ Vencer")}
             </div>
           </div>
           {insightFilter && <div style={{ marginTop: "16px", fontSize: "13px", color: "#2563eb", fontWeight: "500", textAlign: "right" }}>Filtro de status ativo. Clique no card novamente para limpar.</div>}
@@ -760,14 +806,33 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
     return null;
   }, [sortConfig, rows, dateFilter]);
 
+  const rowsWithEncargo = useMemo(() => {
+    if (!rows.length) return rows;
+    const firstRow = rows[0];
+    const vlPgtoKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'vl pgto');
+    const pgtoKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'pgto' || (k.toLowerCase().includes('pgto') && !k.toLowerCase().includes('vl')));
+    const valKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'entrada' || (k.toLowerCase().includes('valor') && !k.toLowerCase().includes('pgto')));
+    return rows.map(r => {
+      const vlPgto = vlPgtoKey ? (Number(r[vlPgtoKey]) || 0) : 0;
+      const val = valKey ? (Number(r[valKey]) || 0) : 0;
+      const temPgto = pgtoKey && r[pgtoKey] && String(r[pgtoKey]).trim() !== "";
+      // Se vlPgto > 140% do valor de face, considera que não houve encargo (provavelmente dado inconsistente)
+      const encargoPossivel = temPgto && vlPgto > 0 && val > 0 && vlPgto !== val;
+      const encargoDentroLimite = encargoPossivel && vlPgto <= val * 1.4;
+      const encargoCalculado = encargoDentroLimite ? (vlPgto - val) : 0;
+      const encargo = encargoCalculado > 0 ? encargoCalculado : 0;
+      return { ...r, __encargo__: encargo };
+    });
+  }, [rows]);
+
   const sortedRows = useMemo(() => {
-    let sortableItems = [...rows];
+    let sortableItems = [...rowsWithEncargo];
     if (activeSort !== null) {
       sortableItems.sort((a, b) => {
         let aValue = a[activeSort.key] || ""; let bValue = b[activeSort.key] || "";
         const keyLower = activeSort.key.toLowerCase();
         
-        const isCurrency = keyLower === "entrada" || keyLower === "vl pgto" || keyLower.includes("valor") || keyLower === "desagio" || keyLower === "deságio";
+        const isCurrency = keyLower === "entrada" || keyLower === "vl pgto" || keyLower.includes("valor") || keyLower === "desagio" || keyLower === "deságio" || keyLower === "__encargo__";
         const isRate = keyLower.includes("tx") || keyLower.includes("taxa");
         const isDateColumn = !isCurrency && !isRate && (keyLower.includes("emis") || keyLower.includes("vcto") || keyLower.includes("pgto") || keyLower.includes("data"));
 
@@ -792,9 +857,9 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
   const currentItems = sortedRows.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
   const totalPages = Math.ceil(sortedRows.length / itemsPerPage);
 
-  const { totalFace, totalDesagio, taxaMedia, valorMedio, prazoMedio } = useMemo(() => {
-    if (sortedRows.length === 0) return { totalFace: 0, totalDesagio: 0, taxaMedia: 0, valorMedio: 0, prazoMedio: 0 };
-    let f = 0; let d = 0;
+  const { totalFace, totalDesagio, totalEncargos, taxaMedia, valorMedio, prazoMedio } = useMemo(() => {
+    if (sortedRows.length === 0) return { totalFace: 0, totalDesagio: 0, totalEncargos: 0, taxaMedia: 0, valorMedio: 0, prazoMedio: 0 };
+    let f = 0; let d = 0; let enc = 0;
     let countTitulos = 0;
     let sumPrazoWeighted = 0;
 
@@ -812,11 +877,10 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
     sortedRows.forEach((row, idx) => {
       const bNum = (borderoKey && row[borderoKey]) ? String(row[borderoKey]).trim() : `avulso_${idx}`; 
       const val = valKey ? (Number(row[valKey]) || 0) : 0;
-      
+
       f += val;
       if (val > 0) {
         countTitulos += 1;
-        
         let prazo = 0;
         if (emisKey && row[emisKey] && vctoKey && row[vctoKey]) {
           const eDate = new Date(String(row[emisKey]).split("T")[0] + "T00:00:00");
@@ -829,9 +893,12 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
 
       const desagioVal = desagioKey ? (Number(row[desagioKey]) || 0) : 0;
       if (!seenBorderosDesagio.has(bNum)) {
-         seenBorderosDesagio.add(bNum);
-         d += desagioVal;
+        seenBorderosDesagio.add(bNum);
+        d += desagioVal;
       }
+
+      // Usa o encargo pré-computado
+      enc += (row.__encargo__ || 0);
 
       const rawRate = rateKey ? row[rateKey] : null;
       const hasRateVal = rawRate !== null && rawRate !== undefined && String(rawRate).trim() !== "";
@@ -859,7 +926,8 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
 
     return { 
       totalFace: f, 
-      totalDesagio: d, 
+      totalDesagio: d,
+      totalEncargos: enc,
       taxaMedia: totalValueTaxa > 0 ? (weightedRateSum / totalValueTaxa) : 0,
       valorMedio: countTitulos > 0 ? f / countTitulos : 0,
       prazoMedio: f > 0 ? (sumPrazoWeighted / f) : 0 
@@ -889,10 +957,18 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
                   {columns.map((c) => {
                     let labelColuna = c === "Entrada" ? "Valor de Face" : c === "Cliente" ? "Cedente" : c.toLowerCase() === "vcto" ? "Dt.Vcto" : c.toLowerCase() === "pgto" ? "Dt.Pgto" : c.toLowerCase() === "vl pgto" ? "Valor Pgto" : c;
                     const isSorted = activeSort?.key === c;
+                    const isDesagioCol = c.toLowerCase() === 'desagio' || c.toLowerCase() === 'deságio';
                     return (
-                      <th key={c} onClick={() => requestSort(c)} style={{ borderBottom: "2px solid #e5e7eb", padding: "12px 16px", background: isSorted ? "#eff6ff" : "#f9fafb", color: isSorted ? "#1d4ed8" : "#374151", fontWeight: "600", textAlign: "left", position: "sticky", top: 0, zIndex: 10, cursor: "pointer", userSelect: "none" }}>
-                        {labelColuna}{isSorted ? (activeSort.direction === 'asc' ? ' ↑' : ' ↓') : ''}
-                      </th>
+                      <React.Fragment key={c}>
+                        <th onClick={() => requestSort(c)} style={{ borderBottom: "2px solid #e5e7eb", padding: "12px 16px", background: isSorted ? "#eff6ff" : "#f9fafb", color: isSorted ? "#1d4ed8" : "#374151", fontWeight: "600", textAlign: "left", position: "sticky", top: 0, zIndex: 10, cursor: "pointer", userSelect: "none" }}>
+                          {labelColuna}{isSorted ? (activeSort.direction === 'asc' ? ' ↑' : ' ↓') : ''}
+                        </th>
+                        {isDesagioCol && (
+                          <th key="__encargos_header__" onClick={() => requestSort("__encargo__")} style={{ borderBottom: "2px solid #e5e7eb", padding: "12px 16px", background: activeSort?.key === "__encargo__" ? "#fffbeb" : "#fffbeb", color: activeSort?.key === "__encargo__" ? "#78350f" : "#92400e", fontWeight: "600", textAlign: "left", position: "sticky", top: 0, zIndex: 10, cursor: "pointer", userSelect: "none" }}>
+                            Encargos{activeSort?.key === "__encargo__" ? (activeSort.direction === 'asc' ? ' ↑' : ' ↓') : ''}
+                          </th>
+                        )}
+                      </React.Fragment>
                     );
                   })}
                 </tr>
@@ -913,6 +989,7 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
                         const baseValor = String(valor || "").split(/[-/]/)[0].trim();
                         const baseFiltered = dctoFilter ? String(dctoFilter.value).split(/[-/]/)[0].trim() : null;
                         const isThisDctoFiltered = dctoFilter?.key === c && baseValor === baseFiltered;
+                        const isDesagioCol = cLower === 'desagio' || cLower === 'deságio';
 
                         if (isDateColumn) valor = formatarData(valor);
                         else if (isCurrency) valor = fmtM(valor);
@@ -921,8 +998,12 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
                           valor = !isNaN(valNum) && valor ? `${valNum.toFixed(2).replace('.', ',')}%` : escapeText(valor);
                         }
 
-                        return (
-                          <td key={c} style={{ padding: "12px 16px", color: "#374151" }}>
+                        // Calcular encargo deste título
+                        const encargoCellVal = isDesagioCol ? (r.__encargo__ || 0) : null;
+
+                      return (
+                        <React.Fragment key={c}>
+                          <td style={{ padding: "12px 16px", color: "#374151" }}>
                             {isBorderoCol ? (
                               <span onClick={(e) => { e.stopPropagation(); if (isThisBorderoFiltered) setBorderoFilter(null); else { setBorderoFilter({ key: c, value: valor }); setDctoFilter(null); setDateFilter({ type: 'emis', start: '', end: '' }); if (setInsightFilter) setInsightFilter(null); } }} style={{ background: isThisBorderoFiltered ? "#4f46e5" : "rgba(79, 70, 229, 0.08)", color: isThisBorderoFiltered ? "#fff" : "#4f46e5", padding: "4px 8px", borderRadius: "6px", fontWeight: "600", cursor: "pointer" }}>{escapeText(valor)}</span>
                             ) : isDctoCol ? (
@@ -933,7 +1014,13 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
                               <span onClick={(e) => { e.stopPropagation(); setSacadoSelecionado(valor); }} className="clickable-entity">{escapeText(valor)}</span>
                             ) : ( escapeText(valor) )}
                           </td>
-                        );
+                          {isDesagioCol && (
+                            <td key="__encargos_cell__" style={{ padding: "12px 16px", color: encargoCellVal > 0 ? "#92400e" : "#9ca3af", fontWeight: encargoCellVal > 0 ? "600" : "400", background: encargoCellVal > 0 ? "rgba(245, 158, 11, 0.04)" : "transparent" }}>
+                              {encargoCellVal > 0 ? fmtM(encargoCellVal) : "—"}
+                            </td>
+                          )}
+                        </React.Fragment>
+                      );
                       })}
                     </tr>
                   );
@@ -967,6 +1054,10 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
             <div>
               <span style={{ color: "#4b5563", fontWeight: "500", marginRight: "8px", fontSize: "14px" }}>Deságio Total:</span>
               <span style={{ color: "#0f172a", fontWeight: "700", fontSize: "18px" }}>{fmtM(totalDesagio)}</span>
+            </div>
+            <div>
+              <span style={{ color: "#4b5563", fontWeight: "500", marginRight: "8px", fontSize: "14px" }}>Encargo Total:</span>
+              <span style={{ color: "#92400e", fontWeight: "700", fontSize: "18px" }}>{fmtM(totalEncargos)}</span>
             </div>
             <div>
               <span style={{ color: "#4b5563", fontWeight: "500", marginRight: "8px", fontSize: "14px" }}>Ticket Médio:</span>
@@ -1057,6 +1148,7 @@ export default function MicroDashboard({ session, onSidebarToggle, hideValues, s
   
   const [relacionamentos, setRelacionamentos] = useState([]);
   const [clienteSelecionado, setClienteSelecionado] = useState("");
+  const [grupoSelecionado, setGrupoSelecionado] = useState("");
   const [sacadoSelecionado, setSacadoSelecionado] = useState("");
 
   // ESTADOS DE CONTROLO DA SIDEBAR
@@ -1130,7 +1222,7 @@ export default function MicroDashboard({ session, onSidebarToggle, hideValues, s
   }, [dateFilter]);
 
   useEffect(() => {
-    const currentlyHasEntity = !!(clienteSelecionado || sacadoSelecionado);
+    const currentlyHasEntity = !!(clienteSelecionado || sacadoSelecionado || grupoSelecionado);
 
     if (currentlyHasEntity && !prevHasEntity.current) {
       savedDateFilter.current = latestDateFilter.current;
@@ -1151,7 +1243,7 @@ export default function MicroDashboard({ session, onSidebarToggle, hideValues, s
     setInsightFilter(null); 
     setBorderoFilter(null); 
     setDctoFilter(null);
-  }, [clienteSelecionado, sacadoSelecionado]);
+  }, [clienteSelecionado, sacadoSelecionado, grupoSelecionado]);
 
   const applyQuickDate = (quickType) => {
     if (activeQuickDate === quickType) {
@@ -1260,7 +1352,7 @@ export default function MicroDashboard({ session, onSidebarToggle, hideValues, s
   }, [rowsFilteredByDate, insightFilter, borderoFilter, dctoFilter]);
 
   const kpiData = useMemo(() => {
-    if (!rowsParaTabela || rowsParaTabela.length === 0) return { taxaMedia: 0, baseCalculo: 0, valorMedio: 0, prazoMedio: 0, desagioTotal: 0 };
+    if (!rowsParaTabela || rowsParaTabela.length === 0) return { taxaMedia: 0, baseCalculo: 0, valorMedio: 0, prazoMedio: 0, desagioTotal: 0, encargosTotal: 0 };
 
     const borderoMap = new Map();
     let sumFaceTotal = 0;
@@ -1270,6 +1362,8 @@ export default function MicroDashboard({ session, onSidebarToggle, hideValues, s
     const firstRow = rowsParaTabela[0];
     const borderoKey = Object.keys(firstRow).find(k => k.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes("border"));
     const valKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'entrada' || (k.toLowerCase().includes('valor') && !k.toLowerCase().includes('pgto')));
+    const vlPgtoKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'vl pgto');
+    const pgtoKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'pgto' || (k.toLowerCase().includes('pgto') && !k.toLowerCase().includes('vl')));
     const rateKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'tx.efet' || k.toLowerCase().includes('tx.efet') || k.toLowerCase().includes('tx efet'));
     const emisKey = Object.keys(firstRow).find(k => k.toLowerCase().includes('emis'));
     const vctoKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'vcto' || (k.toLowerCase().includes('vcto') && !k.toLowerCase().includes('vl')));
@@ -1277,10 +1371,12 @@ export default function MicroDashboard({ session, onSidebarToggle, hideValues, s
 
     const seenBorderosDesagio = new Set();
     let totalDesagio = 0;
+    let totalEncargos = 0;
 
     rowsParaTabela.forEach((r, idx) => {
       const bNum = (borderoKey && r[borderoKey]) ? String(r[borderoKey]).trim() : `avulso_${idx}`; 
       const val = valKey ? (Number(r[valKey]) || 0) : 0;
+      const vlPgto = vlPgtoKey ? (Number(r[vlPgtoKey]) || 0) : 0;
       
       const rawRate = rateKey ? r[rateKey] : null;
       const hasRateVal = rawRate !== null && rawRate !== undefined && String(rawRate).trim() !== "";
@@ -1290,6 +1386,16 @@ export default function MicroDashboard({ session, onSidebarToggle, hideValues, s
       if (!seenBorderosDesagio.has(bNum)) {
          seenBorderosDesagio.add(bNum);
          totalDesagio += desagioVal;
+      }
+
+      // Encargo por título (não deduplicado por borderô)
+      const temPgto = pgtoKey && r[pgtoKey] && String(r[pgtoKey]).trim() !== "";
+      // Se vlPgto > 170% do valor de face, considera que não houve encargo (provavelmente dado inconsistente)
+      const encargoPossivel = temPgto && vlPgto > 0 && val > 0 && vlPgto !== val;
+      // Se vlPgto > 140% do valor de face, considera que não houve encargo (provavelmente dado inconsistente)
+      if (encargoPossivel && vlPgto <= val * 1.4) {
+        const encargoCalculado = vlPgto - val;
+        if (encargoCalculado > 0) totalEncargos += encargoCalculado;
       }
 
       if (!borderoMap.has(bNum)) {
@@ -1332,7 +1438,8 @@ export default function MicroDashboard({ session, onSidebarToggle, hideValues, s
       baseCalculo: baseCalculoTaxa,
       valorMedio: countTitulos > 0 ? sumFaceTotal / countTitulos : 0,
       prazoMedio: sumFaceTotal > 0 ? sumPrazoWeighted / sumFaceTotal : 0,
-      desagioTotal: totalDesagio
+      desagioTotal: totalDesagio,
+      encargosTotal: totalEncargos
     };
   }, [rowsParaTabela]);
 
@@ -1363,26 +1470,45 @@ export default function MicroDashboard({ session, onSidebarToggle, hideValues, s
     const delayDebounceFn = setTimeout(async () => {
       setLoading(true);
       let query = supabase.from("secInfo").select("*");
-      if (clienteSelecionado) query = query.eq("Cliente", clienteSelecionado);
+      if (clienteSelecionado) {
+        query = query.eq("Cliente", clienteSelecionado);
+      } else if (grupoSelecionado) {
+        const grupo = GRUPOS_ECONOMICOS.find(g => g.label === grupoSelecionado);
+        if (grupo) {
+          // Filtra clientes cujo nome começa com algum dos prefixos do grupo
+          // Supabase não tem startsWith múltiplo, então buscamos sem filtro e filtramos no client
+          // Para eficiência, usamos ilike com or via rpc ou simplesmente filtramos no client
+        }
+      }
       if (sacadoSelecionado) query = query.eq("Sacado", sacadoSelecionado);
       query = query.order("id", { ascending: false }).limit(10000);
       const { data } = await query;
-      if (data) setRows(data.filter(r => sacadoValido(r.Sacado) && cedenteValido(r.Cliente)));
+      if (data) {
+        let filtered = data.filter(r => sacadoValido(r.Sacado) && cedenteValido(r.Cliente));
+        if (grupoSelecionado && !clienteSelecionado) {
+          const grupo = GRUPOS_ECONOMICOS.find(g => g.label === grupoSelecionado);
+          if (grupo) {
+            filtered = filtered.filter(r => grupo.prefixos.some(p => String(r.Cliente || "").trim().startsWith(p.trim())));
+          }
+        }
+        setRows(filtered);
+      }
       setLoading(false);
     }, 300);
     return () => clearTimeout(delayDebounceFn);
-  }, [clienteSelecionado, sacadoSelecionado, session?.user?.id]);
+  }, [clienteSelecionado, sacadoSelecionado, grupoSelecionado, session?.user?.id]);
 
   const limparFiltroEntidades = () => {
     setClienteSelecionado(""); 
     setSacadoSelecionado(""); 
+    setGrupoSelecionado("");
   };
 
   const limparFiltroData = () => {
     handleSetDateFilter({ type: inputType, start: '', end: '' }); 
   };
 
-  const hasEntityFilter = !!(clienteSelecionado || sacadoSelecionado);
+  const hasEntityFilter = !!(clienteSelecionado || sacadoSelecionado || grupoSelecionado);
   const hasDateFilter = !!(dateFilter.start || dateFilter.end);
   const hasAnyFilter = hasEntityFilter || hasDateFilter || viewMode !== 'all' || insightFilter || borderoFilter || dctoFilter;
 
@@ -1484,7 +1610,16 @@ return (
         <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
           <div>
             <label style={{ display: "block", marginBottom: 6, fontSize: "13px", fontWeight: "600", color: "#374151" }}>Cedente</label>
-            <CustomDropdown value={clienteSelecionado} onChange={setClienteSelecionado} options={clientesDisponiveis} placeholder="Selecione o Cedente..." />
+            <CustomDropdown value={clienteSelecionado} onChange={(v) => { setClienteSelecionado(v); if (v) setGrupoSelecionado(""); }} options={clientesDisponiveis} placeholder="Selecione o Cedente..." />
+          </div>
+          <div>
+            <label style={{ display: "block", marginBottom: 6, fontSize: "13px", fontWeight: "600", color: "#374151" }}>Grupo Econômico</label>
+            <CustomDropdown
+              value={grupoSelecionado}
+              onChange={(v) => { setGrupoSelecionado(v); if (v) { setClienteSelecionado(""); setSacadoSelecionado(""); } }}
+              options={GRUPOS_ECONOMICOS.map(g => g.label)}
+              placeholder="Selecione o Grupo..."
+            />
           </div>
           <div>
             <label style={{ display: "block", marginBottom: 6, fontSize: "13px", fontWeight: "600", color: "#374151" }}>Sacado</label>
@@ -1659,10 +1794,10 @@ return (
                     <div style={{ background: "rgba(245, 158, 11, 0.1)", padding: "6px", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}>
                       <svg width="16" height="16" fill="none" stroke="#f59e0b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg>
                     </div>
-                    <h3 style={{ margin: 0, fontSize: "11px", fontWeight: "700", color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "normal" }}>Deságio Ganho</h3>
+                    <h3 style={{ margin: 0, fontSize: "11px", fontWeight: "700", color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "normal" }}>Deságio + Encargos</h3>
                   </div>
                   <div style={{ display: "flex", alignItems: "baseline", gap: "4px" }}>
-                    <span style={{ fontSize: "28px", fontWeight: "700", color: "#111827", lineHeight: "1", letterSpacing: "-0.02em", wordBreak: "break-word" }}>{fmtM(kpiData.desagioTotal)}</span>
+                    <span style={{ fontSize: "28px", fontWeight: "700", color: "#111827", lineHeight: "1", letterSpacing: "-0.02em", wordBreak: "break-word" }}>{fmtM(kpiData.desagioTotal + kpiData.encargosTotal)}</span>
                   </div>
                   <div style={{ fontSize: "12px", color: "#6b7280", marginTop: "12px", fontWeight: "500", whiteSpace: "normal" }}>
                     Total apurado na visualização
