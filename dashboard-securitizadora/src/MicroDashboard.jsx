@@ -1060,7 +1060,7 @@ export default function MicroDashboard({ session, onSidebarToggle, hideValues, s
   const [sacadoSelecionado, setSacadoSelecionado] = useState("");
 
   // ESTADOS DE CONTROLO DA SIDEBAR
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [isTablet, setIsTablet] = useState(false);
   // Formata moeda ou mascara o valor se hideValues estiver ativo
