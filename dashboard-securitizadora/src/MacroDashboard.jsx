@@ -202,11 +202,10 @@ function MacroDetailedTable({ rows, focus, setFocus, setSelectedSlice, hideValue
 
 
 // --- DASHBOARD MACRO PRINCIPAL ---
-export default function MacroDashboard() {
+export default function MacroDashboard({ session, hideValues, setHideValues }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [focus, setFocus] = useState('cedente'); 
-  const [hideValues, setHideValues] = useState(false);
   const fmtM = (valor) => hideValues ? "R$ -" : formatarMoeda(valor);
   
   const [hoveredSlice, setHoveredSlice] = useState(null);

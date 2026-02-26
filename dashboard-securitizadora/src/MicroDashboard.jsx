@@ -1046,7 +1046,7 @@ function CustomDropdown({ value, options, onChange, placeholder }) {
 }
 
 // --- EXPORTAÇÃO DO MICRODASHBOARD ---
-export default function MicroDashboard({ session, onSidebarToggle }) {
+export default function MicroDashboard({ session, onSidebarToggle, hideValues, setHideValues }) {
   const [loading, setLoading] = useState(false);
   const [rows, setRows] = useState([]);
   
@@ -1063,8 +1063,6 @@ export default function MicroDashboard({ session, onSidebarToggle }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
   const [isTablet, setIsTablet] = useState(false);
-  const [hideValues, setHideValues] = useState(false);
-
   // Formata moeda ou mascara o valor se hideValues estiver ativo
   const fmtM = (valor) => hideValues ? "R$ -" : formatarMoeda(valor);
 

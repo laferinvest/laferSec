@@ -12,6 +12,7 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
   const [isTablet, setIsTablet] = useState(false);
+  const [hideValues, setHideValues] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
@@ -128,7 +129,7 @@ export default function App() {
             </div>
 
             {/* MicroDashboard fora do wrapper — translada sozinho */}
-            {activeTab === 'micro' ? <MicroDashboard session={session} onSidebarToggle={handleSidebarToggle} /> : <MacroDashboard session={session} />}
+            {activeTab === 'micro' ? <MicroDashboard session={session} onSidebarToggle={handleSidebarToggle} hideValues={hideValues} setHideValues={setHideValues} /> : <MacroDashboard session={session} hideValues={hideValues} setHideValues={setHideValues} />}
           </div>
         )}
 
