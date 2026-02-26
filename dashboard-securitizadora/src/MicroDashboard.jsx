@@ -55,7 +55,8 @@ function sacadoValido(sacado) {
 }
 
 // --- COMPONENTE DE EVOLUÇÃO ---
-function EvolutionCharts({ rows, dateFilter, setDateFilter, setBorderoFilter, setDctoFilter }) {
+function EvolutionCharts({ rows, dateFilter, setDateFilter, setBorderoFilter, setDctoFilter, hideValues }) {
+  const fmtM = (v) => hideValues ? "R$ -" : formatarMoeda(v);
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   const [hoveredIndex1, setHoveredIndex1] = useState(null);
@@ -208,9 +209,10 @@ function EvolutionCharts({ rows, dateFilter, setDateFilter, setBorderoFilter, se
   const segmentWidth = chartData.length > 1 ? chartWidth / (chartData.length - 1) : chartWidth;
 
   const formatAxisVal = (val) => {
+    if (hideValues) return 'R$ -';
     if (val === 0) return '0';
-    if (val >= 1000000) return Math.floor(val / 1000000) + 'M';
-    if (val >= 1000) return Math.floor(val / 1000) + 'K';
+    if (val >= 1000000) { const n = (val / 1000000).toFixed(1); return (n.endsWith('.0') ? n.slice(0, -2) : n) + 'M'; }
+    if (val >= 1000) { const n = (val / 1000).toFixed(1); return (n.endsWith('.0') ? n.slice(0, -2) : n) + 'K'; }
     return Math.floor(val).toString();
   };
   const formatAxisPct = (val) => Math.floor(val) + '%';
@@ -252,7 +254,6 @@ function EvolutionCharts({ rows, dateFilter, setDateFilter, setBorderoFilter, se
   const pathD4 = points4.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
   const areaD4 = points4.length > 1 ? `${pathD4} L ${points4[points4.length - 1].x} ${svgHeight - paddingBottom} L ${points4[0].x} ${svgHeight - paddingBottom} Z` : "";
 
-  // NOVA LÓGICA: Determina dinamicamente se um ponto está selecionado (suporta arrasto em tempo real)
   const isPointSelected = (p, i, type) => {
     if (dragState.isDragging && dragState.type === type) {
       const minIdx = Math.min(dragState.startIndex, dragState.currentIndex);
@@ -268,35 +269,35 @@ function EvolutionCharts({ rows, dateFilter, setDateFilter, setBorderoFilter, se
   };
 
   const renderHighlight = (points, type, rgb) => {
-    // 1º PRIORIDADE: Se estiver a arrastar, mostra a nova área em tempo real (mesmo que haja um filtro anterior)
+    const clampStart = (val) => Math.max(paddingX, val);
+    const clampEnd = (val) => Math.min(svgWidth - paddingRight, val);
+
     if (dragState.isDragging && dragState.type === type && points.length > 0) {
        const minIdx = Math.min(dragState.startIndex, dragState.currentIndex);
        const maxIdx = Math.max(dragState.startIndex, dragState.currentIndex);
        if (points[minIdx] && points[maxIdx]) {
-          const xStart = points[minIdx].x - segmentWidth/2;
-          const xEnd = points[maxIdx].x + segmentWidth/2;
-          return <rect x={xStart} y={paddingTop} width={xEnd - xStart} height={chartHeight} fill={`rgba(${rgb}, 0.15)`} stroke={`rgba(${rgb}, 0.5)`} strokeWidth="1" />;
+          const xStart = clampStart(points[minIdx].x - segmentWidth/2);
+          const xEnd = clampEnd(points[maxIdx].x + segmentWidth/2);
+          return <rect x={xStart} y={paddingTop} width={Math.max(0, xEnd - xStart)} height={chartHeight} fill={`rgba(${rgb}, 0.15)`} stroke={`rgba(${rgb}, 0.5)`} strokeWidth="1" />;
        }
     }
 
-    // 2º PRIORIDADE: Se NÃO estiver a arrastar, mostra o filtro guardado
     if (dateFilter.type === type && (dateFilter.start || dateFilter.end)) {
        const dsStr = dateFilter.start ? dateFilter.start.substring(0,7) : "0000-00";
        const deStr = dateFilter.end ? dateFilter.end.substring(0,7) : "9999-99";
        const selPoints = points.filter(p => p.ym >= dsStr && p.ym <= deStr);
        if (selPoints.length > 0) {
-          const xStart = selPoints[0].x - segmentWidth/2;
-          const xEnd = selPoints[selPoints.length - 1].x + segmentWidth/2;
-          return <rect x={xStart} y={paddingTop} width={xEnd - xStart} height={chartHeight} fill={`rgba(${rgb}, 0.08)`} />;
+          const xStart = clampStart(selPoints[0].x - segmentWidth/2);
+          const xEnd = clampEnd(selPoints[selPoints.length - 1].x + segmentWidth/2);
+          return <rect x={xStart} y={paddingTop} width={Math.max(0, xEnd - xStart)} height={chartHeight} fill={`rgba(${rgb}, 0.08)`} />;
        }
     }
     return null;
   }
 
-  const chartBoxStyle = { flex: "1 1 400px", background: "#fff", padding: "20px", borderRadius: "10px", border: "1px solid #e5e7eb", boxShadow: "0 4px 12px rgba(0,0,0,0.05)" };
-
-  return (
-    <div style={{ background: "#fff", padding: "24px", borderRadius: "12px", boxShadow: "0 8px 20px rgba(0, 0, 0, 0.06)", border: "1px solid #e5e7eb", marginBottom: "24px" }}>
+const chartBoxStyle = { flex: "1 1 400px", minWidth: "250px", maxWidth: "100%", background: "#fff", padding: "20px", borderRadius: "10px", border: "1px solid #e5e7eb", boxShadow: "0 4px 12px rgba(0,0,0,0.05)", boxSizing: "border-box" };
+return (
+    <div style={{ background: "#fff", padding: "24px", borderRadius: "12px", boxShadow: "0 8px 20px rgba(0, 0, 0, 0.06)", border: "1px solid #e5e7eb" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: isCollapsed ? "0" : "24px" }}>
         <div>
            <h2 style={{ margin: 0, fontSize: "16px", fontWeight: "700", color: "#374151" }}>Análise Gráfica Evolutiva</h2>
@@ -341,7 +342,7 @@ function EvolutionCharts({ rows, dateFilter, setDateFilter, setBorderoFilter, se
                       <line x1={points1[hoveredIndex1].x} y1={paddingTop} x2={points1[hoveredIndex1].x} y2={svgHeight - paddingBottom} stroke="#9ca3af" strokeWidth="1" strokeDasharray="4 4" />
                       <circle cx={points1[hoveredIndex1].x} cy={points1[hoveredIndex1].y} r="5" fill="#fff" stroke="#4f46e5" strokeWidth="2" />
                       <rect x={points1[hoveredIndex1].x - 60} y={points1[hoveredIndex1].y - 35} width="120" height="26" rx="4" fill="#111827" opacity="0.9" />
-                      <text x={points1[hoveredIndex1].x} y={points1[hoveredIndex1].y - 18} fill="#fff" fontSize="11px" fontWeight="600" textAnchor="middle">{formatarMoeda(points1[hoveredIndex1].value)}</text>
+                      <text x={points1[hoveredIndex1].x} y={points1[hoveredIndex1].y - 18} fill="#fff" fontSize="11px" fontWeight="600" textAnchor="middle">{fmtM(points1[hoveredIndex1].value)}</text>
                     </g>
                   )}
                   {points1.map((p, i) => (
@@ -481,7 +482,7 @@ function EvolutionCharts({ rows, dateFilter, setDateFilter, setBorderoFilter, se
                       <line x1={points4[hoveredIndex4].x} y1={paddingTop} x2={points4[hoveredIndex4].x} y2={svgHeight - paddingBottom} stroke="#9ca3af" strokeWidth="1" strokeDasharray="4 4" />
                       <circle cx={points4[hoveredIndex4].x} cy={points4[hoveredIndex4].y} r="5" fill="#fff" stroke="#f59e0b" strokeWidth="2" />
                       <rect x={points4[hoveredIndex4].x - 60} y={points4[hoveredIndex4].y - 35} width="120" height="26" rx="4" fill="#111827" opacity="0.9" />
-                      <text x={points4[hoveredIndex4].x} y={points4[hoveredIndex4].y - 18} fill="#fff" fontSize="11px" fontWeight="600" textAnchor="middle">{formatarMoeda(points4[hoveredIndex4].value)}</text>
+                      <text x={points4[hoveredIndex4].x} y={points4[hoveredIndex4].y - 18} fill="#fff" fontSize="11px" fontWeight="600" textAnchor="middle">{fmtM(points4[hoveredIndex4].value)}</text>
                     </g>
                   )}
                   {points4.map((p, i) => (
@@ -504,7 +505,8 @@ function EvolutionCharts({ rows, dateFilter, setDateFilter, setBorderoFilter, se
 }
 
 // --- COMPONENTE DE INSIGHTS ---
-function DashboardInsights({ processedRows, insightFilter, setInsightFilter, setBorderoFilter, setDctoFilter }) {
+function DashboardInsights({ processedRows, insightFilter, setInsightFilter, setBorderoFilter, setDctoFilter, hideValues }) {
+  const fmtM = (v) => hideValues ? "R$ -" : formatarMoeda(v);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [hoveredSlice, setHoveredSlice] = useState(null);
   const [tooltip, setTooltip] = useState({ show: false, x: 0, y: 0, label: '', count: 0, value: 0 });
@@ -631,7 +633,7 @@ function DashboardInsights({ processedRows, insightFilter, setInsightFilter, set
         <hr style={{ border: 0, borderTop: "1px dashed #d1d5db", margin: "14px 0", width: "100%" }} />
         <div>
           <div style={{ display: "flex", alignItems: "baseline", gap: "6px" }}>
-            <div style={{ fontSize: "16px", fontWeight: "700", color: "#111827", lineHeight: "1" }}>{formatarMoeda(valorReal)}</div>
+            <div style={{ fontSize: "16px", fontWeight: "700", color: "#111827", lineHeight: "1" }}>{fmtM(valorReal)}</div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "4px", marginTop: "4px" }}>
             <div style={{ fontSize: "12px", color: "#6b7280", fontWeight: "600" }}>{stats.values.total > 0 ? ((valorReal / stats.values.total) * 100).toFixed(1) : 0}%</div>
@@ -642,7 +644,7 @@ function DashboardInsights({ processedRows, insightFilter, setInsightFilter, set
         <hr style={{ border: 0, borderTop: "1px dashed #d1d5db", margin: "14px 0", width: "100%" }} />
         <div>
           <div style={{ display: "flex", alignItems: "baseline", gap: "6px" }}>
-            <div style={{ fontSize: "16px", fontWeight: "700", color: "#111827", lineHeight: "1" }}>{formatarMoeda(desagioVal)}</div>
+            <div style={{ fontSize: "16px", fontWeight: "700", color: "#111827", lineHeight: "1" }}>{fmtM(desagioVal)}</div>
           </div>
           <div style={{ fontSize: "11px", color: "#9ca3af", marginTop: "4px" }}>Deságio Total</div>
         </div>
@@ -662,8 +664,8 @@ function DashboardInsights({ processedRows, insightFilter, setInsightFilter, set
     );
   };
 
-  return (
-    <div style={{ background: "#fff", padding: "24px", borderRadius: "12px", boxShadow: "0 8px 20px rgba(0, 0, 0, 0.06)", border: "1px solid #e5e7eb", marginBottom: "24px" }}>
+return (
+    <div style={{ background: "#fff", padding: "24px", borderRadius: "12px", boxShadow: "0 8px 20px rgba(0, 0, 0, 0.06)", border: "1px solid #e5e7eb" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: isCollapsed ? "0" : "24px" }}>
         <h2 style={{ margin: 0, fontSize: "16px", fontWeight: "700", color: "#374151" }}>Visão Geral (Insights)</h2>
         <button onClick={() => setIsCollapsed(!isCollapsed)} style={{ background: "transparent", border: "1px solid #d1d5db", padding: "4px 10px", borderRadius: "6px", color: "#4b5563", fontSize: "12px", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
@@ -694,7 +696,7 @@ function DashboardInsights({ processedRows, insightFilter, setInsightFilter, set
               </div>
               <div style={{ textAlign: "center", display: "flex", flexDirection: "column", gap: "2px" }}>
                 <span style={{ fontSize: "13px", fontWeight: "500", color: "#6b7280" }}>{stats.counts.total} títulos no total</span>
-                <span style={{ fontSize: "16px", fontWeight: "700", color: "#111827" }}>{formatarMoeda(stats.values.total)}</span>
+                <span style={{ fontSize: "16px", fontWeight: "700", color: "#111827" }}>{fmtM(stats.values.total)}</span>
               </div>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "16px", flex: 1 }}>
@@ -710,7 +712,7 @@ function DashboardInsights({ processedRows, insightFilter, setInsightFilter, set
             <div style={{ position: 'fixed', top: tooltip.y + 15, left: tooltip.x + 15, background: 'rgba(17, 24, 39, 0.9)', color: '#fff', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', pointerEvents: 'none', zIndex: 9999 }}>
               <div style={{ fontWeight: 600 }}>{tooltip.label}</div>
               <div style={{ marginTop: '4px', fontSize: '15px', fontWeight: 700 }}>{tooltip.count} títulos</div>
-              <div style={{ marginTop: '2px', fontSize: '13px', color: '#10b981' }}>{formatarMoeda(tooltip.value)}</div>
+              <div style={{ marginTop: '2px', fontSize: '13px', color: '#10b981' }}>{fmtM(tooltip.value)}</div>
             </div>
           )}
         </>
@@ -720,7 +722,8 @@ function DashboardInsights({ processedRows, insightFilter, setInsightFilter, set
 }
 
 // --- COMPONENTE DA TABELA (OTIMIZADA COM PAGINAÇÃO) ---
-function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, borderoFilter, setBorderoFilter, dctoFilter, setDctoFilter, setDateFilter, setInsightFilter, setClienteSelecionado, setSacadoSelecionado }) {
+function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, borderoFilter, setBorderoFilter, dctoFilter, setDctoFilter, setDateFilter, setInsightFilter, setClienteSelecionado, setSacadoSelecionado, hideValues }) {
+  const fmtM = (v) => hideValues ? "R$ -" : formatarMoeda(v);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [sortConfig, setSortConfig] = useState(null);
   
@@ -912,7 +915,7 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
                         const isThisDctoFiltered = dctoFilter?.key === c && baseValor === baseFiltered;
 
                         if (isDateColumn) valor = formatarData(valor);
-                        else if (isCurrency) valor = formatarMoeda(valor);
+                        else if (isCurrency) valor = fmtM(valor);
                         else if (isRate) {
                           const valNum = Number(String(valor).replace('%', '').replace(',', '.'));
                           valor = !isNaN(valNum) && valor ? `${valNum.toFixed(2).replace('.', ',')}%` : escapeText(valor);
@@ -963,11 +966,11 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
           }}>
             <div>
               <span style={{ color: "#4b5563", fontWeight: "500", marginRight: "8px", fontSize: "14px" }}>Deságio Total:</span>
-              <span style={{ color: "#0f172a", fontWeight: "700", fontSize: "18px" }}>{formatarMoeda(totalDesagio)}</span>
+              <span style={{ color: "#0f172a", fontWeight: "700", fontSize: "18px" }}>{fmtM(totalDesagio)}</span>
             </div>
             <div>
               <span style={{ color: "#4b5563", fontWeight: "500", marginRight: "8px", fontSize: "14px" }}>Ticket Médio:</span>
-              <span style={{ color: "#0f172a", fontWeight: "700", fontSize: "18px" }}>{formatarMoeda(valorMedio)}</span>
+              <span style={{ color: "#0f172a", fontWeight: "700", fontSize: "18px" }}>{fmtM(valorMedio)}</span>
             </div>
             <div>
               <span style={{ color: "#4b5563", fontWeight: "500", marginRight: "8px", fontSize: "14px" }}>Prazo Médio:</span>
@@ -979,7 +982,7 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
             </div>
             <div>
               <span style={{ color: "#4b5563", fontWeight: "500", marginRight: "8px", fontSize: "14px" }}>Valor de Face Total:</span>
-              <span style={{ color: "#0f172a", fontWeight: "700", fontSize: "18px" }}>{formatarMoeda(totalFace)}</span>
+              <span style={{ color: "#0f172a", fontWeight: "700", fontSize: "18px" }}>{fmtM(totalFace)}</span>
             </div>
           </div>
         </>
@@ -1005,7 +1008,7 @@ function CustomDropdown({ value, options, onChange, placeholder }) {
 
   return (
     <div ref={wrapperRef} style={{ position: "relative", width: "100%" }}>
-      <input type="text" value={displayValue} onChange={(e) => { setSearchTerm(e.target.value); setIsOpen(true); }} onFocus={() => { setIsOpen(true); setSearchTerm(""); }} onKeyDown={handleKeyDown} placeholder={isOpen && value ? value : placeholder} style={{ width: "100%", padding: "11px", borderRadius: "6px", border: "1px solid #d1d5db", background: "#fff", fontSize: "14px", color: "#111827", outline: "none", boxSizing: "border-box" }} />
+      <input type="text" value={displayValue} onChange={(e) => { setSearchTerm(e.target.value); setIsOpen(true); }} onFocus={() => { setIsOpen(true); setSearchTerm(""); }} onKeyDown={handleKeyDown} placeholder={isOpen && value ? value : placeholder} style={{ width: "100%", padding: "11px", paddingRight: "32px", borderRadius: "6px", border: "1px solid #d1d5db", background: "#fff", fontSize: "14px", color: "#111827", outline: "none", boxSizing: "border-box", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} />
       <div style={{ position: "absolute", right: "12px", top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: "#6b7280", fontSize: "12px" }}>▼</div>
       {isOpen && (
         <div style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: "4px", background: "#fff", border: "1px solid #d1d5db", borderRadius: "8px", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1)", zIndex: 50, maxHeight: "250px", overflowY: "auto" }}>
@@ -1018,7 +1021,7 @@ function CustomDropdown({ value, options, onChange, placeholder }) {
 }
 
 // --- EXPORTAÇÃO DO MICRODASHBOARD ---
-export default function MicroDashboard({ session }) {
+export default function MicroDashboard({ session, onSidebarToggle }) {
   const [loading, setLoading] = useState(false);
   const [rows, setRows] = useState([]);
   
@@ -1030,6 +1033,39 @@ export default function MicroDashboard({ session }) {
   const [relacionamentos, setRelacionamentos] = useState([]);
   const [clienteSelecionado, setClienteSelecionado] = useState("");
   const [sacadoSelecionado, setSacadoSelecionado] = useState("");
+
+  // ESTADOS DE CONTROLO DA SIDEBAR
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isMobile, setIsMobile] = useState(false);
+  const [isTablet, setIsTablet] = useState(false);
+  const [hideValues, setHideValues] = useState(false);
+
+  // Formata moeda ou mascara o valor se hideValues estiver ativo
+  const fmtM = (valor) => hideValues ? "R$ -" : formatarMoeda(valor);
+
+  const handleSidebarToggle = (val, mobile, tablet) => {
+    setIsSidebarOpen(val);
+    if (onSidebarToggle) onSidebarToggle(val, mobile, tablet);
+  };
+
+  useEffect(() => {
+    const handleResize = () => {
+      const w = window.innerWidth;
+      const mobile = w < 640;           // < 640px: overlay (flutua por cima)
+      const tablet = w >= 640 && w < 1824; // 640–1023px: sidebar empurra conteúdo sem translado
+      setIsMobile(mobile);
+      setIsTablet(tablet);
+      const newOpen = !mobile;
+      setIsSidebarOpen(newOpen);
+      if (onSidebarToggle) onSidebarToggle(mobile ? false : newOpen, mobile, tablet);
+    };
+
+    if (typeof window !== 'undefined') {
+      handleResize();
+      window.addEventListener('resize', handleResize);
+      return () => window.removeEventListener('resize', handleResize);
+    }
+  }, []);
 
   // ESTADOS DE DATA
   const [dateFilter, setDateFilter] = useState(() => {
@@ -1049,13 +1085,11 @@ export default function MicroDashboard({ session }) {
   const savedQuickDate = useRef(null);
   const prevHasEntity = useRef(false);
 
-  // Mantém a ref atualizada com a última escolha manual do utilizador
   useEffect(() => {
     latestDateFilter.current = dateFilter;
     latestQuickDate.current = activeQuickDate;
   }, [dateFilter, activeQuickDate]);
 
-  // Função centralizadora para atualizar a data e limpar o estado do botão rápido
   const handleSetDateFilter = (newFilter) => {
     setActiveQuickDate(null);
     setDateFilter(newFilter);
@@ -1067,12 +1101,10 @@ export default function MicroDashboard({ session }) {
     setInputType(dateFilter.type);
   }, [dateFilter]);
 
-  // Lógica principal: Limpar data ao selecionar Entidade e Restaurar ao limpar a Entidade
   useEffect(() => {
     const currentlyHasEntity = !!(clienteSelecionado || sacadoSelecionado);
 
     if (currentlyHasEntity && !prevHasEntity.current) {
-      // Saiu de 0 Entidades para 1+: Memoriza e Limpa a Data
       savedDateFilter.current = latestDateFilter.current;
       savedQuickDate.current = latestQuickDate.current;
       
@@ -1080,7 +1112,6 @@ export default function MicroDashboard({ session }) {
       setActiveQuickDate(null);
     } 
     else if (!currentlyHasEntity && prevHasEntity.current) {
-      // Saiu de 1+ Entidades para 0: Restaura a Data Memorizada
       if (savedDateFilter.current) {
         setDateFilter(savedDateFilter.current);
         setActiveQuickDate(savedQuickDate.current);
@@ -1089,17 +1120,13 @@ export default function MicroDashboard({ session }) {
 
     prevHasEntity.current = currentlyHasEntity;
 
-    // Independentemente, limpamos os filtros de detalhe visual
     setInsightFilter(null); 
     setBorderoFilter(null); 
     setDctoFilter(null);
   }, [clienteSelecionado, sacadoSelecionado]);
 
-
-  // Lógica dos Botões Rápidos
-const applyQuickDate = (quickType) => {
+  const applyQuickDate = (quickType) => {
     if (activeQuickDate === quickType) {
-      // Toggle off
       setActiveQuickDate(null);
       setDateFilter({ type: inputType, start: '', end: '' });
       return;
@@ -1114,7 +1141,7 @@ const applyQuickDate = (quickType) => {
       start.setDate(end.getDate() - 30);
     } else if (quickType === 'ytd') {
       start = new Date(end.getFullYear(), 0, 1);
-    } else if (quickType === 'ult_semestre') { // <--- NOVA LÓGICA AQUI
+    } else if (quickType === 'ult_semestre') {
       start.setMonth(end.getMonth() - 6);
     } else if (quickType === 'ult_ano') {
       start.setFullYear(end.getFullYear() - 1);
@@ -1205,7 +1232,7 @@ const applyQuickDate = (quickType) => {
   }, [rowsFilteredByDate, insightFilter, borderoFilter, dctoFilter]);
 
   const kpiData = useMemo(() => {
-    if (!rowsParaTabela || rowsParaTabela.length === 0) return { taxaMedia: 0, baseCalculo: 0, valorMedio: 0, prazoMedio: 0 };
+    if (!rowsParaTabela || rowsParaTabela.length === 0) return { taxaMedia: 0, baseCalculo: 0, valorMedio: 0, prazoMedio: 0, desagioTotal: 0 };
 
     const borderoMap = new Map();
     let sumFaceTotal = 0;
@@ -1218,6 +1245,10 @@ const applyQuickDate = (quickType) => {
     const rateKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'tx.efet' || k.toLowerCase().includes('tx.efet') || k.toLowerCase().includes('tx efet'));
     const emisKey = Object.keys(firstRow).find(k => k.toLowerCase().includes('emis'));
     const vctoKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'vcto' || (k.toLowerCase().includes('vcto') && !k.toLowerCase().includes('vl')));
+    const desagioKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'desagio' || k.toLowerCase() === 'deságio');
+
+    const seenBorderosDesagio = new Set();
+    let totalDesagio = 0;
 
     rowsParaTabela.forEach((r, idx) => {
       const bNum = (borderoKey && r[borderoKey]) ? String(r[borderoKey]).trim() : `avulso_${idx}`; 
@@ -1226,6 +1257,12 @@ const applyQuickDate = (quickType) => {
       const rawRate = rateKey ? r[rateKey] : null;
       const hasRateVal = rawRate !== null && rawRate !== undefined && String(rawRate).trim() !== "";
       const rate = hasRateVal ? (Number(String(rawRate).replace('%', '').replace(',', '.')) || 0) : 0;
+
+      const desagioVal = desagioKey ? (Number(r[desagioKey]) || 0) : 0;
+      if (!seenBorderosDesagio.has(bNum)) {
+         seenBorderosDesagio.add(bNum);
+         totalDesagio += desagioVal;
+      }
 
       if (!borderoMap.has(bNum)) {
         borderoMap.set(bNum, { totalValue: 0, rate: 0, hasRate: false });
@@ -1266,7 +1303,8 @@ const applyQuickDate = (quickType) => {
       taxaMedia: baseCalculoTaxa > 0 ? (sumTaxaWeighted / baseCalculoTaxa) : 0,
       baseCalculo: baseCalculoTaxa,
       valorMedio: countTitulos > 0 ? sumFaceTotal / countTitulos : 0,
-      prazoMedio: sumFaceTotal > 0 ? sumPrazoWeighted / sumFaceTotal : 0
+      prazoMedio: sumFaceTotal > 0 ? sumPrazoWeighted / sumFaceTotal : 0,
+      desagioTotal: totalDesagio
     };
   }, [rowsParaTabela]);
 
@@ -1327,20 +1365,14 @@ const applyQuickDate = (quickType) => {
   });
 
   const getQuickBtnStyle = (isActive) => ({
-    padding: "6px 14px",
-    borderRadius: "6px",
-    border: "1px solid",
-    borderColor: isActive ? "#4f46e5" : "#d1d5db",
-    background: isActive ? "#e0e7ff" : "#fff",
-    color: isActive ? "#4f46e5" : "#4b5563",
-    fontWeight: "600",
-    fontSize: "12px",
-    cursor: "pointer",
-    transition: "all 0.2s"
+    padding: "6px 14px", borderRadius: "6px", border: "1px solid", borderColor: isActive ? "#4f46e5" : "#d1d5db",
+    background: isActive ? "#e0e7ff" : "#fff", color: isActive ? "#4f46e5" : "#4b5563",
+    fontWeight: "600", fontSize: "12px", cursor: "pointer", transition: "all 0.2s"
   });
 
-  return (
-    <div style={{ background: "#fff", padding: "24px", borderRadius: "12px", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)" }}>
+return (
+    // NOVO LAYOUT: Container Root flexível englobando todo o dashboard
+    <div style={{ display: "flex", width: "100%", position: "relative", alignItems: "flex-start", minHeight: "100vh", marginLeft: (!isMobile && !isTablet && isSidebarOpen) ? "150px" : "0px", marginRight: (!isMobile && !isTablet && isSidebarOpen) ? "-150px" : "0px", paddingLeft: (isTablet && isSidebarOpen) ? "300px" : "0px", transition: "margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1), margin-right 0.3s cubic-bezier(0.4, 0, 0.2, 1), padding-left 0.3s cubic-bezier(0.4, 0, 0.2, 1)", boxSizing: "border-box" }}>
       <style>
         {`
           .table-row-liquidado { background: rgba(34, 197, 94, 0.08); }
@@ -1355,186 +1387,294 @@ const applyQuickDate = (quickType) => {
           .table-row-aVencer:hover { background: rgba(148, 163, 184, 0.12); }
           .table-row-default { background: #fff; }
           .table-row-default:hover { background: #f9fafb; }
-          
           .clickable-entity { cursor: pointer; font-weight: 600; color: #374151; transition: color 0.2s; }
           .clickable-entity:hover { color: #4f46e5; }
         `}
       </style>
 
-      <h2 style={{ margin: "0 0 20px 0", color: "#111827", fontSize: "18px" }}>Filtro de Registos</h2>
+      {/* OVERLAY MOBILE: Fecha o menu se clicado fora */}
+      {isMobile && isSidebarOpen && (
+        <div
+          onClick={() => setIsSidebarOpen(false)}
+          style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.5)", zIndex: 9998 }}
+        />
+      )}
 
-      <div style={{ display: "flex", flexWrap: "wrap", gap: "20px", marginBottom: "8px", alignItems: "flex-end" }}>
-        <div style={{ flex: "1 1 280px" }}>
-          <label style={{ display: "block", marginBottom: 8, fontSize: "14px", fontWeight: "500", color: "#374151" }}>Cedente</label>
-          <CustomDropdown value={clienteSelecionado} onChange={setClienteSelecionado} options={clientesDisponiveis} placeholder="Selecione ou digite o Cedente..." />
-        </div>
-        <div style={{ flex: "1 1 280px" }}>
-          <label style={{ display: "block", marginBottom: 8, fontSize: "14px", fontWeight: "500", color: "#374151" }}>Sacado</label>
-          <CustomDropdown value={sacadoSelecionado} onChange={setSacadoSelecionado} options={sacadosDisponiveis} placeholder="Selecione ou digite o Sacado..." />
-        </div>
-        <div>
-          <button onClick={limparFiltroEntidades} disabled={!hasEntityFilter} style={{ padding: "11px 16px", borderRadius: "6px", border: "1px solid #d1d5db", background: (!hasEntityFilter) ? "#f3f4f6" : "#fff", color: (!hasEntityFilter) ? "#9ca3af" : "#ef4444", fontWeight: "600", fontSize: "14px", cursor: (!hasEntityFilter) ? "not-allowed" : "pointer", transition: "all 0.2s" }}>Limpar Nomes</button>
-        </div>
-      </div>
+      {/* BOTÃO HAMBURGER FIXO À ESQUERDA (TIPO GEMINI) */}
+      <button
+        onClick={() => handleSidebarToggle(!isSidebarOpen, isMobile, isTablet)}
+        title={isSidebarOpen ? "Fechar Menu" : "Abrir Menu"}
+        style={{
+          position: "fixed",
+          top: "16px",
+          left: "16px",
+          zIndex: 10000,
+          background: "#fff",
+          border: "1px solid #e5e7eb",
+          borderRadius: "8px",
+          padding: "8px",
+          cursor: "pointer",
+          boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: "#374151",
+          transition: "background 0.2s"
+        }}
+        onMouseOver={(e) => e.currentTarget.style.background = "#f3f4f6"}
+        onMouseOut={(e) => e.currentTarget.style.background = "#fff"}
+      >
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="3" y1="12" x2="21" y2="12"></line>
+          <line x1="3" y1="6" x2="21" y2="6"></line>
+          <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
+      </button>
 
-      <div style={{ display: "flex", flexWrap: "wrap", gap: "16px", marginTop: "16px", alignItems: "flex-start", padding: "16px", background: "#f9fafb", borderRadius: "8px", border: "1px solid #e5e7eb" }}>
-        
-        {/* ROW: Botões Rápidos */}
-        <div style={{ width: "100%", display: "flex", gap: "8px", flexWrap: "wrap", borderBottom: "1px solid #e5e7eb", paddingBottom: "12px", marginBottom: "4px", alignItems: "center" }}>
-          <span style={{ fontSize: "13px", fontWeight: "600", color: "#4b5563", marginRight: "8px" }}>Períodos Rápidos:</span>
-          <button onClick={() => applyQuickDate('mes_atual')} style={getQuickBtnStyle(activeQuickDate === 'mes_atual')}>Mês Atual</button>
-          <button onClick={() => applyQuickDate('ult_30')} style={getQuickBtnStyle(activeQuickDate === 'ult_30')}>Últ. 30 Dias</button>
-          <button onClick={() => applyQuickDate('ytd')} style={getQuickBtnStyle(activeQuickDate === 'ytd')}>YTD</button>
-          <button onClick={() => applyQuickDate('ult_semestre')} style={getQuickBtnStyle(activeQuickDate === 'ult_semestre')}>Últ. Semestre</button> {/* <--- NOVO BOTÃO AQUI */}
-          <button onClick={() => applyQuickDate('ult_ano')} style={getQuickBtnStyle(activeQuickDate === 'ult_ano')}>Últ. Ano</button>
+      {/* --- SIDEBAR LATERAL FIXA (FILTROS) --- */}
+      <aside style={{
+        position: "fixed",
+        top: 0,
+        left: isSidebarOpen ? 0 : "-300px",
+        bottom: 0,
+        width: "300px",
+        background: "#fff",
+        padding: "24px",
+        paddingTop: "72px",
+        boxShadow: "4px 0 15px rgba(0,0,0,0.05)",
+        borderRight: "1px solid #e5e7eb",
+        display: "flex",
+        flexDirection: "column",
+        gap: "24px",
+        overflowY: "auto",
+        transition: "left 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+        zIndex: 9999,
+        boxSizing: "border-box"
+      }}>
+        <h2 style={{ margin: 0, color: "#111827", fontSize: "18px", borderBottom: "2px solid #f3f4f6", paddingBottom: "12px" }}>Filtros de Análise</h2>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+          <div>
+            <label style={{ display: "block", marginBottom: 6, fontSize: "13px", fontWeight: "600", color: "#374151" }}>Cedente</label>
+            <CustomDropdown value={clienteSelecionado} onChange={setClienteSelecionado} options={clientesDisponiveis} placeholder="Selecione o Cedente..." />
+          </div>
+          <div>
+            <label style={{ display: "block", marginBottom: 6, fontSize: "13px", fontWeight: "600", color: "#374151" }}>Sacado</label>
+            <CustomDropdown value={sacadoSelecionado} onChange={setSacadoSelecionado} options={sacadosDisponiveis} placeholder="Selecione o Sacado..." />
+          </div>
+          <button onClick={limparFiltroEntidades} disabled={!hasEntityFilter} style={{ padding: "10px", borderRadius: "8px", border: "1px solid #d1d5db", background: (!hasEntityFilter) ? "#f9fafb" : "#fff", color: (!hasEntityFilter) ? "#9ca3af" : "#ef4444", fontWeight: "600", fontSize: "13px", cursor: (!hasEntityFilter) ? "not-allowed" : "pointer", transition: "all 0.2s" }}>
+            Limpar Nomes
+          </button>
         </div>
 
-        {/* Linha dos Inputs Manuais */}
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "16px", width: "100%", alignItems: "flex-end" }}>
-          <div style={{ flex: "1 1 150px" }}>
-            <label style={{ display: "block", marginBottom: 6, fontSize: "13px", fontWeight: "600", color: "#4b5563" }}>Data Base</label>
-            <select value={inputType} onChange={e => setInputType(e.target.value)} style={{ width: "100%", padding: "10px", borderRadius: "6px", border: "1px solid #d1d5db", background: "#fff", fontSize: "14px", color: "#111827", outline: "none" }}>
-              <option value="emis">Emissão</option>
-              <option value="vcto">Vencimento</option>
+        <hr style={{ border: 0, borderTop: "1px dashed #d1d5db", margin: 0 }} />
+
+        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+          <label style={{ display: "block", fontSize: "14px", fontWeight: "700", color: "#111827" }}>Período Base</label>
+          
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+            <button onClick={() => applyQuickDate('mes_atual')} style={getQuickBtnStyle(activeQuickDate === 'mes_atual')}>Mês Atual</button>
+            <button onClick={() => applyQuickDate('ult_30')} style={getQuickBtnStyle(activeQuickDate === 'ult_30')}>Últ. 30 Dias</button>
+            <button onClick={() => applyQuickDate('ytd')} style={getQuickBtnStyle(activeQuickDate === 'ytd')}>YTD</button>
+            <button onClick={() => applyQuickDate('ult_semestre')} style={getQuickBtnStyle(activeQuickDate === 'ult_semestre')}>Últ. Sem.</button>
+            <button onClick={() => applyQuickDate('ult_ano')} style={{ ...getQuickBtnStyle(activeQuickDate === 'ult_ano'), gridColumn: "span 2" }}>Último Ano</button>
+          </div>
+
+          <div>
+            <label style={{ display: "block", marginBottom: 6, fontSize: "12px", fontWeight: "600", color: "#6b7280" }}>Referência de Data</label>
+            <select value={inputType} onChange={e => setInputType(e.target.value)} style={{ width: "100%", padding: "10px", borderRadius: "6px", border: "1px solid #d1d5db", background: "#f9fafb", fontSize: "13px", color: "#111827", outline: "none" }}>
+              <option value="emis">Data de Emissão</option>
+              <option value="vcto">Data de Vencimento</option>
             </select>
           </div>
-          <div style={{ flex: "1 1 180px" }}>
-            <label style={{ display: "block", marginBottom: 6, fontSize: "13px", fontWeight: "600", color: "#4b5563" }}>Data Inicial</label>
-            <input type="date" value={inputDateStart} onChange={e => setInputDateStart(e.target.value)} style={{ width: "100%", padding: "9px", borderRadius: "6px", border: "1px solid #d1d5db", background: "#fff", fontSize: "14px", color: "#111827", outline: "none", boxSizing: "border-box" }} />
+
+          <div>
+            <label style={{ display: "block", marginBottom: 6, fontSize: "12px", fontWeight: "600", color: "#6b7280" }}>Data Inicial</label>
+            <input type="date" value={inputDateStart} onChange={e => setInputDateStart(e.target.value)} style={{ width: "100%", padding: "9px", borderRadius: "6px", border: "1px solid #d1d5db", background: "#fff", fontSize: "13px", color: "#111827", outline: "none", boxSizing: "border-box" }} />
           </div>
-          <div style={{ flex: "1 1 180px" }}>
-            <label style={{ display: "block", marginBottom: 6, fontSize: "13px", fontWeight: "600", color: "#4b5563" }}>Data Final</label>
-            <input type="date" value={inputDateEnd} onChange={e => setInputDateEnd(e.target.value)} style={{ width: "100%", padding: "9px", borderRadius: "6px", border: "1px solid #d1d5db", background: "#fff", fontSize: "14px", color: "#111827", outline: "none", boxSizing: "border-box" }} />
+
+          <div>
+            <label style={{ display: "block", marginBottom: 6, fontSize: "12px", fontWeight: "600", color: "#6b7280" }}>Data Final</label>
+            <input type="date" value={inputDateEnd} onChange={e => setInputDateEnd(e.target.value)} style={{ width: "100%", padding: "9px", borderRadius: "6px", border: "1px solid #d1d5db", background: "#fff", fontSize: "13px", color: "#111827", outline: "none", boxSizing: "border-box" }} />
           </div>
-          <div style={{ display: "flex", gap: "12px" }}>
-            <button onClick={() => { handleSetDateFilter({ type: inputType, start: inputDateStart, end: inputDateEnd }); setBorderoFilter(null); setDctoFilter(null); }} style={{ padding: "10px 16px", borderRadius: "6px", border: "none", background: "#4f46e5", color: "#fff", fontWeight: "600", fontSize: "13px", cursor: "pointer", transition: "all 0.2s" }}>Aplicar Data</button>
-            <button onClick={limparFiltroData} disabled={!hasDateFilter} style={{ padding: "10px 16px", borderRadius: "6px", border: "1px solid #d1d5db", background: (!hasDateFilter) ? "#f3f4f6" : "#fff", color: (!hasDateFilter) ? "#9ca3af" : "#ef4444", fontWeight: "600", fontSize: "13px", cursor: (!hasDateFilter) ? "not-allowed" : "pointer", transition: "all 0.2s" }}>Limpar Data</button>
+
+          <div style={{ display: "flex", gap: "8px", flexDirection: "column", marginTop: "8px" }}>
+            <button onClick={() => { handleSetDateFilter({ type: inputType, start: inputDateStart, end: inputDateEnd }); setBorderoFilter(null); setDctoFilter(null); }} style={{ padding: "10px", borderRadius: "8px", border: "none", background: "#4f46e5", color: "#fff", fontWeight: "600", fontSize: "13px", cursor: "pointer", transition: "all 0.2s" }}>Aplicar Intervalo</button>
+            <button onClick={limparFiltroData} disabled={!hasDateFilter} style={{ padding: "10px", borderRadius: "8px", border: "1px solid #d1d5db", background: (!hasDateFilter) ? "#f9fafb" : "#fff", color: (!hasDateFilter) ? "#9ca3af" : "#ef4444", fontWeight: "600", fontSize: "13px", cursor: (!hasDateFilter) ? "not-allowed" : "pointer", transition: "all 0.2s" }}>Limpar Data</button>
           </div>
         </div>
-      </div>
+      </aside>
 
-      {dateFilter && (dateFilter.start || dateFilter.end) && (
-        <div style={{ marginTop: "12px", fontSize: "13px", color: "#4f46e5", fontWeight: "600", textAlign: "right" }}>
-          Filtro de {dateFilter.type === 'emis' ? 'Emissão' : 'Vencimento'} ativo: 
-          {dateFilter.start ? ` de ${formatarData(dateFilter.start)}` : ''} 
-          {dateFilter.end ? ` até ${formatarData(dateFilter.end)}` : ''}.
-          <span style={{ color: "#6b7280", fontWeight: "500", marginLeft: "8px" }}>(Clique no período selecionado no gráfico para limpar)</span>
-        </div>
-      )}
+        {/* --- ÁREA PRINCIPAL (CONTEÚDO E GRÁFICOS) --- */}
+        <main style={{
+          width: "100%",
+          display: "flex",
+          flexDirection: "column",
+          paddingBottom: "24px"
+        }}>
+        
+        {/* Container limpo, sem forçar minWidth quebrando o flex */}
+          <div style={{
+            width: "100%",
+            maxWidth: "100%",
+            margin: "0 auto", 
+            display: "flex",
+            flexDirection: "column",
+            gap: "24px",
+            boxSizing: "border-box"
+        }}>
+          {/* Top Bar de Controlo de View */}
+          <div style={{ background: "#fff", padding: "16px 24px", borderRadius: "12px", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)", border: "1px solid #e5e7eb", display: "flex", justifyContent: "space-between", flexWrap: "wrap", alignItems: "center", gap: "16px" }}>
+            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
+              <button onClick={() => { setViewMode('all'); setInsightFilter(null); handleSetDateFilter({ type: 'emis', start: '', end: '' }); setBorderoFilter(null); setDctoFilter(null); }} style={getTabStyle(viewMode === 'all')}>Visão Geral</button>
+              <button onClick={() => { setViewMode(prev => prev === 'finalized' ? 'all' : 'finalized'); setInsightFilter(null); handleSetDateFilter({ type: 'emis', start: '', end: '' }); setBorderoFilter(null); setDctoFilter(null); }} style={getTabStyle(viewMode === 'finalized')}>Operações Já Finalizadas</button>
+              <button onClick={() => { setViewMode(prev => prev === 'open' ? 'all' : 'open'); setInsightFilter(null); handleSetDateFilter({ type: 'emis', start: '', end: '' }); setBorderoFilter(null); setDctoFilter(null); }} style={getTabStyle(viewMode === 'open')}>Mostrar Em Aberto</button>
+              {/* Botão Olho — esconde/mostra valores monetários */}
+              <button
+                onClick={() => setHideValues(v => !v)}
+                title={hideValues ? "Mostrar valores" : "Ocultar valores"}
+                style={{ padding: "6px 10px", borderRadius: "6px", border: "1px solid #d1d5db", background: hideValues ? "#f3f4f6" : "#fff", color: hideValues ? "#4f46e5" : "#6b7280", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.2s" }}
+              >
+                {hideValues ? (
+                  /* Olho fechado */
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+                    <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+                    <line x1="1" y1="1" x2="23" y2="23"/>
+                  </svg>
+                ) : (
+                  /* Olho aberto */
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                    <circle cx="12" cy="12" r="3"/>
+                  </svg>
+                )}
+              </button>
+            </div>
 
-      <div style={{ display: "flex", gap: "10px", marginTop: "16px", flexWrap: "wrap" }}>
-        <button onClick={() => { setViewMode('all'); setInsightFilter(null); handleSetDateFilter({ type: 'emis', start: '', end: '' }); setBorderoFilter(null); setDctoFilter(null); }} style={getTabStyle(viewMode === 'all')}>Visão Geral</button>
-        <button onClick={() => { setViewMode(prev => prev === 'finalized' ? 'all' : 'finalized'); setInsightFilter(null); handleSetDateFilter({ type: 'emis', start: '', end: '' }); setBorderoFilter(null); setDctoFilter(null); }} style={getTabStyle(viewMode === 'finalized')}>Operações Já Finalizadas</button>
-        <button onClick={() => { setViewMode(prev => prev === 'open' ? 'all' : 'open'); setInsightFilter(null); handleSetDateFilter({ type: 'emis', start: '', end: '' }); setBorderoFilter(null); setDctoFilter(null); }} style={getTabStyle(viewMode === 'open')}>Mostrar Em Aberto</button>
-      </div>
+            {dateFilter && (dateFilter.start || dateFilter.end) && (
+              <div style={{ fontSize: "13px", color: "#4f46e5", fontWeight: "600", textAlign: "right" }}>
+                Filtro ativo: 
+                {dateFilter.start ? ` de ${formatarData(dateFilter.start)}` : ''} 
+                {dateFilter.end ? ` até ${formatarData(dateFilter.end)}` : ''}.
+              </div>
+            )}
+          </div>
 
-      {rowsFilteredByMode.length > 0 && (
-        <div style={{ marginTop: "24px" }}>
-          
-          {rowsParaTabela.length > 0 && kpiData.baseCalculo > 0 && (
-            <div style={{
-              background: "#d1d5db", 
-              borderRadius: "12px",
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-              gap: "1px",
-              boxShadow: "0 14px 28px -6px rgba(0, 0, 0, 0.12), 0 4px 10px -4px rgba(0, 0, 0, 0.08)", 
-              marginBottom: "32px",
-              border: "1px solid #d1d5db",
-              overflow: "hidden"
-            }}>
+            {rowsFilteredByMode.length > 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+              {/* NOVO BANNER DE KPIs: 4 COLUNAS E DESÁGIO ADICIONADO */}
+              {rowsParaTabela.length > 0 && kpiData.baseCalculo > 0 && (
+                <div style={{
+                  background: "#d1d5db", 
+                  borderRadius: "12px",
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", /* Aqui permite empilhar em ecrãs menores */
+                  gap: "1px",
+                  boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)", 
+                  border: "1px solid #d1d5db",
+                  overflow: "hidden"
+                }}>
+                
+                {/* INFO 1: Taxa Média */}
+                <div style={{ background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #4f46e5", padding: "20px 16px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
+                    <div style={{ background: "rgba(79, 70, 229, 0.1)", padding: "6px", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <svg width="16" height="16" fill="none" stroke="#4f46e5" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M23 6l-9.5 9.5-5-5L1 18"/><path d="M17 6h6v6"/></svg>
+                    </div>
+                    <h3 style={{ margin: 0, fontSize: "11px", fontWeight: "700", color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "normal" }}>Taxa Média Ponderada</h3>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: "4px" }}>
+                    <span style={{ fontSize: "28px", fontWeight: "700", color: "#111827", lineHeight: "1", letterSpacing: "-0.02em", wordBreak: "break-word" }}>{kpiData.taxaMedia.toFixed(2).replace('.', ',')}%</span>
+                  </div>
+                  <div style={{ fontSize: "12px", color: "#6b7280", marginTop: "12px", fontWeight: "500", whiteSpace: "normal" }}>
+                    Base: <span style={{color: "#374151", fontWeight: "600"}}>{fmtM(kpiData.baseCalculo)}</span>
+                  </div>
+                </div>
+
+                {/* INFO 2: Ticket Médio */}
+                <div style={{ background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #0ea5e9", padding: "20px 16px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
+                    <div style={{ background: "rgba(14, 165, 233, 0.1)", padding: "6px", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <svg width="16" height="16" fill="none" stroke="#0ea5e9" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"></rect><circle cx="12" cy="12" r="2"></circle><path d="M6 12h.01M18 12h.01"></path></svg>
+                    </div>
+                    <h3 style={{ margin: 0, fontSize: "11px", fontWeight: "700", color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "normal" }}>Ticket Médio</h3>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: "4px" }}>
+                    <span style={{ fontSize: "28px", fontWeight: "700", color: "#111827", lineHeight: "1", letterSpacing: "-0.02em", wordBreak: "break-word" }}>{fmtM(kpiData.valorMedio)}</span>
+                  </div>
+                  <div style={{ fontSize: "12px", color: "#6b7280", marginTop: "12px", fontWeight: "500", whiteSpace: "normal" }}>
+                    Por título na visualização
+                  </div>
+                </div>
+
+                {/* INFO 3: Prazo Médio */}
+                <div style={{ background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #10b981", padding: "20px 16px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
+                    <div style={{ background: "rgba(16, 185, 129, 0.1)", padding: "6px", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <svg width="16" height="16" fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                    </div>
+                    <h3 style={{ margin: 0, fontSize: "11px", fontWeight: "700", color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "normal" }}>Prazo Médio</h3>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: "6px" }}>
+                    <span style={{ fontSize: "28px", fontWeight: "700", color: "#111827", lineHeight: "1", letterSpacing: "-0.02em", wordBreak: "break-word" }}>{kpiData.prazoMedio.toFixed(0)}</span>
+                    <span style={{ fontSize: "14px", color: "#6b7280", fontWeight: "600" }}>dias</span>
+                  </div>
+                  <div style={{ fontSize: "12px", color: "#6b7280", marginTop: "12px", fontWeight: "500", whiteSpace: "normal" }}>
+                    Ponderado pelo valor de face
+                  </div>
+                </div>
+
+                {/* INFO 4: Deságio Total */}
+                <div style={{ background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #f59e0b", padding: "20px 16px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
+                    <div style={{ background: "rgba(245, 158, 11, 0.1)", padding: "6px", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <svg width="16" height="16" fill="none" stroke="#f59e0b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg>
+                    </div>
+                    <h3 style={{ margin: 0, fontSize: "11px", fontWeight: "700", color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "normal" }}>Deságio Ganho</h3>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: "4px" }}>
+                    <span style={{ fontSize: "28px", fontWeight: "700", color: "#111827", lineHeight: "1", letterSpacing: "-0.02em", wordBreak: "break-word" }}>{fmtM(kpiData.desagioTotal)}</span>
+                  </div>
+                  <div style={{ fontSize: "12px", color: "#6b7280", marginTop: "12px", fontWeight: "500", whiteSpace: "normal" }}>
+                    Total apurado na visualização
+                  </div>
+                </div>
+
+              </div>
+              )}
               
-              <div style={{ background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #4f46e5", padding: "24px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
-                  <div style={{ background: "rgba(79, 70, 229, 0.1)", padding: "6px", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <svg width="18" height="18" fill="none" stroke="#4f46e5" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-                      <path d="M23 6l-9.5 9.5-5-5L1 18"/>
-                      <path d="M17 6h6v6"/>
-                    </svg>
-                  </div>
-                  <h3 style={{ margin: 0, fontSize: "12px", fontWeight: "700", color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em" }}>Taxa Média Ponderada</h3>
-                </div>
-                <div style={{ display: "flex", alignItems: "baseline", gap: "4px" }}>
-                  <span style={{ fontSize: "36px", fontWeight: "700", color: "#111827", lineHeight: "1", letterSpacing: "-0.02em" }}>{kpiData.taxaMedia.toFixed(2).replace('.', ',')}%</span>
-                </div>
-                <div style={{ fontSize: "13px", color: "#6b7280", marginTop: "12px", fontWeight: "500" }}>
-                  Base: <span style={{color: "#374151", fontWeight: "600"}}>{formatarMoeda(kpiData.baseCalculo)}</span> 
-                  {(insightFilter || dateFilter.start || dateFilter.end || borderoFilter || dctoFilter) && (
-                    <span style={{color: "#4f46e5", background: "#e0e7ff", padding: "2px 6px", borderRadius: "4px", marginLeft: "4px", fontSize: "11px", fontWeight: "700"}}>FILTRO ATIVO</span>
-                  )}
-                </div>
-              </div>
-
-              <div style={{ background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #0ea5e9", padding: "24px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
-                  <div style={{ background: "rgba(14, 165, 233, 0.1)", padding: "6px", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <svg width="18" height="18" fill="none" stroke="#0ea5e9" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-                      <rect x="2" y="6" width="20" height="12" rx="2"></rect>
-                      <circle cx="12" cy="12" r="2"></circle>
-                      <path d="M6 12h.01M18 12h.01"></path>
-                    </svg>
-                  </div>
-                  <h3 style={{ margin: 0, fontSize: "12px", fontWeight: "700", color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em" }}>Ticket Médio</h3>
-                </div>
-                <div style={{ display: "flex", alignItems: "baseline", gap: "4px" }}>
-                  <span style={{ fontSize: "36px", fontWeight: "700", color: "#111827", lineHeight: "1", letterSpacing: "-0.02em" }}>{formatarMoeda(kpiData.valorMedio)}</span>
-                </div>
-                <div style={{ fontSize: "13px", color: "#6b7280", marginTop: "12px", fontWeight: "500" }}>
-                  Considerando os títulos no filtro
-                </div>
-              </div>
-
-              <div style={{ background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #10b981", padding: "24px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
-                  <div style={{ background: "rgba(16, 185, 129, 0.1)", padding: "6px", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <svg width="18" height="18" fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-                      <circle cx="12" cy="12" r="10"></circle>
-                      <polyline points="12 6 12 12 16 14"></polyline>
-                    </svg>
-                  </div>
-                  <h3 style={{ margin: 0, fontSize: "12px", fontWeight: "700", color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em" }}>Prazo Médio</h3>
-                </div>
-                <div style={{ display: "flex", alignItems: "baseline", gap: "6px" }}>
-                  <span style={{ fontSize: "36px", fontWeight: "700", color: "#111827", lineHeight: "1", letterSpacing: "-0.02em" }}>{kpiData.prazoMedio.toFixed(0)}</span>
-                  <span style={{ fontSize: "16px", color: "#6b7280", fontWeight: "600" }}>dias</span>
-                </div>
-                <div style={{ fontSize: "13px", color: "#6b7280", marginTop: "12px", fontWeight: "500" }}>
-                  Em aberto, ponderado pelo valor
-                </div>
-              </div>
-
+              <DashboardInsights processedRows={rowsFilteredByDate} insightFilter={insightFilter} setInsightFilter={setInsightFilter} setBorderoFilter={setBorderoFilter} setDctoFilter={setDctoFilter} hideValues={hideValues} />
+              
+              <EvolutionCharts rows={evolutionRows} dateFilter={dateFilter} setDateFilter={handleSetDateFilter} setBorderoFilter={setBorderoFilter} setDctoFilter={setDctoFilter} hideValues={hideValues} />
             </div>
           )}
-          
-          <DashboardInsights processedRows={rowsFilteredByDate} insightFilter={insightFilter} setInsightFilter={setInsightFilter} setBorderoFilter={setBorderoFilter} setDctoFilter={setDctoFilter} />
-          
-          <EvolutionCharts rows={evolutionRows} dateFilter={dateFilter} setDateFilter={handleSetDateFilter} setBorderoFilter={setBorderoFilter} setDctoFilter={setDctoFilter} />
-        </div>
-      )}
 
-      <div style={{ marginTop: "16px", position: "relative", minHeight: loading ? "150px" : "auto" }}>
-        {loading && (
-          <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(255,255,255,0.7)", zIndex: 20, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "8px" }}>
-            <div style={{ padding: "10px 20px", background: "#4f46e5", color: "#fff", borderRadius: "8px", fontSize: "14px", fontWeight: "600", boxShadow: "0 4px 6px rgba(0,0,0,0.1)" }}>A carregar dados...</div>
-          </div>
-        )}
-        
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: "16px", flexWrap: "wrap" }}>
-          {borderoFilter && <div style={{ marginBottom: "12px", fontSize: "13px", color: "#4f46e5", fontWeight: "600", textAlign: "right" }}>Filtro de Borderô ativo: {borderoFilter.value}. Clique no número na tabela para limpar.</div>}
-          {dctoFilter && <div style={{ marginBottom: "12px", fontSize: "13px", color: "#0ea5e9", fontWeight: "600", textAlign: "right" }}>Filtro de Documento ativo (Raiz: {String(dctoFilter.value).split(/[-/]/)[0].trim()}). Clique no número na tabela para limpar.</div>}
-        </div>
+          <div style={{ position: "relative", minHeight: loading ? "150px" : "auto" }}>
+            {loading && (
+              <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(255,255,255,0.7)", zIndex: 20, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "8px" }}>
+                <div style={{ padding: "10px 20px", background: "#4f46e5", color: "#fff", borderRadius: "8px", fontSize: "14px", fontWeight: "600", boxShadow: "0 4px 6px rgba(0,0,0,0.1)" }}>A carregar dados...</div>
+              </div>
+            )}
+            
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "16px", flexWrap: "wrap" }}>
+              {borderoFilter && <div style={{ marginBottom: "12px", fontSize: "13px", color: "#4f46e5", fontWeight: "600", textAlign: "right" }}>Filtro de Borderô ativo: {borderoFilter.value}. Clique no número na tabela para limpar.</div>}
+              {dctoFilter && <div style={{ marginBottom: "12px", fontSize: "13px", color: "#0ea5e9", fontWeight: "600", textAlign: "right" }}>Filtro de Documento ativo (Raiz: {String(dctoFilter.value).split(/[-/]/)[0].trim()}). Clique no número na tabela para limpar.</div>}
+            </div>
 
-        {(!hasAnyFilter && !loading) ? (
-          <div style={{ padding: "40px 20px", textAlign: "center", color: "#6b7280", background: "#fff", borderRadius: "12px", border: "1px dashed #d1d5db", boxShadow: "0 1px 3px 0 rgba(0,0,0,0.1)" }}>
-            <p style={{ margin: 0, fontSize: "15px", fontWeight: "500" }}>Tabela oculta na Visão Geral para otimizar o desempenho.</p>
-            <p style={{ margin: "8px 0 0 0", fontSize: "13px" }}>Selecione um <strong>Cedente</strong>, <strong>Sacado</strong> ou filtre para carregar os registos detalhados.</p>
+            {(!hasAnyFilter && !loading) ? (
+              <div style={{ padding: "40px 20px", textAlign: "center", color: "#6b7280", background: "#fff", borderRadius: "12px", border: "1px dashed #d1d5db", boxShadow: "0 1px 3px 0 rgba(0,0,0,0.1)" }}>
+                <p style={{ margin: 0, fontSize: "15px", fontWeight: "500" }}>Tabela oculta na Visão Geral para otimizar o desempenho.</p>
+                <p style={{ margin: "8px 0 0 0", fontSize: "13px" }}>Selecione um <strong>Cedente</strong>, <strong>Sacado</strong> ou filtre na barra lateral para carregar os registos detalhados.</p>
+              </div>
+            ) : (
+              (!loading || rowsParaTabela.length > 0) && (
+                <SimpleTable rows={rowsParaTabela} clienteSelecionado={clienteSelecionado} sacadoSelecionado={sacadoSelecionado} dateFilter={dateFilter} borderoFilter={borderoFilter} setBorderoFilter={setBorderoFilter} dctoFilter={dctoFilter} setDctoFilter={setDctoFilter} setDateFilter={handleSetDateFilter} setInsightFilter={setInsightFilter} setClienteSelecionado={setClienteSelecionado} setSacadoSelecionado={setSacadoSelecionado} hideValues={hideValues} />
+              )
+            )}
           </div>
-        ) : (
-          (!loading || rowsParaTabela.length > 0) && (
-            <SimpleTable rows={rowsParaTabela} clienteSelecionado={clienteSelecionado} sacadoSelecionado={sacadoSelecionado} dateFilter={dateFilter} borderoFilter={borderoFilter} setBorderoFilter={setBorderoFilter} dctoFilter={dctoFilter} setDctoFilter={setDctoFilter} setDateFilter={handleSetDateFilter} setInsightFilter={setInsightFilter} setClienteSelecionado={setClienteSelecionado} setSacadoSelecionado={setSacadoSelecionado} />
-          )
-        )}
-      </div>
+        </div>
+      </main>
     </div>
   );
 }

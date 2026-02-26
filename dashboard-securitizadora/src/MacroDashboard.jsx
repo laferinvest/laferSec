@@ -370,15 +370,24 @@ export default function MacroDashboard() {
     const rateKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'tx.efet' || k.toLowerCase().includes('tx.efet') || k.toLowerCase().includes('tx efet'));
     const emisKey = Object.keys(firstRow).find(k => k.toLowerCase().includes('emis'));
     const vctoKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'vcto' || (k.toLowerCase().includes('vcto') && !k.toLowerCase().includes('vl')));
+    const desagioKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'desagio' || k.toLowerCase() === 'deságio');
 
     const borderoMap = new Map();
+    const desagioBorderoSet = new Set();
     let sumFaceTotal = 0;
     let sumPrazoWeighted = 0;
     let countTitulos = 0;
+    let sumDesagioTotal = 0;
 
     kpiRows.forEach((r, idx) => {
       const bNum = (borderoKey && r[borderoKey]) ? String(r[borderoKey]).trim() : `avulso_${idx}`; 
       const val = valKey ? (Number(r[valKey]) || 0) : 0;
+      const desagioVal = desagioKey ? (Number(r[desagioKey]) || 0) : 0;
+
+      if (!desagioBorderoSet.has(bNum)) {
+        desagioBorderoSet.add(bNum);
+        sumDesagioTotal += desagioVal;
+      }
       
       const rawRate = rateKey ? r[rateKey] : null;
       const hasRateVal = rawRate !== null && rawRate !== undefined && String(rawRate).trim() !== "";
@@ -423,7 +432,8 @@ export default function MacroDashboard() {
       taxaMedia: baseCalculoTaxa > 0 ? (sumTaxaWeighted / baseCalculoTaxa) : 0,
       baseCalculo: baseCalculoTaxa,
       valorMedio: countTitulos > 0 ? sumFaceTotal / countTitulos : 0,
-      prazoMedio: sumFaceTotal > 0 ? sumPrazoWeighted / sumFaceTotal : 0
+      prazoMedio: sumFaceTotal > 0 ? sumPrazoWeighted / sumFaceTotal : 0,
+      desagioTotal: sumDesagioTotal
     };
   }, [detailedRows, openRows]);
 
@@ -637,6 +647,24 @@ export default function MacroDashboard() {
                 </div>
                 <div style={{ fontSize: "13px", color: "#6b7280", marginTop: "12px", fontWeight: "500" }}>
                   Ponderado pelo valor de face
+                </div>
+              </div>
+
+              <div style={{ background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #f59e0b", padding: "24px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
+                  <div style={{ background: "rgba(245, 158, 11, 0.1)", padding: "6px", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <svg width="18" height="18" fill="none" stroke="#f59e0b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                      <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
+                      <line x1="7" y1="7" x2="7.01" y2="7"></line>
+                    </svg>
+                  </div>
+                  <h3 style={{ margin: 0, fontSize: "12px", fontWeight: "700", color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em" }}>Deságio Total</h3>
+                </div>
+                <div style={{ display: "flex", alignItems: "baseline", gap: "4px" }}>
+                  <span style={{ fontSize: "36px", fontWeight: "700", color: "#111827", lineHeight: "1", letterSpacing: "-0.02em" }}>{formatarMoeda(kpiData.desagioTotal)}</span>
+                </div>
+                <div style={{ fontSize: "13px", color: "#6b7280", marginTop: "12px", fontWeight: "500" }}>
+                  Total apurado na visualização {selectedSlice && <span style={{color: "#4f46e5", background: "#e0e7ff", padding: "2px 6px", borderRadius: "4px", marginLeft: "4px", fontSize: "11px", fontWeight: "700"}}>FILTRO ATIVO</span>}
                 </div>
               </div>
 
