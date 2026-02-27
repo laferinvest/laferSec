@@ -1814,7 +1814,7 @@ return (
                     <h3 style={{ margin: 0, fontSize: "11px", fontWeight: "700", color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "normal" }}>Taxa Média Ponderada</h3>
                   </div>
                   <div style={{ display: "flex", alignItems: "baseline", gap: "4px" }}>
-                    <span style={{ fontSize: "28px", fontWeight: "700", color: "#111827", lineHeight: "1", letterSpacing: "-0.02em", wordBreak: "break-word" }}>{kpiData.taxaMedia.toFixed(2).replace('.', ',')}%</span>
+                    <span style={{ fontSize: "28px", fontWeight: "700", color: "#111827", lineHeight: "1", letterSpacing: "-0.02em", wordBreak: "break-word" }}>{kpiData.taxaMedia.toFixed(2).replace('.', ',')}% a.m.</span>
                   </div>
                   <div style={{ fontSize: "12px", color: "#6b7280", marginTop: "12px", fontWeight: "500", whiteSpace: "normal" }}>
                     Base: <span style={{color: "#374151", fontWeight: "600"}}>{fmtM(kpiData.baseCalculo)}</span>
