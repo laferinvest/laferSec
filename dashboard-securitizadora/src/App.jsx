@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { supabase } from "./supabaseClient";
 import MicroDashboard from "./MicroDashboard";
 import MacroDashboard from "./MacroDashboard";
-import UploadData from "./UploadData"; 
+import UploadData from "./UploadData";
+import NFeConverter from "./NFeConverter"; 
 
 export default function App() {
   const [session, setSession] = useState(null);
@@ -61,7 +62,15 @@ export default function App() {
     transition: "margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1), margin-right 0.3s cubic-bezier(0.4, 0, 0.2, 1)"
   };
 
-  const isAuthorized = session?.user?.email === 'lafersec@lafersec.com.br';
+  const allowedEmails = [
+    'daniel@adm.com.br',
+    'kesia@adm.com.br',
+    'eliene@adm.com.br',
+    'laerte@adm.com.br'
+  ];
+
+  // Verifica se o e-mail do usuário logado está dentro da lista
+  const isAuthorized = allowedEmails.includes(session?.user?.email);
 
   return (
     <div style={{ fontFamily: "'Inter', system-ui, Arial, sans-serif", minHeight: "100vh", width: "100%", backgroundColor: "#f3f4f6", padding: "40px 0", boxSizing: "border-box" }}>
@@ -127,9 +136,11 @@ export default function App() {
                 Dados Macro (Visão de Risco)
               </button>
               
-              {/* NOVO BOTÃO AQUI */}
               <button onClick={() => { setActiveTab('upload'); setIsSidebarOpen(false); }} style={getTabStyle(activeTab === 'upload')}>
                 Atualizar Base de Dados
+              </button>
+              <button onClick={() => { setActiveTab('nfe'); setIsSidebarOpen(false); }} style={getTabStyle(activeTab === 'nfe')}>
+                Análise de NF
               </button>
             </div>
             </div>
@@ -143,6 +154,9 @@ export default function App() {
             )}
             {activeTab === 'upload' && (
               <UploadData />
+            )}
+            {activeTab === 'nfe' && (
+              <NFeConverter />
             )}
           </div>
         )}
