@@ -256,7 +256,7 @@ function Toggle({
 // CHAVE DA API MAPS
 // =============================================================================
 
-const MAPS_API_KEY = "AIzaSyDtvMIkV-RI1mOR3jg6Ux-7guXRRu72IhA";
+const MAPS_API_KEY = import.meta.env.VITE_MAPS_API_KEY;
 
 function loadGoogleMaps(apiKey) {
   return new Promise((resolve, reject) => {
