@@ -663,7 +663,7 @@ export default function NFeConverter() {
         const { data, error } = await supabase.functions.invoke("processar-nfe", {
           body: { pdfBase64: base64Pdf },
         });
-
+        
         if (error) throw new Error(error.message);
         if (data.error) throw new Error(data.error);
 
