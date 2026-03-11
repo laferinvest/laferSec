@@ -735,6 +735,25 @@ export default function NFeConverter() {
     if (input) input.value = "";
   };
 
+  useEffect(() => {
+    if (resultados.length > 0 && pesquisarCenprot && extensaoLaferInstalada) {
+      // Verifica se todos os arquivos que deram 'ok' já receberam o objeto 'protesto'
+      const todasConsultasFinalizadas = resultados.every(
+        (r) => !r.ok || r.protesto !== null
+      );
+
+      if (todasConsultasFinalizadas) {
+        const erros = resultados.filter((r) => !r.ok).length;
+        setStatus(
+          erros === 0
+            ? `✅ ${resultados.length} arquivo(s) processado(s) e consultado(s) com sucesso!`
+            : `⚠️ Consultas concluídas: ${resultados.length - erros} sucesso(s), ${erros} erro(s).`
+        );
+      }
+    }
+  }, [resultados, pesquisarCenprot, extensaoLaferInstalada]);
+  // --------------------------------
+
   const isDisabled = loading || files.length === 0;
 
   return (
