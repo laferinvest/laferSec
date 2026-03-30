@@ -905,7 +905,7 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
 
     const seenBorderosDesagio = new Set();
     const borderoMapTaxa = new Map();
-
+    const borderoMapTicket = new Map();
     const firstRow = sortedRows[0];
     const borderoKey = Object.keys(firstRow).find(k => k.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes("border"));
     const valKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'entrada' || (k.toLowerCase().includes('valor') && !k.toLowerCase().includes('pgto')));
@@ -917,6 +917,11 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
     sortedRows.forEach((row, idx) => {
       const bNum = (borderoKey && row[borderoKey]) ? String(row[borderoKey]).trim() : `avulso_${idx}`; 
       const val = valKey ? (Number(row[valKey]) || 0) : 0;
+
+      if (!borderoMapTicket.has(bNum)) {
+        borderoMapTicket.set(bNum, 0);
+      }
+      borderoMapTicket.set(bNum, borderoMapTicket.get(bNum) + val);
 
       f += val;
       if (val > 0) {
@@ -969,7 +974,7 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
       totalDesagio: d,
       totalEncargos: enc,
       taxaMedia: totalValueTaxa > 0 ? (weightedRateSum / totalValueTaxa) : 0,
-      valorMedio: countTitulos > 0 ? f / countTitulos : 0,
+      valorMedio: borderoMapTicket.size > 0 ? f / borderoMapTicket.size : 0,
       prazoMedio: f > 0 ? (sumPrazoWeighted / f) : 0 
     };
   }, [sortedRows]);
@@ -1390,8 +1395,34 @@ export default function MicroDashboard({ session, onSidebarToggle, hideValues, s
     return filtered;
   }, [rowsFilteredByDate, insightFilter, borderoFilter, dctoFilter]);
 
+  const rowsParaRiscoAtual = useMemo(() => {
+  let filtered = rowsFilteredByMode;
+
+  if (insightFilter) filtered = filtered.filter(r => r._status === insightFilter);
+  if (borderoFilter) filtered = filtered.filter(r => r[borderoFilter.key] === borderoFilter.value);
+  if (dctoFilter) {
+    const baseTarget = String(dctoFilter.value).split(/[-/]/)[0].trim();
+    filtered = filtered.filter(r => String(r[dctoFilter.key] || "").split(/[-/]/)[0].trim() === baseTarget);
+  }
+
+  return filtered.filter(r => ['aVencer', 'atraso'].includes(r._status));
+}, [rowsFilteredByMode, insightFilter, borderoFilter, dctoFilter]);
+
+const riscoAtual = useMemo(() => {
+  if (!rowsParaRiscoAtual || rowsParaRiscoAtual.length === 0) return 0;
+
+  const firstRow = rowsParaRiscoAtual[0];
+  const valKey = Object.keys(firstRow).find(
+    k => k.toLowerCase() === 'entrada' || (k.toLowerCase().includes('valor') && !k.toLowerCase().includes('pgto'))
+  );
+
+  if (!valKey) return 0;
+
+  return rowsParaRiscoAtual.reduce((acc, row) => acc + (Number(row[valKey]) || 0), 0);
+}, [rowsParaRiscoAtual]);
+
 const kpiData = useMemo(() => {
-    if (!rowsParaTabela || rowsParaTabela.length === 0) return { taxaMedia: 0, baseCalculo: 0, valorMedio: 0, prazoMedio: 0, desagioTotal: 0, encargosTotal: 0, diasOperacao: 0 };
+    if (!rowsParaTabela || rowsParaTabela.length === 0) return { riscoAtual: 0, taxaMedia: 0, baseCalculo: 0, valorMedio: 0, prazoMedio: 0, desagioTotal: 0, encargosTotal: 0, diasOperacao: 0 };
 
     const borderoMap = new Map();
     let sumFaceTotal = 0;
@@ -1419,6 +1450,7 @@ const kpiData = useMemo(() => {
     rowsParaTabela.forEach((r, idx) => {
       const bNum = (borderoKey && r[borderoKey]) ? String(r[borderoKey]).trim() : `avulso_${idx}`; 
       const val = valKey ? (Number(r[valKey]) || 0) : 0;
+
       const vlPgto = vlPgtoKey ? (Number(r[vlPgtoKey]) || 0) : 0;
       
       const rawRate = rateKey ? r[rateKey] : null;
@@ -1488,9 +1520,11 @@ const kpiData = useMemo(() => {
     }
 
     return {
+      riscoAtual,
       taxaMedia: baseCalculoTaxa > 0 ? (sumTaxaWeighted / baseCalculoTaxa) : 0,
       baseCalculo: baseCalculoTaxa,
-      valorMedio: countTitulos > 0 ? sumFaceTotal / countTitulos : 0,
+      qtdBorderos: borderoMap.size,
+      valorMedio: borderoMap.size > 0 ? sumFaceTotal / borderoMap.size : 0,
       prazoMedio: sumFaceTotal > 0 ? sumPrazoWeighted / sumFaceTotal : 0,
       desagioTotal: totalDesagio,
       encargosTotal: totalEncargos,
@@ -1755,9 +1789,41 @@ return (
           {/* Top Bar de Controlo de View */}
           <div style={{ background: "#fff", padding: "16px 24px", borderRadius: "12px", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)", border: "1px solid #e5e7eb", display: "flex", justifyContent: "space-between", flexWrap: "wrap", alignItems: "center", gap: "16px" }}>
             <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
-              <button onClick={() => { setViewMode('all'); setInsightFilter(null); handleSetDateFilter({ type: 'emis', start: '', end: '' }); setBorderoFilter(null); setDctoFilter(null); }} style={getTabStyle(viewMode === 'all')}>Visão Geral</button>
-              <button onClick={() => { setViewMode(prev => prev === 'finalized' ? 'all' : 'finalized'); setInsightFilter(null); handleSetDateFilter({ type: 'emis', start: '', end: '' }); setBorderoFilter(null); setDctoFilter(null); }} style={getTabStyle(viewMode === 'finalized')}>Operações Já Finalizadas</button>
-              <button onClick={() => { setViewMode(prev => prev === 'open' ? 'all' : 'open'); setInsightFilter(null); handleSetDateFilter({ type: 'emis', start: '', end: '' }); setBorderoFilter(null); setDctoFilter(null); }} style={getTabStyle(viewMode === 'open')}>Mostrar Em Aberto</button>
+            <button
+              onClick={() => {
+                setViewMode('all');
+                setInsightFilter(null);
+                setBorderoFilter(null);
+                setDctoFilter(null);
+              }}
+              style={getTabStyle(viewMode === 'all')}
+            >
+              Visão Geral
+            </button>
+
+            <button
+              onClick={() => {
+                setViewMode(prev => prev === 'finalized' ? 'all' : 'finalized');
+                setInsightFilter(null);
+                setBorderoFilter(null);
+                setDctoFilter(null);
+              }}
+              style={getTabStyle(viewMode === 'finalized')}
+            >
+              Operações Já Finalizadas
+            </button>
+
+            <button
+              onClick={() => {
+                setViewMode(prev => prev === 'open' ? 'all' : 'open');
+                setInsightFilter(null);
+                setBorderoFilter(null);
+                setDctoFilter(null);
+              }}
+              style={getTabStyle(viewMode === 'open')}
+            >
+              Mostrar Em Aberto
+            </button>
               {/* Botão Olho — esconde/mostra valores monetários */}
               <button
                 onClick={() => setHideValues(v => !v)}
@@ -1793,18 +1859,41 @@ return (
             {rowsFilteredByMode.length > 0 && (
             <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
               {/* NOVO BANNER DE KPIs: 4 COLUNAS E DESÁGIO ADICIONADO */}
-              {rowsParaTabela.length > 0 && kpiData.baseCalculo > 0 && (
+              {rowsParaTabela.length > 0 && (
                 <div style={{
                   background: "#d1d5db", 
                   borderRadius: "12px",
                   display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", /* Aqui permite empilhar em ecrãs menores */
+                  gridTemplateColumns: "repeat(auto-fit, minmax(max(260px, calc((100% - 3 * 1px) / 4)), 1fr))",
                   gap: "1px",
                   boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)", 
                   border: "1px solid #d1d5db",
                   overflow: "hidden"
                 }}>
-                
+
+                {/* INFO 0: Risco Atual */}
+                <div style={{ background: "linear-gradient(180deg, #ffffff 0%, #ffffff 100%)", borderTop: "3px solid #16a34a", padding: "20px 16px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
+                    <div style={{ background: "rgba(22, 163, 74, 0.10)", padding: "6px", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <svg width="16" height="16" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                        <path d="M12 1v22"></path>
+                        <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                      </svg>
+                    </div>
+                    <h3 style={{ margin: 0, fontSize: "11px", fontWeight: "700", color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "normal" }}>
+                      Risco Atual
+                    </h3>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: "4px" }}>
+                    <span style={{ fontSize: "28px", fontWeight: "700", color: "#111827", lineHeight: "1", letterSpacing: "-0.02em", wordBreak: "break-word" }}>
+                      {fmtM(riscoAtual)}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: "12px", color: "#6b7280", marginTop: "12px", fontWeight: "500", whiteSpace: "normal" }}>
+                    Títulos em aberto na seleção
+                  </div>
+                </div>
+
                 {/* INFO 1: Taxa Média */}
                 <div style={{ background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #4f46e5", padding: "20px 16px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
@@ -1832,9 +1921,9 @@ return (
                   <div style={{ display: "flex", alignItems: "baseline", gap: "4px" }}>
                     <span style={{ fontSize: "28px", fontWeight: "700", color: "#111827", lineHeight: "1", letterSpacing: "-0.02em", wordBreak: "break-word" }}>{fmtM(kpiData.valorMedio)}</span>
                   </div>
-                  <div style={{ fontSize: "12px", color: "#6b7280", marginTop: "12px", fontWeight: "500", whiteSpace: "normal" }}>
-                    Por título na visualização
-                  </div>
+                <div style={{ fontSize: "12px", color: "#6b7280", marginTop: "12px", fontWeight: "500", whiteSpace: "normal" }}>
+                  Borderôs analisados: <span style={{ color: "#374151", fontWeight: "600" }}>{kpiData.qtdBorderos}</span>
+                </div>
                 </div>
 
                 {/* INFO 3: Prazo Médio */}
@@ -1854,25 +1943,60 @@ return (
                   </div>
                 </div>
 
-{/* INFO 4: Deságio Total */}
-                <div style={{ background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #f59e0b", padding: "20px 16px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
-                    <div style={{ background: "rgba(245, 158, 11, 0.1)", padding: "6px", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <svg width="16" height="16" fill="none" stroke="#f59e0b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg>
-                    </div>
-                    <h3 style={{ margin: 0, fontSize: "11px", fontWeight: "700", color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "normal" }}>Deságio + Encargos</h3>
+              {/* INFO 5: Deságio Total */}
+              <div style={{ background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #f59e0b", padding: "20px 16px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
+                  <div style={{ background: "rgba(245, 158, 11, 0.1)", padding: "6px", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <svg width="16" height="16" fill="none" stroke="#f59e0b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                      <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
+                      <line x1="7" y1="7" x2="7.01" y2="7"></line>
+                    </svg>
                   </div>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: "4px" }}>
-                    <span style={{ fontSize: "28px", fontWeight: "700", color: "#111827", lineHeight: "1", letterSpacing: "-0.02em", wordBreak: "break-word" }}>{fmtM(kpiData.desagioTotal + kpiData.encargosTotal)}</span>
-                  </div>
-                  <div style={{ fontSize: "12px", color: "#6b7280", marginTop: "12px", fontWeight: "500", whiteSpace: "normal" }}>
-                    Apurado em <span style={{color: "#374151", fontWeight: "600"}}>
-                      {kpiData.diasOperacao > 90 
-                        ? (kpiData.diasOperacao / 30).toFixed(1).replace('.', ',') 
-                        : kpiData.diasOperacao}
-                    </span> {kpiData.diasOperacao > 90 ? "meses" : "dias"}
-                  </div>
+                  <h3 style={{ margin: 0, fontSize: "11px", fontWeight: "700", color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "normal" }}>
+                    Deságio Total
+                  </h3>
                 </div>
+                <div style={{ display: "flex", alignItems: "baseline", gap: "4px" }}>
+                  <span style={{ fontSize: "28px", fontWeight: "700", color: "#111827", lineHeight: "1", letterSpacing: "-0.02em", wordBreak: "break-word" }}>
+                    {fmtM(kpiData.desagioTotal)}
+                  </span>
+                </div>
+                <div style={{ fontSize: "12px", color: "#6b7280", marginTop: "12px", fontWeight: "500", whiteSpace: "normal" }}>
+                  Apurado em <span style={{color: "#374151", fontWeight: "600"}}>
+                    {kpiData.diasOperacao > 90
+                      ? (kpiData.diasOperacao / 30).toFixed(1).replace('.', ',')
+                      : kpiData.diasOperacao}
+                  </span> {kpiData.diasOperacao > 90 ? "meses" : "dias"}
+                </div>
+              </div>
+
+              {/* INFO 6: Encargos Totais */}
+              <div style={{ background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #ea580c", padding: "20px 16px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
+                  <div style={{ background: "rgba(234, 88, 12, 0.1)", padding: "6px", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <svg width="16" height="16" fill="none" stroke="#ea580c" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                      <path d="M12 1v22"></path>
+                      <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                    </svg>
+                  </div>
+                  <h3 style={{ margin: 0, fontSize: "11px", fontWeight: "700", color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "normal" }}>
+                    Encargos Totais
+                  </h3>
+                </div>
+                <div style={{ display: "flex", alignItems: "baseline", gap: "4px" }}>
+                  <span style={{ fontSize: "28px", fontWeight: "700", color: "#111827", lineHeight: "1", letterSpacing: "-0.02em", wordBreak: "break-word" }}>
+                    {fmtM(kpiData.encargosTotal)}
+                  </span>
+                </div>
+                
+                <div style={{ fontSize: "12px", color: "#6b7280", marginTop: "12px", fontWeight: "500", whiteSpace: "normal" }}>
+                  Apurado em <span style={{color: "#374151", fontWeight: "600"}}>
+                    {kpiData.diasOperacao > 90
+                      ? (kpiData.diasOperacao / 30).toFixed(1).replace('.', ',')
+                      : kpiData.diasOperacao}
+                  </span> {kpiData.diasOperacao > 90 ? "meses" : "dias"}
+                </div>
+              </div>
 
               </div>
               )}
