@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "./supabaseClient";
 import * as XLSX from "xlsx";
 
@@ -35,11 +35,224 @@ const limpaChave = (val) => {
   return s;
 };
 
+const formatarMoeda = (valor) => {
+  const numero = Number(valor || 0);
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  }).format(numero);
+};
+
+const getTodayIso = () => {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+};
+
+const CEDENTES_IGNORADOS = ["12 -", "23 -", "2 -"];
+
+function calcularCreditoEmAbertoCedentesExcluidosPorMes(rows) {
+  if (!rows || rows.length === 0) return [];
+
+  const firstRow = rows[0];
+
+  const emisKey = Object.keys(firstRow).find(
+    (k) => k.toLowerCase().includes("emis")
+  );
+  const pgtoKey = Object.keys(firstRow).find(
+    (k) => k.toLowerCase() === "pgto" ||
+      (k.toLowerCase().includes("pgto") && !k.toLowerCase().includes("vl"))
+  );
+  const entradaKey = Object.keys(firstRow).find(
+    (k) => k.toLowerCase() === "entrada" || k.toLowerCase().includes("valor")
+  );
+
+  if (!emisKey || !entradaKey) {
+    console.log("Não achei as chaves necessárias:", { emisKey, pgtoKey, entradaKey });
+    return [];
+  }
+
+  const cedentesExcluidos = CEDENTES_IGNORADOS;
+
+  // descobre faixa de meses com base na emissão
+  const emisDates = rows
+    .map((r) => r[emisKey])
+    .filter(Boolean)
+    .map((d) => new Date(String(d).split("T")[0] + "T00:00:00"))
+    .filter((d) => !isNaN(d));
+
+  if (emisDates.length === 0) return [];
+
+  const minDate = new Date(Math.min(...emisDates));
+  const cursor = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
+  const hoje = new Date();
+  const end = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+
+  const resultado = [];
+
+  while (cursor <= end) {
+    const ano = cursor.getFullYear();
+    const mes = cursor.getMonth();
+
+    // corte = primeiro dia do mês seguinte
+    const dataCorte = new Date(ano, mes + 1, 1);
+
+    const porCedente = {};
+
+    for (const r of rows) {
+      const cliente = String(r.Cliente || "").trim();
+
+      const ehExcluido = cedentesExcluidos.some((prefixo) =>
+        cliente.startsWith(prefixo)
+      );
+      if (!ehExcluido) continue;
+
+      const emisVal = r[emisKey];
+      if (!emisVal) continue;
+
+      const dtEmis = new Date(String(emisVal).split("T")[0] + "T00:00:00");
+      if (isNaN(dtEmis)) continue;
+
+      // tem que ter sido emitido antes de 01 do mês seguinte
+      if (dtEmis >= dataCorte) continue;
+
+      const pgtoVal = pgtoKey ? r[pgtoKey] : null;
+      let emAberto = false;
+
+      if (!pgtoVal || String(pgtoVal).trim() === "") {
+        emAberto = true;
+      } else {
+        const dtPgto = new Date(String(pgtoVal).split("T")[0] + "T00:00:00");
+        if (isNaN(dtPgto) || dtPgto >= dataCorte) {
+          emAberto = true;
+        }
+      }
+
+      if (!emAberto) continue;
+
+      const valor = Number(r[entradaKey] || 0);
+
+      if (!porCedente[cliente]) {
+        porCedente[cliente] = 0;
+      }
+
+      porCedente[cliente] += valor;
+    }
+
+    resultado.push({
+      mes: `${ano}-${String(mes + 1).padStart(2, "0")}`,
+      dataCorte: dataCorte.toISOString().split("T")[0],
+      porCedente,
+    });
+
+    cursor.setMonth(cursor.getMonth() + 1);
+  }
+
+  return resultado;
+}
+
+
+function cedenteValido(cedente) {
+  if (!cedente) return false;
+  return !CEDENTES_IGNORADOS.some((ignorado) =>
+    String(cedente).trim().startsWith(ignorado)
+  );
+}
+
+function calcularRiscoAtualIgualMicro(rows) {
+  if (!rows || rows.length === 0) return 0;
+
+  const firstRow = rows[0];
+  const vctoKey = Object.keys(firstRow).find(
+    (k) => k.toLowerCase() === "vcto" || (k.toLowerCase().includes("vcto") && !k.toLowerCase().includes("vl"))
+  );
+  const pgtoKey = Object.keys(firstRow).find(
+    (k) => k.toLowerCase() === "pgto" || (k.toLowerCase().includes("pgto") && !k.toLowerCase().includes("vl"))
+  );
+  const statusKey = Object.keys(firstRow).find(
+    (k) => k.toLowerCase() === "status" || k.toLowerCase() === "estado"
+  );
+  const entradaKey = Object.keys(firstRow).find(
+    (k) => k.toLowerCase() === "entrada" || k.toLowerCase().includes("valor")
+  );
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  let riscoAtual = 0;
+
+  for (const r of rows) {
+    if (!cedenteValido(r.Cliente)) continue;
+
+    let status = "invalido";
+    const vctoVal = vctoKey ? r[vctoKey] : null;
+    const pgtoVal = pgtoKey ? r[pgtoKey] : null;
+    const statusVal = statusKey ? String(r[statusKey] || "").trim().toUpperCase() : "";
+
+    if (statusVal === "REC" || statusVal.includes("REC")) {
+      status = "recompra";
+    } else if (vctoVal) {
+      const effectiveVcto = new Date(String(vctoVal).split("T")[0] + "T00:00:00");
+
+      if (effectiveVcto.getDay() === 6) effectiveVcto.setDate(effectiveVcto.getDate() + 2);
+      else if (effectiveVcto.getDay() === 0) effectiveVcto.setDate(effectiveVcto.getDate() + 1);
+
+      if (pgtoVal && String(pgtoVal).trim() !== "") {
+        const pgtoDate = new Date(String(pgtoVal).split("T")[0] + "T00:00:00");
+        status = pgtoDate <= effectiveVcto ? "liquidado" : "liquidadoAtraso";
+      } else {
+        status = effectiveVcto < today ? "atraso" : "aVencer";
+      }
+    }
+
+    if (status === "aVencer" || status === "atraso") {
+      riscoAtual += Number(r[entradaKey] || 0);
+    }
+  }
+
+  return riscoAtual;
+}
+
+
+
+const cardStyle = {
+  background: "#fff",
+  border: "1px solid #e5e7eb",
+  borderRadius: "12px",
+  padding: "24px",
+  boxShadow: "0 8px 20px rgba(0,0,0,0.06)",
+};
+
+const inputStyle = {
+  width: "100%",
+  padding: "12px",
+  borderRadius: "8px",
+  border: "1px solid #d1d5db",
+  boxSizing: "border-box",
+  fontSize: "14px",
+  outline: "none",
+  background: "#fff",
+};
+
 export default function UploadData() {
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("");
   const [progress, setProgress] = useState("");
+
+  const [snapshotLoading, setSnapshotLoading] = useState(false);
+  const [snapshotStatus, setSnapshotStatus] = useState("");
+  const [snapshotRiscoAtual, setSnapshotRiscoAtual] = useState(0);
+  const [snapshotLastUpdated, setSnapshotLastUpdated] = useState("");
+  const [dinheiroBanco, setDinheiroBanco] = useState("");
+  const [compraDebentures, setCompraDebentures] = useState("0");
+
+  const [snapshotHistorico, setSnapshotHistorico] = useState([]);
+  const [snapshotHistoricoLoading, setSnapshotHistoricoLoading] = useState(false);
+
+  const snapshotDate = useMemo(() => getTodayIso(), []);
 
   const readFileAsArrayBuffer = (file) => {
     return new Promise((resolve, reject) => {
@@ -48,6 +261,93 @@ export default function UploadData() {
       reader.onerror = (e) => reject(e);
       reader.readAsArrayBuffer(file);
     });
+  };
+
+  const carregarRiscoAtualSnapshot = async () => {
+    setSnapshotStatus("");
+    try {
+      const { data, error } = await supabase.from("secInfo").select("*");
+      if (error) throw error;
+
+      const recebiveis = calcularRiscoAtualIgualMicro(data || []);
+      setSnapshotRiscoAtual(recebiveis);
+      setSnapshotLastUpdated(new Date().toLocaleString("pt-BR"));
+
+      // const resultadoCedentesExcluidos =
+      //   calcularCreditoEmAbertoCedentesExcluidosPorMes(data || []);
+
+      // resultadoCedentesExcluidos.forEach((item) => {
+      //   console.log(`\nMÊS BASE: ${item.mes} | CORTE: ${item.dataCorte}`);
+      //   console.table(
+      //     Object.entries(item.porCedente).map(([cedente, valor]) => ({
+      //       cedente,
+      //       credito_em_aberto: valor,
+      //     }))
+      //   );
+      // });
+    } catch (err) {
+      console.error(err);
+      setSnapshotStatus(`❌ Não foi possível calcular o risco atual: ${err.message}`);
+    }
+  };
+
+  useEffect(() => {
+    carregarRiscoAtualSnapshot();
+    carregarHistoricoSnapshots();
+  }, []);
+
+  const carregarHistoricoSnapshots = async () => {
+  setSnapshotHistoricoLoading(true);
+  try {
+    const { data, error } = await supabase
+      .from("secSnapshots")
+      .select('*')
+      .order("Data", { ascending: false });
+
+    if (error) throw error;
+    setSnapshotHistorico(data || []);
+  } catch (err) {
+    console.error(err);
+    setSnapshotStatus(`❌ Não foi possível carregar o histórico de snapshots: ${err.message}`);
+  } finally {
+    setSnapshotHistoricoLoading(false);
+  }
+};
+
+  const criarSnapshot = async () => {
+    const dinheiroBancoNum = cleanNumber(dinheiroBanco);
+    const compraDebenturesNum = cleanNumber(compraDebentures) ?? 0;
+
+    if (dinheiroBancoNum === null) {
+      setSnapshotStatus("❌ Informe o valor de Dinheiro Banco.");
+      return;
+    }
+
+    setSnapshotLoading(true);
+    setSnapshotStatus("");
+
+    try {
+      const payload = {
+        Data: snapshotDate,
+        Recebiveis: Number(snapshotRiscoAtual || 0),
+        "Dinheiro Banco": dinheiroBancoNum,
+        "Compra Debentures": compraDebenturesNum,
+      };
+
+      const { error } = await supabase.from("secSnapshots").insert(payload);
+      if (error) throw error;
+
+      setSnapshotStatus("✅ Snapshot criado com sucesso!");
+      setDinheiroBanco("");
+      setCompraDebentures("0");
+      await carregarRiscoAtualSnapshot();
+      await carregarHistoricoSnapshots();
+    } catch (err) {
+      console.error(err);
+      setSnapshotStatus(`❌ Erro ao criar snapshot: ${err.message}`);
+    } finally {
+      setSnapshotLoading(false);
+    }
   };
 
   const processAllFiles = async () => {
@@ -96,7 +396,8 @@ export default function UploadData() {
         for (let r = 0; r < raw.length; r++) {
           const rowTxt = raw[r].map(x => String(x || "").trim().toLowerCase()).join(" ");
           if (rowTxt.includes("border") && (rowTxt.includes("vlr") || rowTxt.includes("face")) && (rowTxt.includes("des") || rowTxt.includes("deságio"))) {
-            hdrR = r; break;
+            hdrR = r;
+            break;
           }
         }
 
@@ -119,7 +420,10 @@ export default function UploadData() {
                 for (let v of rowVals) {
                   if (v === null) continue;
                   const vFloat = parseFloat(String(v).trim());
-                  if (!isNaN(vFloat) && Number.isInteger(vFloat) && vFloat > 0) { currentBNum = vFloat; break; }
+                  if (!isNaN(vFloat) && Number.isInteger(vFloat) && vFloat > 0) {
+                    currentBNum = vFloat;
+                    break;
+                  }
                 }
               }
 
@@ -137,8 +441,7 @@ export default function UploadData() {
       }
 
       // ==========================================
-      // MODO TAXA APENAS: só vieram arquivos de taxa
-      // Busca todos os registros do banco com aquele Borderô e atualiza só Desagio e Tx.Efet
+      // MODO TAXA APENAS
       // ==========================================
       if (mainFiles.length === 0 && Object.keys(globalRatesMap).length > 0) {
         const borderos = Object.keys(globalRatesMap).map(Number);
@@ -146,7 +449,7 @@ export default function UploadData() {
 
         const { data: existingRows, error: fetchErr } = await supabase
           .from("secInfo")
-          .select('*')
+          .select("*")
           .in('"Borderô"', borderos);
 
         if (fetchErr) throw new Error(`Erro ao buscar registros no banco: ${fetchErr.message}`);
@@ -156,8 +459,7 @@ export default function UploadData() {
 
         setProgress(`4/5: Atualizando taxas em ${existingRows.length} registro(s)...`);
 
-        // Monta os registros atualizados mantendo todos os campos e sobrescrevendo só as taxas
-        const updatedRows = existingRows.map(row => ({
+        const updatedRows = existingRows.map((row) => ({
           ...row,
           Desagio: globalRatesMap[row["Borderô"]]?.Desagio ?? row.Desagio,
           "Tx.Efet": globalRatesMap[row["Borderô"]]?.["Tx.Efet"] ?? row["Tx.Efet"],
@@ -179,11 +481,12 @@ export default function UploadData() {
         setProgress("");
         setFiles([]);
         document.getElementById("upload-input").value = "";
+        await carregarRiscoAtualSnapshot();
         return;
       }
 
       // ==========================================
-      // MODO NORMAL: planilhas principais presentes
+      // MODO NORMAL
       // ==========================================
       setProgress("3/5: Processando planilhas principais...");
 
@@ -194,7 +497,7 @@ export default function UploadData() {
       let allExtractedRows = [];
       for (let mf of mainFiles) {
         const rawData = XLSX.utils.sheet_to_json(mf.worksheet, { defval: null });
-        rawData.forEach(row => {
+        rawData.forEach((row) => {
           const newRow = {};
           for (let key in row) {
             const cleanKey = String(key).trim();
@@ -202,8 +505,12 @@ export default function UploadData() {
             let val = row[key];
             if (["Dt.Emis", "Vcto", "Pgto"].includes(cleanKey)) val = cleanDate(val);
             else if (["Vl Pgto", "Entrada", "Rec."].includes(cleanKey)) val = cleanNumber(val);
-            else if (["Cód.Red", "Borderô"].includes(cleanKey)) { val = parseFloat(val); if (isNaN(val)) val = null; }
-            else if (cleanKey === "UF" && val) val = String(val).trim().toUpperCase().slice(0, 2);
+            else if (["Cód.Red", "Borderô"].includes(cleanKey)) {
+              val = parseFloat(val);
+              if (isNaN(val)) val = null;
+            } else if (cleanKey === "UF" && val) {
+              val = String(val).trim().toUpperCase().slice(0, 2);
+            }
             newRow[cleanKey] = val;
           }
 
@@ -225,9 +532,8 @@ export default function UploadData() {
 
       setProgress("4/5: Consolidando e limpando dados...");
 
-      // 4. SOMA DO "0 -" E LIMPEZA
       const groupedByDcto = {};
-      allExtractedRows.forEach(r => {
+      allExtractedRows.forEach((r) => {
         const groupKey = `${limpaChave(r["Cliente"])}_${limpaChave(r["Dcto"])}`;
         if (!groupedByDcto[groupKey]) groupedByDcto[groupKey] = [];
         groupedByDcto[groupKey].push(r);
@@ -238,7 +544,7 @@ export default function UploadData() {
         const group = groupedByDcto[key];
         if (group.length === 1) rowsAfterSum.push(group[0]);
         else {
-          let bestRow = group.find(r => {
+          let bestRow = group.find((r) => {
             const s = String(r["Sacado"] || "").trim().replace(/\s/g, "");
             return !(s.startsWith("0-") || s === "0" || s === "");
           }) || group[0];
@@ -249,7 +555,7 @@ export default function UploadData() {
 
       const finalRows = [];
       const seenCodRed = new Set();
-      rowsAfterSum.forEach(r => {
+      rowsAfterSum.forEach((r) => {
         const codRedVal = limpaChave(r["Cód.Red"]);
         if (!codRedVal) return;
         const sacadoStr = String(r["Sacado"] || "").trim().replace(/\s/g, "");
@@ -262,29 +568,28 @@ export default function UploadData() {
 
       setProgress(`5/5: Enviando ${finalRows.length} registros para o Supabase (Preservando taxas)...`);
 
-      // 5. ENVIO COM PRESERVAÇÃO DE TAXAS
       const BATCH_SIZE = 500;
       let upsertedCount = 0;
 
       for (let i = 0; i < finalRows.length; i += BATCH_SIZE) {
         const batch = finalRows.slice(i, i + BATCH_SIZE);
-        const codReds = batch.map(r => r["Cód.Red"]);
+        const codReds = batch.map((r) => r["Cód.Red"]);
 
-        // FIX: usar select('*') e .in com aspas duplas para colunas com ponto no nome
         const { data: existingData, error: fetchErr } = await supabase
           .from("secInfo")
-          .select('*')
+          .select("*")
           .in('"Cód.Red"', codReds);
 
         if (fetchErr) throw new Error(`Erro ao checar banco: ${fetchErr.message}`);
 
         const existingMap = {};
         if (existingData) {
-          existingData.forEach(r => existingMap[r["Cód.Red"]] = r);
+          existingData.forEach((r) => {
+            existingMap[r["Cód.Red"]] = r;
+          });
         }
 
-        // Se o lote novo tiver taxa vazia, copia do banco
-        const finalBatch = batch.map(row => {
+        const finalBatch = batch.map((row) => {
           const existingRow = existingMap[row["Cód.Red"]];
           if (existingRow) {
             if (row["Desagio"] === null || row["Desagio"] === undefined) {
@@ -311,7 +616,7 @@ export default function UploadData() {
       setProgress("");
       setFiles([]);
       document.getElementById("upload-input").value = "";
-
+      await carregarRiscoAtualSnapshot();
     } catch (err) {
       setStatus(`❌ Erro: ${err.message}`);
       setProgress("");
@@ -322,87 +627,217 @@ export default function UploadData() {
   };
 
   return (
-    <div style={{ background: "#fff", padding: "32px", borderRadius: "12px", boxShadow: "0 8px 20px rgba(0,0,0,0.06)", maxWidth: "600px", margin: "0 auto", border: "1px solid #e5e7eb" }}>
-      <h2 style={{ marginTop: 0, color: "#111827", fontSize: "20px" }}>Atualização de Dados</h2>
-      <p style={{ color: "#6b7280", fontSize: "14px", marginBottom: "20px" }}>
-        Selecione todos os arquivos de dados do Borderô e/ou dados de Taxas.
-      </p>
+    <div style={{ display: "grid", gap: "24px", maxWidth: "820px", margin: "0 auto" }}>
+      <div style={cardStyle}>
+        <h2 style={{ marginTop: 0, color: "#111827", fontSize: "20px" }}>Atualização de Dados</h2>
+        <p style={{ color: "#6b7280", fontSize: "14px", marginBottom: "20px" }}>
+          Selecione todos os arquivos de dados do Borderô e/ou dados de Taxas.
+        </p>
 
-      {/* BOX DE INSTRUÇÕES DE EXTRAÇÃO */}
-      <div style={{ background: "#f8fafc", padding: "16px", borderRadius: "8px", border: "1px solid #e2e8f0", marginBottom: "24px", fontSize: "13px", color: "#334155", lineHeight: "1.5" }}>
-        <div style={{ marginBottom: "12px" }}>
-          <strong style={{ color: "#0f172a", fontSize: "14px" }}>📄 Arquivo de Operações:</strong><br />
-          Ir em Contas <span style={{ color: "#94a3b8", margin: "0 4px" }}>➔</span> 
-          Lançamentos <span style={{ color: "#94a3b8", margin: "0 4px" }}>➔</span> 
-          Busca Avançada <span style={{ color: "#94a3b8", margin: "0 4px" }}>➔</span> 
-          Vencimento = Todos ; a Receber ; OK <span style={{ color: "#94a3b8", margin: "0 4px" }}>➔</span> 
-          Imprimir (Primeiro Ícone) <span style={{ color: "#94a3b8", margin: "0 4px" }}>➔</span> 
-          Resumido - Modelo 2 <span style={{ color: "#94a3b8", margin: "0 4px" }}>➔</span> 
-          Exportar para Excel
+        <div style={{ background: "#f8fafc", padding: "16px", borderRadius: "8px", border: "1px solid #e2e8f0", marginBottom: "24px", fontSize: "13px", color: "#334155", lineHeight: "1.5" }}>
+          <div style={{ marginBottom: "12px" }}>
+            <strong style={{ color: "#0f172a", fontSize: "14px" }}>📄 Arquivo de Operações:</strong><br />
+            Ir em Contas <span style={{ color: "#94a3b8", margin: "0 4px" }}>➔</span>
+            Lançamentos <span style={{ color: "#94a3b8", margin: "0 4px" }}>➔</span>
+            Busca Avançada <span style={{ color: "#94a3b8", margin: "0 4px" }}>➔</span>
+            Vencimento = Todos ; a Receber ; OK <span style={{ color: "#94a3b8", margin: "0 4px" }}>➔</span>
+            Imprimir (Primeiro Ícone) <span style={{ color: "#94a3b8", margin: "0 4px" }}>➔</span>
+            Resumido - Modelo 2 <span style={{ color: "#94a3b8", margin: "0 4px" }}>➔</span>
+            Exportar para Excel
+          </div>
+          <div>
+            <strong style={{ color: "#0f172a", fontSize: "14px" }}>📊 Arquivo de Taxas (Método Muito Lento):</strong><br />
+            Ir em Gerência <span style={{ color: "#94a3b8", margin: "0 4px" }}>➔</span>
+            Operações <span style={{ color: "#94a3b8", margin: "0 4px" }}>➔</span>
+            C. Própria <span style={{ color: "#94a3b8", margin: "0 4px" }}>➔</span>
+            Aquisições no Período - Resumo <span style={{ color: "#94a3b8", margin: "0 4px" }}>➔</span>
+            Seleciona APENAS Período Desejado (Método Muito Lento)<span style={{ color: "#94a3b8", margin: "0 4px" }}>➔</span>
+            Exportar para Planilha do Excel (Penúltimo Ícone)
+          </div>
         </div>
-        <div>
-          <strong style={{ color: "#0f172a", fontSize: "14px" }}>📊 Arquivo de Taxas (Método Muito Lento):</strong><br />
-          Ir em Gerência <span style={{ color: "#94a3b8", margin: "0 4px" }}>➔</span> 
-          Operações <span style={{ color: "#94a3b8", margin: "0 4px" }}>➔</span> 
-          C. Própria <span style={{ color: "#94a3b8", margin: "0 4px" }}>➔</span> 
-          Aquisições no Período - Resumo <span style={{ color: "#94a3b8", margin: "0 4px" }}>➔</span> 
-          Seleciona APENAS Período Desejado (Método Muito Lento)<span style={{ color: "#94a3b8", margin: "0 4px" }}>➔</span> 
-          Exportar para Planilha do Excel (Penúltimo Ícone)
-        </div>
-      </div>
 
-      <div style={{ marginBottom: "20px" }}>
-        <input
-          id="upload-input"
-          type="file"
-          multiple
-          accept=".xlsx, .xls"
-          onChange={(e) => setFiles(Array.from(e.target.files))}
-          disabled={loading}
-          style={{ 
-            boxSizing: "border-box", // <-- Correção da largura adicionada aqui
-            width: "100%", 
-            padding: "12px", 
-            border: "2px dashed #cbd5e1", 
-            borderRadius: "8px", 
-            background: "#f8fafc", 
-            cursor: "pointer" 
+        <div style={{ marginBottom: "20px" }}>
+          <input
+            id="upload-input"
+            type="file"
+            multiple
+            accept=".xlsx, .xls"
+            onChange={(e) => setFiles(Array.from(e.target.files))}
+            disabled={loading}
+            style={{
+              boxSizing: "border-box",
+              width: "100%",
+              padding: "12px",
+              border: "2px dashed #cbd5e1",
+              borderRadius: "8px",
+              background: "#f8fafc",
+              cursor: "pointer",
+            }}
+          />
+          <div style={{ fontSize: "13px", color: "#64748b", marginTop: "8px", fontWeight: "500" }}>
+            {files.length} arquivo(s) selecionado(s).
+          </div>
+        </div>
+
+        <button
+          onClick={processAllFiles}
+          disabled={loading || files.length === 0}
+          style={{
+            boxSizing: "border-box",
+            width: "100%",
+            padding: "12px",
+            borderRadius: "8px",
+            border: "none",
+            background: (loading || files.length === 0) ? "#9ca3af" : "#4f46e5",
+            color: "#fff",
+            fontWeight: "600",
+            fontSize: "15px",
+            cursor: (loading || files.length === 0) ? "not-allowed" : "pointer",
+            transition: "background 0.2s",
           }}
-        />
-        <div style={{ fontSize: "13px", color: "#64748b", marginTop: "8px", fontWeight: "500" }}>
-          {files.length} arquivo(s) selecionado(s).
-        </div>
+        >
+          {loading ? "Processando..." : "Processar e Enviar"}
+        </button>
+
+        {progress && (
+          <div style={{ marginTop: "16px", fontSize: "14px", color: "#4f46e5", fontWeight: "600", textAlign: "center" }}>
+            {progress}
+          </div>
+        )}
+
+        {status && (
+          <div style={{ marginTop: "16px", padding: "12px", borderRadius: "8px", background: status.includes("❌") ? "#fef2f2" : "#ecfdf5", color: status.includes("❌") ? "#991b1b" : "#065f46", fontWeight: "500", fontSize: "14px", textAlign: "center" }}>
+            {status}
+          </div>
+        )}
       </div>
 
-      <button
-        onClick={processAllFiles}
-        disabled={loading || files.length === 0}
-        style={{
-          boxSizing: "border-box", // <-- Correção da largura adicionada aqui
-          width: "100%", 
-          padding: "12px", 
-          borderRadius: "8px", 
-          border: "none",
-          background: (loading || files.length === 0) ? "#9ca3af" : "#4f46e5",
-          color: "#fff", 
-          fontWeight: "600", 
-          fontSize: "15px", 
-          cursor: (loading || files.length === 0) ? "not-allowed" : "pointer",
-          transition: "background 0.2s"
-        }}
-      >
-        {loading ? "Processando..." : "Processar e Enviar"}
-      </button>
-
-      {progress && (
-        <div style={{ marginTop: "16px", fontSize: "14px", color: "#4f46e5", fontWeight: "600", textAlign: "center" }}>{progress}</div>
-      )}
-
-      {status && (
-        <div style={{ marginTop: "16px", padding: "12px", borderRadius: "8px", background: status.includes("❌") ? "#fef2f2" : "#ecfdf5", color: status.includes("❌") ? "#991b1b" : "#065f46", fontWeight: "500", fontSize: "14px", textAlign: "center" }}>
-          {status}
+      <div style={cardStyle}>
+        <div style={{ marginBottom: "20px" }}>
+          <h2 style={{ margin: 0, color: "#111827", fontSize: "20px" }}>Criar Snapshot da Securitizadora</h2>
+          <p style={{ color: "#6b7280", fontSize: "14px", margin: "8px 0 0 0" }}>
+            Salva a foto do dia com recebíveis, dinheiro em banco e compra de debêntures.
+          </p>
         </div>
-      )}
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "16px", marginBottom: "20px" }}>
+          <div style={{ background: "#f8fafc", border: "1px solid #e5e7eb", borderRadius: "10px", padding: "16px" }}>
+            <div style={{ fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.04em", color: "#6b7280", fontWeight: 700, marginBottom: "8px" }}>Data</div>
+            <div style={{ fontSize: "22px", fontWeight: 700, color: "#111827" }}>{snapshotDate.split("-").reverse().join("/")}</div>
+          </div>
+          <div style={{ background: "#f8fafc", border: "1px solid #e5e7eb", borderRadius: "10px", padding: "16px" }}>
+            <div style={{ fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.04em", color: "#6b7280", fontWeight: 700, marginBottom: "8px" }}>Recebíveis</div>
+            <div style={{ fontSize: "22px", fontWeight: 700, color: "#111827" }}>{formatarMoeda(snapshotRiscoAtual)}</div>
+            <div style={{ fontSize: "12px", color: "#6b7280", marginTop: "8px" }}>Baseado nos títulos em aberto</div>
+          </div>
+        </div>
+
+        <div style={{ display: "grid", gap: "16px" }}>
+          <div>
+            <label style={{ display: "block", marginBottom: "6px", fontSize: "14px", fontWeight: 600, color: "#374151" }}>Dinheiro no Banco</label>
+            <input
+              type="text"
+              value={dinheiroBanco}
+              onChange={(e) => setDinheiroBanco(e.target.value)}
+              placeholder="Ex.: 125000,50"
+              style={inputStyle}
+            />
+          </div>
+
+          <div>
+            <label style={{ display: "block", marginBottom: "6px", fontSize: "14px", fontWeight: 600, color: "#374151" }}>Debentures Adquiridas no Mês em R$</label>
+            <input
+              type="text"
+              value={compraDebentures}
+              onChange={(e) => setCompraDebentures(e.target.value)}
+              placeholder="0"
+              style={inputStyle}
+            />
+          </div>
+        </div>
+
+        <button
+          onClick={criarSnapshot}
+          disabled={snapshotLoading}
+          style={{
+            marginTop: "20px",
+            width: "100%",
+            padding: "12px",
+            borderRadius: "8px",
+            border: "none",
+            background: snapshotLoading ? "#9ca3af" : "#16a34a",
+            color: "#fff",
+            fontWeight: 700,
+            fontSize: "15px",
+            cursor: snapshotLoading ? "not-allowed" : "pointer",
+          }}
+        >
+          {snapshotLoading ? "Criando snapshot..." : "Criar Snapshot"}
+        </button>
+
+        <div style={{ marginTop: "24px" }}>
+          <h3 style={{ margin: "0 0 12px 0", color: "#111827", fontSize: "16px" }}>
+            Histórico de Snapshots
+          </h3>
+
+          <div style={{ overflowX: "auto", border: "1px solid #e5e7eb", borderRadius: "10px" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "620px", background: "#fff" }}>
+              <thead>
+                <tr style={{ background: "#f8fafc" }}>
+                  <th style={{ textAlign: "left", padding: "12px", fontSize: "13px", color: "#374151", borderBottom: "1px solid #e5e7eb" }}>Data</th>
+                  <th style={{ textAlign: "right", padding: "12px", fontSize: "13px", color: "#374151", borderBottom: "1px solid #e5e7eb" }}>Recebíveis</th>
+                  <th style={{ textAlign: "right", padding: "12px", fontSize: "13px", color: "#374151", borderBottom: "1px solid #e5e7eb" }}>Dinheiro no Banco</th>
+                  <th style={{ textAlign: "right", padding: "12px", fontSize: "13px", color: "#374151", borderBottom: "1px solid #e5e7eb" }}>Deb. Adq. Mês</th>
+                </tr>
+              </thead>
+              <tbody>
+                {snapshotHistoricoLoading ? (
+                  <tr>
+                    <td colSpan="4" style={{ padding: "16px", textAlign: "center", color: "#6b7280" }}>
+                      Carregando histórico...
+                    </td>
+                  </tr>
+                ) : snapshotHistorico.length === 0 ? (
+                  <tr>
+                    <td colSpan="4" style={{ padding: "16px", textAlign: "center", color: "#6b7280" }}>
+                      Nenhum snapshot encontrado.
+                    </td>
+                  </tr>
+                ) : (
+                  snapshotHistorico.map((item, idx) => (
+                    <tr key={`${item.Data}-${idx}`} style={{ borderTop: idx === 0 ? "none" : "1px solid #f1f5f9" }}>
+                      <td style={{ padding: "12px", fontSize: "14px", color: "#111827" }}>
+                        {String(item["Data"] || "").split("-").reverse().join("/")}
+                      </td>
+                      <td style={{ padding: "12px", fontSize: "14px", color: "#111827", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
+                        {formatarMoeda(item["Recebiveis"])}
+                      </td>
+                      <td style={{ padding: "12px", fontSize: "14px", color: "#111827", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
+                        {formatarMoeda(item["Dinheiro Banco"])}
+                      </td>
+                      <td style={{ padding: "12px", fontSize: "14px", color: "#111827", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
+                        {formatarMoeda(item["Compra Debentures"])}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {snapshotLastUpdated && (
+          <div style={{ marginTop: "12px", fontSize: "12px", color: "#6b7280", textAlign: "center" }}>
+            Recebíveis recalculados em {snapshotLastUpdated}
+          </div>
+        )}
+
+        {snapshotStatus && (
+          <div style={{ marginTop: "16px", padding: "12px", borderRadius: "8px", background: snapshotStatus.includes("❌") ? "#fef2f2" : "#ecfdf5", color: snapshotStatus.includes("❌") ? "#991b1b" : "#065f46", fontWeight: "500", fontSize: "14px", textAlign: "center" }}>
+            {snapshotStatus}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

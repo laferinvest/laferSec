@@ -93,6 +93,39 @@ const GRUPOS_ECONOMICOS = [
     prefixos: ["613 -", "614 -", "615 -", "617 -", "605 -"]
   }
 ];
+
+
+function getDiasUteisToleranciaComissaria(cedente) {
+  if (!cedente) return 0;
+  const ced = String(cedente).trim();
+
+  if (ced.startsWith("160 -") || ced.startsWith("260 -")) {
+    return 2;
+  }
+
+  if (ced.startsWith("466 -") || ced.startsWith("479 -")) {
+    return 1;
+  }
+
+  return 0;
+}
+
+function adicionarDiasUteis(baseDate, qtdDiasUteis) {
+  const d = new Date(baseDate);
+  let adicionados = 0;
+
+  while (adicionados < qtdDiasUteis) {
+    d.setDate(d.getDate() + 1);
+    const diaSemana = d.getDay();
+    if (diaSemana !== 0 && diaSemana !== 6) {
+      adicionados++;
+    }
+  }
+
+  return d;
+}
+
+
 function cedenteValido(cedente) {
   if (!cedente) return false;
   return !CEDENTES_IGNORADOS.some(ignorado => String(cedente).trim().startsWith(ignorado));
@@ -808,6 +841,251 @@ return (
 }
 
 // --- COMPONENTE DA TABELA (OTIMIZADA COM PAGINAÇÃO) ---
+
+
+function SacadoConcentrationCard({
+  rows,
+  clienteSelecionado,
+  grupoSelecionado,
+  sacadoSelecionado,
+  setSacadoSelecionado,
+  hideValues
+}) {
+  const [hoveredKey, setHoveredKey] = useState(null);
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [tooltip, setTooltip] = useState({ show: false, x: 0, y: 0, label: '', value: 0, pct: 0 });
+  const fmtM = (v) => hideValues ? "R$ -" : formatarMoeda(v);
+
+  const data = useMemo(() => {
+    if ((!clienteSelecionado && !grupoSelecionado) || !rows.length) return [];
+
+    const firstRow = rows[0];
+    const entradaKey =
+      Object.keys(firstRow).find(
+        (k) => k.toLowerCase() === "entrada" || (k.toLowerCase().includes("valor") && !k.toLowerCase().includes("pgto"))
+      ) || "Entrada";
+
+    const agrupado = new Map();
+
+    rows.forEach((r) => {
+      const sacado = String(r.Sacado || "").trim();
+      const status = r._status;
+
+      if (!sacadoValido(sacado)) return;
+      if (status !== "aVencer" && status !== "atraso") return;
+
+      const valor = Number(r[entradaKey]) || 0;
+      if (valor <= 0) return;
+
+      if (!agrupado.has(sacado)) {
+        agrupado.set(sacado, { sacado, valor: 0, qtdTitulos: 0 });
+      }
+
+      const atual = agrupado.get(sacado);
+      atual.valor += valor;
+      atual.qtdTitulos += 1;
+    });
+
+    const arr = Array.from(agrupado.values()).sort((a, b) => b.valor - a.valor);
+    const total = arr.reduce((acc, item) => acc + item.valor, 0);
+
+    return arr.map((item) => ({
+      ...item,
+      pct: total > 0 ? (item.valor / total) * 100 : 0,
+      total,
+    }));
+  }, [rows, clienteSelecionado, grupoSelecionado]);
+
+  if (!clienteSelecionado && !grupoSelecionado) return null;
+
+  const totalCapital = data[0]?.total || 0;
+  const size = 240;
+  const strokeWidth = 22;
+  const radius = 50 - strokeWidth / 2;
+  const circumference = 2 * Math.PI * radius;
+
+  let accPct = 0;
+  const palette = ["#4f46e5", "#0ea5e9", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#14b8a6", "#f97316", "#6366f1", "#84cc16"];
+
+  const enriched = data.map((item, idx) => {
+    const color = palette[idx % palette.length];
+    const strokeDasharray = `${(item.pct / 100) * circumference} ${circumference}`;
+    const strokeDashoffset = -((accPct / 100) * circumference);
+    accPct += item.pct;
+    return { ...item, color, strokeDasharray, strokeDashoffset };
+  });
+
+  const top5Pct = enriched.slice(0, 5).reduce((acc, item) => acc + item.pct, 0);
+
+  const handleDonutMouseMove = (e, item) => {
+    setTooltip({
+      show: true,
+      x: e.clientX,
+      y: e.clientY,
+      label: item.sacado,
+      value: item.valor,
+      pct: item.pct,
+    });
+    setHoveredKey(item.sacado);
+  };
+
+  const clearDonutHover = () => {
+    setTooltip((prev) => ({ ...prev, show: false }));
+    setHoveredKey(null);
+  };
+
+  return (
+    <div style={concentrationCardStyle}>
+      <div
+        onClick={() => setIsCollapsed(!isCollapsed)}
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: "16px",
+          flexWrap: "wrap",
+          cursor: "pointer",
+          userSelect: "none",
+        }}
+      >
+        <div>
+          <h2 style={sectionTitleStyle}>Concentração por Sacado</h2>
+        </div>
+
+        <span style={{ background: "transparent", border: "1px solid #d1d5db", padding: "4px 10px", borderRadius: "6px", color: "#4b5563", fontSize: "12px", fontWeight: "600", display: "flex", alignItems: "center", gap: "6px" }}>
+          Concentração
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transition: "transform 0.35s cubic-bezier(0.4,0,0.2,1)", transform: isCollapsed ? "rotate(0deg)" : "rotate(180deg)" }}>
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </span>
+      </div>
+
+      <CollapsePanel isCollapsed={isCollapsed}>
+        <div style={{ paddingTop: "24px" }}>
+          {!data.length ? (
+            <div style={{ padding: "28px 20px", textAlign: "center", color: "#6b7280", border: "1px dashed #d1d5db", borderRadius: "12px", background: "#fafafa" }}>
+              Não há capital em aberto por sacado para a seleção atual.
+            </div>
+          ) : (
+            <div style={{ display: "grid", gridTemplateColumns: "minmax(280px, 360px) minmax(0, 1fr)", gap: "24px", alignItems: "stretch" }}>
+              <div style={{ border: "1px solid #e5e7eb", borderRadius: "14px", background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", padding: "22px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: 400 }}>
+                <div style={{ width: "100%", display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", marginBottom: "18px" }}>
+                  <div style={{ fontSize: 10, color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", lineHeight: 1.2 }}>Capital em aberto</div>
+                  <div style={{ fontSize: 28, color: "#111827", fontWeight: 800, lineHeight: 1.1, marginTop: 6, letterSpacing: "-0.02em", wordBreak: "break-word" }}>{fmtM(totalCapital)}</div>
+                  <div style={{ fontSize: 12, color: "#64748b", marginTop: 8, lineHeight: 1.2, fontWeight: 600 }}>Top 5 = {hideValues ? "-" : `${top5Pct.toFixed(1).replace(".", ",")}%`}</div>
+                </div>
+
+                <div style={{ position: "relative", width: size, height: size }}>
+                  <svg
+                    viewBox="0 0 120 120"
+                    style={{ width: "100%", height: "100%", transform: "rotate(-90deg)" }}
+                    onMouseLeave={clearDonutHover}
+                  >
+                    <circle cx="60" cy="60" r={radius} fill="none" stroke="#e5e7eb" strokeWidth={strokeWidth} />
+                    {enriched.map((item) => {
+                      const active = hoveredKey === item.sacado || sacadoSelecionado === item.sacado;
+                      return (
+                        <circle
+                          key={item.sacado}
+                          cx="60"
+                          cy="60"
+                          r={radius}
+                          fill="none"
+                          stroke={item.color}
+                          strokeWidth={active ? strokeWidth + 2 : strokeWidth}
+                          strokeDasharray={item.strokeDasharray}
+                          strokeDashoffset={item.strokeDashoffset}
+                          strokeLinecap="butt"
+                          style={{ cursor: "pointer", transition: "all 0.2s ease", opacity: hoveredKey && hoveredKey !== item.sacado ? 0.35 : 1 }}
+                          onMouseMove={(e) => handleDonutMouseMove(e, item)}
+                          onMouseEnter={(e) => handleDonutMouseMove(e, item)}
+                          onMouseLeave={clearDonutHover}
+                          onClick={() => setSacadoSelecionado((prev) => prev === item.sacado ? "" : item.sacado)}
+                        />
+                      );
+                    })}
+                  </svg>
+                </div>
+
+                <div style={{ marginTop: 20, fontSize: 12, color: "#64748b", textAlign: "center", lineHeight: 1.6, maxWidth: 260 }}>
+                  Passe o mouse para ver os detalhes e clique em um segmento para filtrar os títulos daquele sacado na tabela detalhada.
+                </div>
+              </div>
+
+              <div style={{ border: "1px solid #e5e7eb", borderRadius: "14px", overflow: "hidden", background: "#fff" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 170px 110px", gap: "12px", padding: "14px 16px", background: "#f8fafc", borderBottom: "1px solid #e5e7eb", fontSize: 12, color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                  <div>Sacado</div>
+                  <div style={{ textAlign: "right" }}>Capital em aberto</div>
+                  <div style={{ textAlign: "right" }}>%</div>
+                </div>
+
+                <div style={{ maxHeight: 360, overflowY: "auto" }}>
+                  {enriched.map((item) => {
+                    const active = sacadoSelecionado === item.sacado;
+                    return (
+                      <div
+                        key={item.sacado}
+                        onClick={() => setSacadoSelecionado((prev) => prev === item.sacado ? "" : item.sacado)}
+                        onMouseEnter={() => setHoveredKey(item.sacado)}
+                        onMouseLeave={() => setHoveredKey(null)}
+                        style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 170px 110px", gap: "12px", alignItems: "center", padding: "14px 16px", borderBottom: "1px solid #f1f5f9", cursor: "pointer", background: active ? "#eef2ff" : hoveredKey === item.sacado ? "#f8fafc" : "#fff", transition: "all 0.18s ease" }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                          <span style={{ width: 10, height: 10, borderRadius: "50%", background: item.color, flex: "0 0 auto" }} />
+                          <span style={{ color: active ? "#312e81" : "#111827", fontWeight: active ? 700 : 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={item.sacado}>{item.sacado}</span>
+                        </div>
+                        <div style={{ textAlign: "right", color: "#111827", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{fmtM(item.valor)}</div>
+                        <div style={{ textAlign: "right", color: active ? "#312e81" : "#475569", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{hideValues ? "-" : `${item.pct.toFixed(2).replace(".", ",")}%`}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </CollapsePanel>
+
+      {tooltip.show && (
+        <div style={{ position: 'fixed', top: tooltip.y + 15, left: tooltip.x + 15, background: 'rgba(17, 24, 39, 0.9)', color: '#fff', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', pointerEvents: 'none', zIndex: 9999 }}>
+          <div style={{ fontWeight: 600 }}>{tooltip.label}</div>
+          <div style={{ marginTop: '4px', fontSize: '15px', fontWeight: 700 }}>{fmtM(tooltip.value)}</div>
+          <div style={{ marginTop: '2px', fontSize: '13px', color: '#10b981' }}>{hideValues ? '-' : `${tooltip.pct.toFixed(2).replace('.', ',')}%`}</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const concentrationCardStyle = {
+  background: "#fff",
+  padding: "24px",
+  borderRadius: "12px",
+  boxShadow: "0 8px 20px rgba(0, 0, 0, 0.06)",
+  border: "1px solid #e5e7eb",
+};
+
+const concentrationSummaryPill = {
+  background: "#f8fafc",
+  border: "1px solid #e5e7eb",
+  borderRadius: "12px",
+  padding: "12px 14px",
+  minWidth: "220px",
+};
+
+const sectionTitleStyle = {
+  margin: 0,
+  fontSize: "16px",
+  fontWeight: "700",
+  color: "#374151",
+};
+
+const sectionSubtitleStyle = {
+  margin: "4px 0 0 0",
+  fontSize: "12px",
+  color: "#6b7280",
+};
+
 function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, borderoFilter, setBorderoFilter, dctoFilter, setDctoFilter, setDateFilter, setInsightFilter, setClienteSelecionado, setSacadoSelecionado, hideValues }) {
   const fmtM = (v) => hideValues ? "R$ -" : formatarMoeda(v);
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -1236,7 +1514,7 @@ export default function MicroDashboard({ session, onSidebarToggle, hideValues, s
     const init = getInitDateStr();
     return { type: 'emis', start: init.start, end: init.end };
   });
-  const [activeQuickDate, setActiveQuickDate] = useState('ult_ano');
+  const [activeQuickDate, setActiveQuickDate] = useState('ytd');
   
   const [inputType, setInputType] = useState("emis");
   const [inputDateStart, setInputDateStart] = useState(() => getInitDateStr().start);
@@ -1342,9 +1620,21 @@ export default function MicroDashboard({ session, onSidebarToggle, hideValues, s
 
         if (pgtoVal && String(pgtoVal).trim() !== "") {
           const pgtoDate = new Date(String(pgtoVal).split("T")[0] + "T00:00:00");
-          if (pgtoDate <= effectiveVcto) status = 'liquidado'; else status = 'liquidadoAtraso';
+
+          const clienteAtual = String(r["Cliente"] || "").trim();
+          const diasTolerancia = getDiasUteisToleranciaComissaria(clienteAtual);
+          const toleranciaFinal = diasTolerancia > 0
+            ? adicionarDiasUteis(effectiveVcto, diasTolerancia)
+            : effectiveVcto;
+
+          if (pgtoDate <= toleranciaFinal) {
+            status = 'liquidado';
+          } else {
+            status = 'liquidadoAtraso';
+          }
         } else {
-          if (effectiveVcto < today) status = 'atraso'; else status = 'aVencer';
+          if (effectiveVcto < today) status = 'atraso';
+          else status = 'aVencer';
         }
       }
       return { ...r, _status: status }; 
@@ -2002,6 +2292,17 @@ return (
               )}
               
               <DashboardInsights processedRows={rowsFilteredByDate} insightFilter={insightFilter} setInsightFilter={setInsightFilter} setBorderoFilter={setBorderoFilter} setDctoFilter={setDctoFilter} hideValues={hideValues} />
+              
+              {(clienteSelecionado || grupoSelecionado) && (
+                <SacadoConcentrationCard
+                  rows={rowsParaTabela}
+                  clienteSelecionado={clienteSelecionado}
+                  grupoSelecionado={grupoSelecionado}
+                  sacadoSelecionado={sacadoSelecionado}
+                  setSacadoSelecionado={setSacadoSelecionado}
+                  hideValues={hideValues}
+                />
+              )}
               
               <EvolutionCharts rows={evolutionRows} dateFilter={dateFilter} setDateFilter={handleSetDateFilter} setBorderoFilter={setBorderoFilter} setDctoFilter={setDctoFilter} hideValues={hideValues} />
             </div>
