@@ -1492,12 +1492,11 @@ export default function MicroDashboard({ session, onSidebarToggle, hideValues, s
       const tablet = w >= 640 && w < 1824; // 640–1023px: sidebar empurra conteúdo sem translado
       setIsMobile(mobile);
       setIsTablet(tablet);
-      // Em mobile, não altera o estado do sidebar durante resize (evita fechar ao abrir teclado virtual)
       if (!mobile) {
         setIsSidebarOpen(true);
         if (onSidebarToggle) onSidebarToggle(true, mobile, tablet);
       } else {
-        // Só atualiza o App sobre o estado mobile, sem fechar o sidebar
+        setIsSidebarOpen(false);
         if (onSidebarToggle) onSidebarToggle(false, mobile, tablet);
       }
     };

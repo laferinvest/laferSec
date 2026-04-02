@@ -12,7 +12,7 @@ export default function App() {
   const [password, setPassword] = useState("");
   const [msg, setMsg] = useState("");
   const [activeTab, setActiveTab] = useState("patrimonio");
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [isTablet, setIsTablet] = useState(false);
   const [hideValues, setHideValues] = useState(false);
@@ -56,7 +56,9 @@ export default function App() {
     if (tablet !== undefined) setIsTablet(tablet);
   };
 
-  const slideStyle = isMobile
+  const shouldShiftLayout = activeTab === "micro" && !isMobile;
+
+  const slideStyle = !shouldShiftLayout
     ? {}
     : isTablet
     ? {
@@ -342,7 +344,12 @@ export default function App() {
                   Patrimônio
                 </button>
 
-                <button onClick={() => setActiveTab("micro")} style={getTabStyle(activeTab === "micro")}>
+                <button
+                  onClick={() => {
+                    setActiveTab("micro");
+                  }}
+                  style={getTabStyle(activeTab === "micro")}
+                >
                   Dados Micro (Detalhes de Operações)
                 </button>
 
