@@ -76,8 +76,7 @@ const formatToLocalISO = (d) => {
 
 const getInitDateStr = () => {
   const end = new Date();
-  const start = new Date();
-  start.setFullYear(end.getFullYear() - 1);
+  const start = new Date(end.getFullYear(), 0, 1); // 01/jan do ano atual
   return { start: formatToLocalISO(start), end: formatToLocalISO(end) };
 };
 
