@@ -209,8 +209,10 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
   const fmtM = (valor) => hideValues ? "R$ -" : formatarMoeda(valor);
   
   const [hoveredSlice, setHoveredSlice] = useState(null);
+  const [hoveredNegotiationSlice, setHoveredNegotiationSlice] = useState(null);
   const [selectedSlice, setSelectedSlice] = useState(null); 
-  const [tooltip, setTooltip] = useState({ show: false, x: 0, y: 0, label: '', value: 0, percent: 0 });
+  const [volumePeriod, setVolumePeriod] = useState('mes_atual');
+  const [tooltip, setTooltip] = useState({ show: false, x: 0, y: 0, label: '', value: 0, percent: 0, context: 'capital_aberto' });
 
   useEffect(() => {
     async function fetchData() {
@@ -226,12 +228,16 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
     fetchData();
   }, []);
 
-  // 1. Processa todos os registos (Em Aberto e Variação Mensal Rolling Window)
-  const { openRows, stats } = useMemo(() => {
-    if (rows.length === 0) return { openRows: [], stats: { totalVal: 0, sorted: [], pieData: [] } };
+  // 1. Processa os registos em aberto e o volume negociado por período
+  const { openRows, stats, negotiationStats } = useMemo(() => {
+    const emptyChart = { totalVal: 0, sorted: [], pieData: [] };
+    if (rows.length === 0) return { openRows: [], stats: emptyChart, negotiationStats: { mes_atual: emptyChart, ult_30_dias: emptyChart, ytd: emptyChart } };
 
     const today = new Date();
     today.setHours(23, 59, 59, 999);
+
+    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+    monthStart.setHours(0, 0, 0, 0);
 
     const thirtyDaysAgo = new Date(today);
     thirtyDaysAgo.setDate(today.getDate() - 30);
@@ -240,13 +246,20 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
     const sixtyDaysAgo = new Date(today);
     sixtyDaysAgo.setDate(today.getDate() - 60);
     sixtyDaysAgo.setHours(0, 0, 0, 0);
+
+    const yearStart = new Date(today.getFullYear(), 0, 1);
+    yearStart.setHours(0, 0, 0, 0);
     
     const abertos = [];
     const grouped = {};
     const monthlyVolume = {};
+    const negotiationGrouped = {
+      mes_atual: {},
+      ult_30_dias: {},
+      ytd: {}
+    };
     let totalVal = 0;
 
-    // OTIMIZAÇÃO: Extrair as chaves apenas uma vez na primeira linha
     const firstRow = rows[0];
     const vctoKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'vcto' || (k.toLowerCase().includes('vcto') && !k.toLowerCase().includes('vl')));
     const pgtoKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'pgto' || (k.toLowerCase().includes('pgto') && !k.toLowerCase().includes('vl')));
@@ -274,6 +287,16 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
         } else if (emisDate >= sixtyDaysAgo && emisDate < thirtyDaysAgo) {
           if (!monthlyVolume[eName]) monthlyVolume[eName] = { lm: 0, plm: 0 };
           monthlyVolume[eName].plm += val;
+        }
+
+        if (emisDate >= monthStart && emisDate <= today) {
+          negotiationGrouped.mes_atual[eName] = (negotiationGrouped.mes_atual[eName] || 0) + val;
+        }
+        if (emisDate >= thirtyDaysAgo && emisDate <= today) {
+          negotiationGrouped.ult_30_dias[eName] = (negotiationGrouped.ult_30_dias[eName] || 0) + val;
+        }
+        if (emisDate >= yearStart && emisDate <= today) {
+          negotiationGrouped.ytd[eName] = (negotiationGrouped.ytd[eName] || 0) + val;
         }
       }
 
@@ -330,7 +353,7 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
       };
     }).sort((a, b) => b.val - a.val).map((item, idx) => ({ ...item, rank: idx + 1 }));
 
-    const colors = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#0ea5e9', '#f97316', '#6366f1', '#9ca3af'];
+    const colors = ['#4f46e5', '#60a5fa', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#0ea5e9', '#f97316', '#6366f1', '#9ca3af'];
     const top9 = sorted.slice(0, 9).map((item, idx) => ({ ...item, color: colors[idx] }));
     const rest = sorted.slice(9);
     
@@ -346,7 +369,42 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
       });
     }
 
-    return { openRows: abertos, stats: { totalVal, sorted, pieData: top9 } };
+    const buildNegotiationChart = (groupMap) => {
+      const groupTotal = Object.values(groupMap).reduce((acc, curr) => acc + curr, 0);
+      const groupSorted = Object.keys(groupMap)
+        .map((name, idx) => ({
+          rank: idx + 1,
+          name,
+          val: groupMap[name],
+          percent: groupTotal > 0 ? groupMap[name] / groupTotal : 0
+        }))
+        .sort((a, b) => b.val - a.val)
+        .map((item, idx) => ({ ...item, rank: idx + 1 }));
+
+      const topSlices = groupSorted.slice(0, 9).map((item, idx) => ({ ...item, color: colors[idx] }));
+      const otherSlices = groupSorted.slice(9);
+      if (otherSlices.length > 0) {
+        const otherVal = otherSlices.reduce((acc, curr) => acc + curr.val, 0);
+        topSlices.push({
+          name: `Restante (${otherSlices.length} outros)`,
+          val: otherVal,
+          percent: groupTotal > 0 ? otherVal / groupTotal : 0,
+          color: colors[9]
+        });
+      }
+
+      return { totalVal: groupTotal, sorted: groupSorted, pieData: topSlices };
+    };
+
+    return {
+      openRows: abertos,
+      stats: { totalVal, sorted, pieData: top9 },
+      negotiationStats: {
+        mes_atual: buildNegotiationChart(negotiationGrouped.mes_atual),
+        ult_30_dias: buildNegotiationChart(negotiationGrouped.ult_30_dias),
+        ytd: buildNegotiationChart(negotiationGrouped.ytd)
+      }
+    };
   }, [rows, focus]);
 
   // 2. Extrai os detalhes da entidade selecionada
@@ -445,16 +503,129 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
     return stats.sorted.filter(item => item.name === selectedSlice);
   }, [stats.sorted, selectedSlice]);
 
+  const currentNegotiationStats = negotiationStats[volumePeriod] || { totalVal: 0, sorted: [], pieData: [] };
+
   const handleMouseMove = (e, slice) => {
-    setTooltip({ show: true, x: e.clientX, y: e.clientY, label: slice.name, value: slice.val, percent: slice.percent });
+    setTooltip({ show: true, x: e.clientX, y: e.clientY, label: slice.name, value: slice.val, percent: slice.percent, context: 'capital_aberto' });
     setHoveredSlice(slice.name);
+  };
+
+  const handleNegotiationMouseMove = (e, slice) => {
+    setTooltip({ show: true, x: e.clientX, y: e.clientY, label: slice.name, value: slice.val, percent: slice.percent, context: 'volume_negociado' });
+    setHoveredNegotiationSlice(slice.name);
   };
 
   const handleSliceClick = (sliceName) => {
     setSelectedSlice(prev => prev === sliceName ? null : sliceName);
   };
 
-  let cumulativePercent = 0;
+  const getVolumePeriodStyle = (isActive) => ({
+    padding: "8px 14px", borderRadius: "8px", border: "1px solid", borderColor: isActive ? "#4f46e5" : "#d1d5db",
+    background: isActive ? "#eef2ff" : "#fff", color: isActive ? "#4338ca" : "#6b7280",
+    fontWeight: "700", fontSize: "13px", cursor: "pointer", transition: "all 0.2s", whiteSpace: "nowrap"
+  });
+
+  const buildPieSegments = (pieData) => {
+    let cumulative = 0;
+    return pieData.map((slice) => {
+      const startPercent = cumulative;
+      cumulative += slice.percent;
+      const endPercent = cumulative;
+      return { ...slice, startPercent, endPercent };
+    });
+  };
+
+  const renderDonutChart = ({ pieData, hoveredName, selectedName = null, onSliceClick, onSliceHover, onMouseLeave, donut = true, size = 260 }) => {
+    const segments = buildPieSegments(pieData);
+    return (
+      <div style={{ width: `${size}px`, maxWidth: "100%", aspectRatio: "1 / 1", position: "relative" }}>
+        <svg
+          viewBox={donut ? "-1.25 -1.25 2.5 2.5" : "-1.1 -1.1 2.2 2.2"}
+          style={{ transform: 'rotate(-90deg)', overflow: 'visible', width: '100%', height: '100%', filter: 'drop-shadow(0px 10px 20px rgba(79,70,229,0.12))' }}
+          onMouseLeave={onMouseLeave}
+        >
+          {segments.map((slice) => {
+            if (!slice.percent) return null;
+            const isDimmed = selectedName && selectedName !== slice.name;
+            const sliceOpacity = isDimmed ? 0.25 : 1;
+            const isHovered = hoveredName === slice.name;
+
+            if (slice.percent >= 0.9999) {
+              return donut ? (
+                <circle
+                  key={slice.name}
+                  cx="0"
+                  cy="0"
+                  r="0.92"
+                  fill="none"
+                  stroke={slice.color}
+                  strokeWidth="0.42"
+                  strokeLinecap="butt"
+                  onMouseMove={(e) => onSliceHover(e, slice)}
+                  onClick={() => onSliceClick && onSliceClick(slice.name)}
+                  style={{ opacity: sliceOpacity, transition: 'all 0.2s', cursor: onSliceClick ? 'pointer' : 'default', transform: isHovered ? 'scale(1.03)' : 'scale(1)', transformOrigin: '0 0' }}
+                />
+              ) : (
+                <circle
+                  key={slice.name}
+                  cx="0"
+                  cy="0"
+                  r="1"
+                  fill={slice.color}
+                  onMouseMove={(e) => onSliceHover(e, slice)}
+                  onClick={() => onSliceClick && onSliceClick(slice.name)}
+                  style={{ opacity: sliceOpacity, transition: 'all 0.2s', cursor: onSliceClick ? 'pointer' : 'default', transform: isHovered ? 'scale(1.03)' : 'scale(1)', transformOrigin: '0 0' }}
+                />
+              );
+            }
+
+            if (donut) {
+              const radius = 0.92;
+              const circumference = 2 * Math.PI * radius;
+              const length = slice.percent * circumference;
+              const gap = Math.max(circumference - length, 0);
+              return (
+                <circle
+                  key={slice.name}
+                  cx="0"
+                  cy="0"
+                  r={radius}
+                  fill="none"
+                  stroke={slice.color}
+                  strokeWidth="0.42"
+                  strokeDasharray={`${length} ${gap}`}
+                  strokeDashoffset={-slice.startPercent * circumference}
+                  strokeLinecap="butt"
+                  onMouseMove={(e) => onSliceHover(e, slice)}
+                  onClick={() => onSliceClick && onSliceClick(slice.name)}
+                  style={{ opacity: sliceOpacity, transition: 'all 0.2s', cursor: onSliceClick ? 'pointer' : 'default', transform: isHovered ? 'scale(1.03)' : 'scale(1)', transformOrigin: '0 0' }}
+                />
+              );
+            }
+
+            const startX = Math.cos(2 * Math.PI * slice.startPercent);
+            const startY = Math.sin(2 * Math.PI * slice.startPercent);
+            const endX = Math.cos(2 * Math.PI * slice.endPercent);
+            const endY = Math.sin(2 * Math.PI * slice.endPercent);
+            const largeArcFlag = slice.percent > 0.5 ? 1 : 0;
+            const pathData = `M 0 0 L ${startX} ${startY} A 1 1 0 ${largeArcFlag} 1 ${endX} ${endY} Z`;
+
+            return (
+              <path
+                key={slice.name}
+                d={pathData}
+                fill={slice.color}
+                onMouseMove={(e) => onSliceHover(e, slice)}
+                onClick={() => onSliceClick && onSliceClick(slice.name)}
+                style={{ opacity: sliceOpacity, transition: 'all 0.2s', cursor: onSliceClick ? 'pointer' : 'default', transform: isHovered ? 'scale(1.03)' : 'scale(1)', transformOrigin: '0 0' }}
+              />
+            );
+          })}
+          {donut && <circle cx="0" cy="0" r="0.48" fill="#ffffff" />}
+        </svg>
+      </div>
+    );
+  };
 
   const getTabStyle = (isActive) => ({
     padding: "10px 20px", borderRadius: "8px", border: "2px solid", borderColor: isActive ? "#4f46e5" : "#e5e7eb",
@@ -530,74 +701,217 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
         </div>
       ) : (
         <>
-          {/* Gráfico de Pizza Top 9 + Restante */}
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "40px", alignItems: "center", padding: "32px", background: "#f9fafb", borderRadius: "12px", marginBottom: "32px", border: "1px solid #e5e7eb" }}>
-            <div style={{ width: "260px", height: "260px", position: "relative" }}>
-              <svg viewBox="-1.1 -1.1 2.2 2.2" style={{ transform: 'rotate(-90deg)', overflow: 'visible', width: '100%', height: '100%', filter: 'drop-shadow(0px 4px 6px rgba(0,0,0,0.15))' }} onMouseLeave={() => {setTooltip({ show: false }); setHoveredSlice(null);}}>
-                {stats.pieData.map(slice => {
-                  if (slice.percent === 0) return null;
-                  
-                  const isDimmed = selectedSlice && selectedSlice !== slice.name;
-                  const sliceOpacity = isDimmed ? 0.25 : 1;
+          {/* Container superior: Volume negociado */}
+          <section style={{ background: "#f3f4f6", borderRadius: "20px", padding: "20px", marginBottom: "28px", border: "1px solid #e5e7eb" }}>
+            <div style={{
+              background: "#ffffff",
+              borderRadius: "18px",
+              padding: "24px",
+              border: "1px solid #e5e7eb",
+              boxShadow: "0 10px 25px rgba(15, 23, 42, 0.06)"
+            }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "16px", flexWrap: "wrap", marginBottom: "20px" }}>
+                <div>
+                  <h3 style={{ margin: "0 0 6px 0", color: "#1f2937", fontSize: "26px", fontWeight: "800", letterSpacing: "-0.02em" }}>
+                    Volume de Negociação
+                  </h3>
+                  <p style={{ margin: 0, color: "#6b7280", fontSize: "14px" }}>
+                    Distribuição do volume negociado por {focus === 'cedente' ? 'cedente' : 'sacado'} no período selecionado.
+                  </p>
+                </div>
+                <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
+                  <button onClick={() => setVolumePeriod('mes_atual')} style={getVolumePeriodStyle(volumePeriod === 'mes_atual')}>Mês Atual</button>
+                  <button onClick={() => setVolumePeriod('ult_30_dias')} style={getVolumePeriodStyle(volumePeriod === 'ult_30_dias')}>Últ. 30 Dias</button>
+                  <button onClick={() => setVolumePeriod('ytd')} style={getVolumePeriodStyle(volumePeriod === 'ytd')}>YTD</button>
+                </div>
+              </div>
 
-                  if (slice.percent === 1) {
-                    return <circle key={slice.name} cx="0" cy="0" r="1" fill={slice.color} 
-                      onMouseMove={(e) => handleMouseMove(e, slice)} 
-                      onClick={() => handleSliceClick(slice.name)}
-                      style={{ transform: hoveredSlice === slice.name ? 'scale(1.05)' : 'scale(1)', transformOrigin: '0 0', opacity: sliceOpacity, transition: 'all 0.2s', cursor: 'pointer' }} 
-                    />;
-                  }
+              {currentNegotiationStats.totalVal === 0 ? (
+                <div style={{ padding: "32px", textAlign: "center", color: "#9ca3af", background: "#f9fafb", borderRadius: "14px", border: "1px dashed #d1d5db" }}>
+                  Nenhum volume negociado encontrado para o período selecionado.
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "28px", alignItems: "stretch" }}>
+                  <div style={{
+                    flex: "0 0 450px",
+                    minWidth: "300px",
+                    maxWidth: "100%",
+                    border: "1px solid #d1d5db",
+                    borderRadius: "18px",
+                    background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)",
+                    padding: "24px",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "space-between"
+                  }}>
+                    <div style={{ textAlign: "center", marginBottom: "18px" }}>
+                      <div style={{ fontSize: "12px", fontWeight: "800", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "8px" }}>
+                        Volume Negociado
+                      </div>
+                      <div style={{ fontSize: "28px", fontWeight: "900", color: "#0f172a", letterSpacing: "-0.03em", lineHeight: 1.1 }}>
+                        {fmtM(currentNegotiationStats.totalVal)}
+                      </div>
+                      <div style={{ marginTop: "10px", fontSize: "14px", color: "#64748b", fontWeight: "700" }}>
+                        Top {currentNegotiationStats.pieData.length} = 100,0%
+                      </div>
+                    </div>
 
-                  const startX = Math.cos(2 * Math.PI * cumulativePercent);
-                  const startY = Math.sin(2 * Math.PI * cumulativePercent);
-                  cumulativePercent += slice.percent;
-                  const endX = Math.cos(2 * Math.PI * cumulativePercent);
-                  const endY = Math.sin(2 * Math.PI * cumulativePercent);
-                  const largeArcFlag = slice.percent > 0.5 ? 1 : 0;
-                  const pathData = `M 0 0 L ${startX} ${startY} A 1 1 0 ${largeArcFlag} 1 ${endX} ${endY} Z`;
+                    {renderDonutChart({
+                      pieData: currentNegotiationStats.pieData,
+                      hoveredName: hoveredNegotiationSlice,
+                      onSliceHover: handleNegotiationMouseMove,
+                      onMouseLeave: () => { setTooltip({ show: false }); setHoveredNegotiationSlice(null); },
+                      donut: true,
+                      size: 250
+                    })}
 
-                  return (
-                    <path key={slice.name} d={pathData} fill={slice.color} 
-                      onMouseMove={(e) => handleMouseMove(e, slice)}
-                      onClick={() => handleSliceClick(slice.name)}
-                      style={{ transform: hoveredSlice === slice.name ? 'scale(1.05)' : 'scale(1)', transformOrigin: '0 0', opacity: sliceOpacity, transition: 'all 0.2s', cursor: 'pointer' }}
-                    />
-                  );
-                })}
-              </svg>
-            </div>
-            
-            {/* Legenda Lateral */}
-            <div style={{ flex: 1, minWidth: "280px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px" }}>
-              {stats.pieData.map(slice => {
-                const isDimmed = selectedSlice && selectedSlice !== slice.name;
-                return (
-                  <div 
-                    key={slice.name} 
-                    onClick={() => handleSliceClick(slice.name)}
-                    onMouseEnter={() => setHoveredSlice(slice.name)}
-                    onMouseLeave={() => setHoveredSlice(null)}
-                    style={{ 
-                      display: "flex", alignItems: "center", gap: "12px", 
-                      opacity: isDimmed ? 0.3 : 1, 
-                      transition: "all 0.2s",
-                      cursor: "pointer",
-                      background: selectedSlice === slice.name ? "#eff6ff" : "transparent",
-                      padding: "6px 8px",
-                      borderRadius: "8px",
-                      marginLeft: "-8px"
-                    }}
-                  >
-                    <div style={{ width: "16px", height: "16px", borderRadius: "4px", background: slice.color, flexShrink: 0 }} />
-                    <div style={{ display: "flex", flexDirection: "column", overflow: "hidden" }}>
-                      <span style={{ fontSize: "14px", fontWeight: "600", color: "#374151", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={slice.name}>{slice.name}</span>
-                      <span style={{ fontSize: "13px", color: "#6b7280" }}>{fmtM(slice.val)} • <strong>{(slice.percent * 100).toFixed(1)}%</strong></span>
+                    <div style={{ marginTop: "20px", textAlign: "center", color: "#64748b", fontSize: "13px", lineHeight: 1.45, maxWidth: "320px" }}>
+                      Passe o mouse para ver os detalhes do volume negociado no período selecionado.
                     </div>
                   </div>
-                )
-              })}
+
+                  <div style={{
+                    flex: "1 1 520px",
+                    minWidth: "320px",
+                    border: "1px solid #d1d5db",
+                    borderRadius: "18px",
+                    overflow: "hidden",
+                    background: "#ffffff"
+                  }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 220px 120px", background: "#f3f4f6", color: "#526581", fontSize: "13px", fontWeight: "800", textTransform: "uppercase", letterSpacing: "0.04em", borderBottom: "1px solid #d1d5db" }}>
+                      <div style={{ padding: "16px 20px" }}>{focus === 'cedente' ? 'Cedente' : 'Sacado'}</div>
+                      <div style={{ padding: "16px 20px", textAlign: "right" }}>Volume Negociado</div>
+                      <div style={{ padding: "16px 20px", textAlign: "right" }}>%</div>
+                    </div>
+                    {currentNegotiationStats.pieData.map((slice, idx) => (
+                      <div
+                        key={slice.name}
+                        onMouseEnter={() => setHoveredNegotiationSlice(slice.name)}
+                        onMouseLeave={() => setHoveredNegotiationSlice(null)}
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "minmax(0, 1fr) 220px 120px",
+                          alignItems: "center",
+                          borderBottom: idx === currentNegotiationStats.pieData.length - 1 ? "none" : "1px solid #e5e7eb",
+                          background: hoveredNegotiationSlice === slice.name ? "#eff6ff" : "#fff",
+                          transition: "background 0.2s"
+                        }}
+                      >
+                        <div style={{ padding: "16px 20px", display: "flex", alignItems: "center", gap: "12px", minWidth: 0 }}>
+                          <span style={{ width: "12px", height: "12px", borderRadius: "999px", background: slice.color, flexShrink: 0 }} />
+                          <span style={{ fontSize: "16px", fontWeight: "700", color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={slice.name}>{slice.name}</span>
+                        </div>
+                        <div style={{ padding: "16px 20px", textAlign: "right", fontSize: "16px", fontWeight: "800", color: "#0f172a" }}>{fmtM(slice.val)}</div>
+                        <div style={{ padding: "16px 20px", textAlign: "right", fontSize: "16px", fontWeight: "800", color: "#475569" }}>{(slice.percent * 100).toFixed(2).replace('.', ',')}%</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
+          </section>
+
+          {/* Container inferior: concentração de capital em aberto */}
+          <section style={{ background: "#f8fafc", borderRadius: "20px", padding: "20px", marginBottom: "32px", border: "1px solid #e5e7eb" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "16px", flexWrap: "wrap", marginBottom: "20px" }}>
+              <div>
+                <h3 style={{ margin: "0 0 6px 0", color: "#1f2937", fontSize: "26px", fontWeight: "800", letterSpacing: "-0.02em" }}>
+                  Concentração por {focus === 'cedente' ? 'Cedente' : 'Sacado'}
+                </h3>
+                <p style={{ margin: 0, color: "#6b7280", fontSize: "14px" }}>
+                  Capital em aberto concentrado nos principais {focus === 'cedente' ? 'cedentes' : 'sacados'}.
+                </p>
+              </div>
+            </div>
+
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "28px", alignItems: "stretch" }}>
+              <div style={{
+                flex: "0 0 450px",
+                minWidth: "300px",
+                maxWidth: "100%",
+                border: "1px solid #d1d5db",
+                borderRadius: "18px",
+                background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)",
+                padding: "24px",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "space-between"
+              }}>
+                <div style={{ textAlign: "center", marginBottom: "18px" }}>
+                  <div style={{ fontSize: "12px", fontWeight: "800", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "8px" }}>
+                    Capital em Aberto
+                  </div>
+                  <div style={{ fontSize: "28px", fontWeight: "900", color: "#0f172a", letterSpacing: "-0.03em", lineHeight: 1.1 }}>
+                    {fmtM(stats.totalVal)}
+                  </div>
+                  <div style={{ marginTop: "10px", fontSize: "14px", color: "#64748b", fontWeight: "700" }}>
+                    Top {stats.pieData.length} = 100,0%
+                  </div>
+                </div>
+
+                {renderDonutChart({
+                  pieData: stats.pieData,
+                  hoveredName: hoveredSlice,
+                  selectedName: selectedSlice,
+                  onSliceClick: handleSliceClick,
+                  onSliceHover: handleMouseMove,
+                  onMouseLeave: () => { setTooltip({ show: false }); setHoveredSlice(null); },
+                  donut: true,
+                  size: 250
+                })}
+
+                <div style={{ marginTop: "20px", textAlign: "center", color: "#64748b", fontSize: "13px", lineHeight: 1.45, maxWidth: "320px" }}>
+                  Passe o mouse para ver os detalhes e clique em um segmento para filtrar os títulos daquele {focus === 'cedente' ? 'cedente' : 'sacado'} na tabela detalhada.
+                </div>
+              </div>
+
+              <div style={{
+                flex: "1 1 520px",
+                minWidth: "320px",
+                border: "1px solid #d1d5db",
+                borderRadius: "18px",
+                overflow: "hidden",
+                background: "#ffffff"
+              }}>
+                <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 220px 120px", background: "#f3f4f6", color: "#526581", fontSize: "13px", fontWeight: "800", textTransform: "uppercase", letterSpacing: "0.04em", borderBottom: "1px solid #d1d5db" }}>
+                  <div style={{ padding: "16px 20px" }}>{focus === 'cedente' ? 'Cedente' : 'Sacado'}</div>
+                  <div style={{ padding: "16px 20px", textAlign: "right" }}>Capital em Aberto</div>
+                  <div style={{ padding: "16px 20px", textAlign: "right" }}>%</div>
+                </div>
+                {stats.pieData.map((slice, idx) => {
+                  const isDimmed = selectedSlice && selectedSlice !== slice.name;
+                  const isActive = selectedSlice === slice.name;
+                  return (
+                    <div
+                      key={slice.name}
+                      onClick={() => handleSliceClick(slice.name)}
+                      onMouseEnter={() => setHoveredSlice(slice.name)}
+                      onMouseLeave={() => setHoveredSlice(null)}
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "minmax(0, 1fr) 220px 120px",
+                        alignItems: "center",
+                        borderBottom: idx === stats.pieData.length - 1 ? "none" : "1px solid #e5e7eb",
+                        background: isActive ? "#eef2ff" : hoveredSlice === slice.name ? "#eff6ff" : "#fff",
+                        opacity: isDimmed ? 0.35 : 1,
+                        cursor: "pointer",
+                        transition: "all 0.2s"
+                      }}
+                    >
+                      <div style={{ padding: "16px 20px", display: "flex", alignItems: "center", gap: "12px", minWidth: 0 }}>
+                        <span style={{ width: "12px", height: "12px", borderRadius: "999px", background: slice.color, flexShrink: 0 }} />
+                        <span style={{ fontSize: "16px", fontWeight: "700", color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={slice.name}>{slice.name}</span>
+                      </div>
+                      <div style={{ padding: "16px 20px", textAlign: "right", fontSize: "16px", fontWeight: "800", color: "#0f172a" }}>{fmtM(slice.val)}</div>
+                      <div style={{ padding: "16px 20px", textAlign: "right", fontSize: "16px", fontWeight: "800", color: "#475569" }}>{(slice.percent * 100).toFixed(2).replace('.', ',')}%</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </section>
 
           {/* BANNER DE KPIs INTELIGENTE */}
           {kpiData.baseCalculo > 0 && (
@@ -761,11 +1075,17 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
 
       {/* Tooltip do Gráfico de Pizza */}
       {tooltip.show && (
-        <div style={{ position: 'fixed', top: tooltip.y + 15, left: tooltip.x + 15, background: 'rgba(17, 24, 39, 0.95)', color: '#fff', padding: '12px 16px', borderRadius: '8px', pointerEvents: 'none', zIndex: 9999, boxShadow: '0 10px 15px -3px rgba(0,0,0,0.3)' }}>
+        <div style={{ position: 'fixed', top: tooltip.y + 15, left: tooltip.x + 15, background: 'rgba(17, 24, 39, 0.96)', color: '#fff', padding: '12px 16px', borderRadius: '10px', pointerEvents: 'none', zIndex: 9999, boxShadow: '0 10px 15px -3px rgba(0,0,0,0.3)' }}>
           <div style={{ fontWeight: 700, fontSize: "14px", color: '#f3f4f6', marginBottom: "4px" }}>{tooltip.label}</div>
           <div style={{ fontSize: '18px', fontWeight: 700, color: '#10b981' }}>{fmtM(tooltip.value)}</div>
-          <div style={{ marginTop: '2px', fontSize: '13px', color: '#9ca3af' }}>Representa {(tooltip.percent * 100).toFixed(1)}% do capital em aberto</div>
-          <div style={{ marginTop: '6px', fontSize: '11px', color: '#60a5fa', fontStyle: 'italic' }}>Clique para ver os detalhes</div>
+          <div style={{ marginTop: '2px', fontSize: '13px', color: '#9ca3af' }}>
+            {tooltip.context === 'volume_negociado'
+              ? `Representa ${(tooltip.percent * 100).toFixed(1)}% do volume negociado no período`
+              : `Representa ${(tooltip.percent * 100).toFixed(1)}% do capital em aberto`}
+          </div>
+          {tooltip.context !== 'volume_negociado' && (
+            <div style={{ marginTop: '6px', fontSize: '11px', color: '#60a5fa', fontStyle: 'italic' }}>Clique para ver os detalhes</div>
+          )}
         </div>
       )}
     </div>

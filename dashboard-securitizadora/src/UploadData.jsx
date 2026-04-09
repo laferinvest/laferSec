@@ -273,8 +273,8 @@ export default function UploadData() {
       setSnapshotRiscoAtual(recebiveis);
       setSnapshotLastUpdated(new Date().toLocaleString("pt-BR"));
 
-      // const resultadoCedentesExcluidos =
-      //   calcularCreditoEmAbertoCedentesExcluidosPorMes(data || []);
+      const resultadoCedentesExcluidos =
+        calcularCreditoEmAbertoCedentesExcluidosPorMes(data || []);
 
       // resultadoCedentesExcluidos.forEach((item) => {
       //   console.log(`\nMÊS BASE: ${item.mes} | CORTE: ${item.dataCorte}`);
