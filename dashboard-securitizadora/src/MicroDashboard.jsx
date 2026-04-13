@@ -852,69 +852,126 @@ function SacadoConcentrationCard({
 }) {
   const [hoveredKey, setHoveredKey] = useState(null);
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [tooltip, setTooltip] = useState({ show: false, x: 0, y: 0, label: '', value: 0, pct: 0 });
+  const [tooltip, setTooltip] = useState({
+    show: false,
+    x: 0,
+    y: 0,
+    label: "",
+    value: 0,
+    pct: 0,
+    cedente: ""
+  });
+
   const fmtM = (v) => hideValues ? "R$ -" : formatarMoeda(v);
 
-  const data = useMemo(() => {
-    if ((!clienteSelecionado && !grupoSelecionado) || !rows.length) return [];
+  const cards = useMemo(() => {
+    if (!rows.length) return [];
 
     const firstRow = rows[0];
     const entradaKey =
       Object.keys(firstRow).find(
-        (k) => k.toLowerCase() === "entrada" || (k.toLowerCase().includes("valor") && !k.toLowerCase().includes("pgto"))
+        (k) =>
+          k.toLowerCase() === "entrada" ||
+          (k.toLowerCase().includes("valor") && !k.toLowerCase().includes("pgto"))
       ) || "Entrada";
 
-    const agrupado = new Map();
+    const isModoCedente = !!(clienteSelecionado || grupoSelecionado);
+    const isModoSacado = !isModoCedente && !!sacadoSelecionado;
+
+    if (!isModoCedente && !isModoSacado) return [];
+
+    const mapaCedentes = new Map();
 
     rows.forEach((r) => {
+      const cedente = String(r.Cliente || "").trim();
       const sacado = String(r.Sacado || "").trim();
       const status = r._status;
-
-      if (!sacadoValido(sacado)) return;
-      if (status !== "aVencer" && status !== "atraso") return;
-
       const valor = Number(r[entradaKey]) || 0;
+
+      if (!cedenteValido(cedente) || !sacadoValido(sacado)) return;
+      if (status !== "aVencer" && status !== "atraso") return;
       if (valor <= 0) return;
 
-      if (!agrupado.has(sacado)) {
-        agrupado.set(sacado, { sacado, valor: 0, qtdTitulos: 0 });
-      }
+      if (isModoCedente) {
+        const chave = clienteSelecionado || grupoSelecionado || "selecionado";
+        if (!mapaCedentes.has(chave)) {
+          mapaCedentes.set(chave, {
+            cedenteTitulo: clienteSelecionado || grupoSelecionado || "Selecionado",
+            itens: new Map()
+          });
+        }
 
-      const atual = agrupado.get(sacado);
-      atual.valor += valor;
-      atual.qtdTitulos += 1;
+        const grupo = mapaCedentes.get(chave);
+        if (!grupo.itens.has(sacado)) {
+          grupo.itens.set(sacado, { sacado, valor: 0, qtdTitulos: 0 });
+        }
+
+        const atual = grupo.itens.get(sacado);
+        atual.valor += valor;
+        atual.qtdTitulos += 1;
+      } else if (isModoSacado) {
+        if (!mapaCedentes.has(cedente)) {
+          mapaCedentes.set(cedente, {
+            cedenteTitulo: cedente,
+            itens: new Map()
+          });
+        }
+
+        const grupo = mapaCedentes.get(cedente);
+        if (!grupo.itens.has(sacado)) {
+          grupo.itens.set(sacado, { sacado, valor: 0, qtdTitulos: 0 });
+        }
+
+        const atual = grupo.itens.get(sacado);
+        atual.valor += valor;
+        atual.qtdTitulos += 1;
+      }
     });
 
-    const arr = Array.from(agrupado.values()).sort((a, b) => b.valor - a.valor);
-    const total = arr.reduce((acc, item) => acc + item.valor, 0);
+    const palette = ["#4f46e5", "#0ea5e9", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#14b8a6", "#f97316", "#6366f1", "#84cc16"];
+    const strokeWidth = 22;
+    const radius = 50 - strokeWidth / 2;
+    const circumference = 2 * Math.PI * radius;
 
-    return arr.map((item) => ({
-      ...item,
-      pct: total > 0 ? (item.valor / total) * 100 : 0,
-      total,
-    }));
-  }, [rows, clienteSelecionado, grupoSelecionado]);
+    return Array.from(mapaCedentes.values())
+      .map((grupo) => {
+        const arr = Array.from(grupo.itens.values()).sort((a, b) => b.valor - a.valor);
+        const total = arr.reduce((acc, item) => acc + item.valor, 0);
 
-  if (!clienteSelecionado && !grupoSelecionado) return null;
+        let accPct = 0;
+        const enriched = arr.map((item, idx) => {
+          const pct = total > 0 ? (item.valor / total) * 100 : 0;
+          const color = palette[idx % palette.length];
+          const strokeDasharray = `${(pct / 100) * circumference} ${circumference}`;
+          const strokeDashoffset = -((accPct / 100) * circumference);
+          accPct += pct;
 
-  const totalCapital = data[0]?.total || 0;
+          return {
+            ...item,
+            pct,
+            total,
+            color,
+            strokeDasharray,
+            strokeDashoffset,
+            cedente: grupo.cedenteTitulo
+          };
+        });
+
+        return {
+          cedente: grupo.cedenteTitulo,
+          total,
+          top5Pct: enriched.slice(0, 5).reduce((acc, item) => acc + item.pct, 0),
+          enriched
+        };
+      })
+      .sort((a, b) => b.total - a.total);
+  }, [rows, clienteSelecionado, grupoSelecionado, sacadoSelecionado]);
+
+  if (!cards.length) return null;
+
   const size = 240;
   const strokeWidth = 22;
   const radius = 50 - strokeWidth / 2;
-  const circumference = 2 * Math.PI * radius;
-
-  let accPct = 0;
-  const palette = ["#4f46e5", "#0ea5e9", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#14b8a6", "#f97316", "#6366f1", "#84cc16"];
-
-  const enriched = data.map((item, idx) => {
-    const color = palette[idx % palette.length];
-    const strokeDasharray = `${(item.pct / 100) * circumference} ${circumference}`;
-    const strokeDashoffset = -((accPct / 100) * circumference);
-    accPct += item.pct;
-    return { ...item, color, strokeDasharray, strokeDashoffset };
-  });
-
-  const top5Pct = enriched.slice(0, 5).reduce((acc, item) => acc + item.pct, 0);
 
   const handleDonutMouseMove = (e, item) => {
     setTooltip({
@@ -924,8 +981,9 @@ function SacadoConcentrationCard({
       label: item.sacado,
       value: item.valor,
       pct: item.pct,
+      cedente: item.cedente
     });
-    setHoveredKey(item.sacado);
+    setHoveredKey(`${item.cedente}__${item.sacado}`);
   };
 
   const clearDonutHover = () => {
@@ -960,96 +1018,171 @@ function SacadoConcentrationCard({
       </div>
 
       <CollapsePanel isCollapsed={isCollapsed}>
-        <div style={{ paddingTop: "24px" }}>
-          {!data.length ? (
-            <div style={{ padding: "28px 20px", textAlign: "center", color: "#6b7280", border: "1px dashed #d1d5db", borderRadius: "12px", background: "#fafafa" }}>
-              Não há capital em aberto por sacado para a seleção atual.
-            </div>
-          ) : (
-            <div style={{ display: "grid", gridTemplateColumns: "minmax(280px, 360px) minmax(0, 1fr)", gap: "24px", alignItems: "stretch" }}>
-              <div style={{ border: "1px solid #e5e7eb", borderRadius: "14px", background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", padding: "22px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: 400 }}>
-                <div style={{ width: "100%", display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", marginBottom: "18px" }}>
-                  <div style={{ fontSize: 10, color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", lineHeight: 1.2 }}>Capital em aberto</div>
-                  <div style={{ fontSize: 28, color: "#111827", fontWeight: 800, lineHeight: 1.1, marginTop: 6, letterSpacing: "-0.02em", wordBreak: "break-word" }}>{fmtM(totalCapital)}</div>
-                  <div style={{ fontSize: 12, color: "#64748b", marginTop: 8, lineHeight: 1.2, fontWeight: 600 }}>Top 5 = {hideValues ? "-" : `${top5Pct.toFixed(1).replace(".", ",")}%`}</div>
+        <div style={{ paddingTop: "24px", display: "flex", flexDirection: "column", gap: "24px" }}>
+          {cards.map((card) => (
+            <div
+              key={card.cedente}
+              style={{
+                border: "1px solid #e5e7eb",
+                borderRadius: "16px",
+                padding: "20px",
+                background: "#fff",
+                boxShadow: "0 4px 12px rgba(0,0,0,0.04)"
+              }}
+            >
+              <div style={{ marginBottom: "18px" }}>
+                <div style={{ fontSize: "11px", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                  Cedente
                 </div>
-
-                <div style={{ position: "relative", width: size, height: size }}>
-                  <svg
-                    viewBox="0 0 120 120"
-                    style={{ width: "100%", height: "100%", transform: "rotate(-90deg)" }}
-                    onMouseLeave={clearDonutHover}
-                  >
-                    <circle cx="60" cy="60" r={radius} fill="none" stroke="#e5e7eb" strokeWidth={strokeWidth} />
-                    {enriched.map((item) => {
-                      const active = hoveredKey === item.sacado || sacadoSelecionado === item.sacado;
-                      return (
-                        <circle
-                          key={item.sacado}
-                          cx="60"
-                          cy="60"
-                          r={radius}
-                          fill="none"
-                          stroke={item.color}
-                          strokeWidth={active ? strokeWidth + 2 : strokeWidth}
-                          strokeDasharray={item.strokeDasharray}
-                          strokeDashoffset={item.strokeDashoffset}
-                          strokeLinecap="butt"
-                          style={{ cursor: "pointer", transition: "all 0.2s ease", opacity: hoveredKey && hoveredKey !== item.sacado ? 0.35 : 1 }}
-                          onMouseMove={(e) => handleDonutMouseMove(e, item)}
-                          onMouseEnter={(e) => handleDonutMouseMove(e, item)}
-                          onMouseLeave={clearDonutHover}
-                          onClick={() => setSacadoSelecionado((prev) => prev === item.sacado ? "" : item.sacado)}
-                        />
-                      );
-                    })}
-                  </svg>
-                </div>
-
-                <div style={{ marginTop: 20, fontSize: 12, color: "#64748b", textAlign: "center", lineHeight: 1.6, maxWidth: 260 }}>
-                  Passe o mouse para ver os detalhes e clique em um segmento para filtrar os títulos daquele sacado na tabela detalhada.
+                <div style={{ fontSize: "20px", color: "#111827", fontWeight: 800, marginTop: 6, wordBreak: "break-word" }}>
+                  {card.cedente}
                 </div>
               </div>
 
-              <div style={{ border: "1px solid #e5e7eb", borderRadius: "14px", overflow: "hidden", background: "#fff" }}>
-                <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 170px 110px", gap: "12px", padding: "14px 16px", background: "#f8fafc", borderBottom: "1px solid #e5e7eb", fontSize: 12, color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                  <div>Sacado</div>
-                  <div style={{ textAlign: "right" }}>Capital em aberto</div>
-                  <div style={{ textAlign: "right" }}>%</div>
+              {!card.enriched.length ? (
+                <div style={{ padding: "28px 20px", textAlign: "center", color: "#6b7280", border: "1px dashed #d1d5db", borderRadius: "12px", background: "#fafafa" }}>
+                  Não há capital em aberto por sacado para este cedente.
                 </div>
-
-                <div style={{ maxHeight: 360, overflowY: "auto" }}>
-                  {enriched.map((item) => {
-                    const active = sacadoSelecionado === item.sacado;
-                    return (
-                      <div
-                        key={item.sacado}
-                        onClick={() => setSacadoSelecionado((prev) => prev === item.sacado ? "" : item.sacado)}
-                        onMouseEnter={() => setHoveredKey(item.sacado)}
-                        onMouseLeave={() => setHoveredKey(null)}
-                        style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 170px 110px", gap: "12px", alignItems: "center", padding: "14px 16px", borderBottom: "1px solid #f1f5f9", cursor: "pointer", background: active ? "#eef2ff" : hoveredKey === item.sacado ? "#f8fafc" : "#fff", transition: "all 0.18s ease" }}
-                      >
-                        <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-                          <span style={{ width: 10, height: 10, borderRadius: "50%", background: item.color, flex: "0 0 auto" }} />
-                          <span style={{ color: active ? "#312e81" : "#111827", fontWeight: active ? 700 : 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={item.sacado}>{item.sacado}</span>
-                        </div>
-                        <div style={{ textAlign: "right", color: "#111827", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{fmtM(item.valor)}</div>
-                        <div style={{ textAlign: "right", color: active ? "#312e81" : "#475569", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{hideValues ? "-" : `${item.pct.toFixed(2).replace(".", ",")}%`}</div>
+              ) : (
+                <div style={{ display: "grid", gridTemplateColumns: "minmax(280px, 360px) minmax(0, 1fr)", gap: "24px", alignItems: "stretch" }}>
+                  <div style={{ border: "1px solid #e5e7eb", borderRadius: "14px", background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", padding: "22px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: 400 }}>
+                    <div style={{ width: "100%", display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", marginBottom: "18px" }}>
+                      <div style={{ fontSize: 10, color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", lineHeight: 1.2 }}>Capital em aberto</div>
+                      <div style={{ fontSize: 28, color: "#111827", fontWeight: 800, lineHeight: 1.1, marginTop: 6, letterSpacing: "-0.02em", wordBreak: "break-word" }}>
+                        {fmtM(card.total)}
                       </div>
-                    );
-                  })}
+                      <div style={{ fontSize: 12, color: "#64748b", marginTop: 8, lineHeight: 1.2, fontWeight: 600 }}>
+                        Top 5 = {hideValues ? "-" : `${card.top5Pct.toFixed(1).replace(".", ",")}%`}
+                      </div>
+                    </div>
+
+                    <div style={{ position: "relative", width: size, height: size }}>
+                      <svg
+                        viewBox="0 0 120 120"
+                        style={{ width: "100%", height: "100%", transform: "rotate(-90deg)" }}
+                        onMouseLeave={clearDonutHover}
+                      >
+                        <circle cx="60" cy="60" r={radius} fill="none" stroke="#e5e7eb" strokeWidth={strokeWidth} />
+                        {card.enriched.map((item) => {
+                          const hoverKey = `${item.cedente}__${item.sacado}`;
+                          const active = hoveredKey === hoverKey || sacadoSelecionado === item.sacado;
+
+                          return (
+                            <circle
+                              key={`${item.cedente}-${item.sacado}`}
+                              cx="60"
+                              cy="60"
+                              r={radius}
+                              fill="none"
+                              stroke={item.color}
+                              strokeWidth={active ? strokeWidth + 2 : strokeWidth}
+                              strokeDasharray={item.strokeDasharray}
+                              strokeDashoffset={item.strokeDashoffset}
+                              strokeLinecap="butt"
+                              style={{
+                                cursor: "pointer",
+                                transition: "all 0.2s ease",
+                                opacity: hoveredKey && hoveredKey !== hoverKey ? 0.35 : 1
+                              }}
+                              onMouseMove={(e) => handleDonutMouseMove(e, item)}
+                              onMouseEnter={(e) => handleDonutMouseMove(e, item)}
+                              onMouseLeave={clearDonutHover}
+                              onClick={() => setSacadoSelecionado((prev) => prev === item.sacado ? "" : item.sacado)}
+                            />
+                          );
+                        })}
+                      </svg>
+                    </div>
+
+                    <div style={{ marginTop: 20, fontSize: 12, color: "#64748b", textAlign: "center", lineHeight: 1.6, maxWidth: 260 }}>
+                      Passe o mouse para ver os detalhes e clique em um segmento para filtrar os títulos daquele sacado na tabela detalhada.
+                    </div>
+                  </div>
+
+                  <div style={{ border: "1px solid #e5e7eb", borderRadius: "14px", overflow: "hidden", background: "#fff" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 170px 110px", gap: "12px", padding: "14px 16px", background: "#f8fafc", borderBottom: "1px solid #e5e7eb", fontSize: 12, color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                      <div>Sacado</div>
+                      <div style={{ textAlign: "right" }}>Capital em aberto</div>
+                      <div style={{ textAlign: "right" }}>%</div>
+                    </div>
+
+                    <div style={{ maxHeight: 360, overflowY: "auto" }}>
+                      {card.enriched.map((item) => {
+                        const hoverKey = `${item.cedente}__${item.sacado}`;
+                        const active = sacadoSelecionado === item.sacado;
+
+                        return (
+                          <div
+                            key={`${item.cedente}-${item.sacado}-row`}
+                            onClick={() => setSacadoSelecionado((prev) => prev === item.sacado ? "" : item.sacado)}
+                            onMouseEnter={() => setHoveredKey(hoverKey)}
+                            onMouseLeave={() => setHoveredKey(null)}
+                            style={{
+                              display: "grid",
+                              gridTemplateColumns: "minmax(0, 1fr) 170px 110px",
+                              gap: "12px",
+                              alignItems: "center",
+                              padding: "14px 16px",
+                              borderBottom: "1px solid #f1f5f9",
+                              cursor: "pointer",
+                              background: active ? "#eef2ff" : hoveredKey === hoverKey ? "#f8fafc" : "#fff",
+                              transition: "all 0.18s ease"
+                            }}
+                          >
+                            <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                              <span style={{ width: 10, height: 10, borderRadius: "50%", background: item.color, flex: "0 0 auto" }} />
+                              <span
+                                style={{
+                                  color: active ? "#312e81" : "#111827",
+                                  fontWeight: active ? 700 : 600,
+                                  whiteSpace: "nowrap",
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis"
+                                }}
+                                title={item.sacado}
+                              >
+                                {item.sacado}
+                              </span>
+                            </div>
+                            <div style={{ textAlign: "right", color: "#111827", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
+                              {fmtM(item.valor)}
+                            </div>
+                            <div style={{ textAlign: "right", color: active ? "#312e81" : "#475569", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
+                              {hideValues ? "-" : `${item.pct.toFixed(2).replace(".", ",")}%`}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
-          )}
+          ))}
         </div>
       </CollapsePanel>
 
       {tooltip.show && (
-        <div style={{ position: 'fixed', top: tooltip.y + 15, left: tooltip.x + 15, background: 'rgba(17, 24, 39, 0.9)', color: '#fff', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', pointerEvents: 'none', zIndex: 9999 }}>
-          <div style={{ fontWeight: 600 }}>{tooltip.label}</div>
-          <div style={{ marginTop: '4px', fontSize: '15px', fontWeight: 700 }}>{fmtM(tooltip.value)}</div>
-          <div style={{ marginTop: '2px', fontSize: '13px', color: '#10b981' }}>{hideValues ? '-' : `${tooltip.pct.toFixed(2).replace('.', ',')}%`}</div>
+        <div
+          style={{
+            position: "fixed",
+            top: tooltip.y + 14,
+            left: tooltip.x + 14,
+            background: "rgba(17,24,39,0.92)",
+            color: "#fff",
+            padding: "10px 12px",
+            borderRadius: "10px",
+            fontSize: "12px",
+            zIndex: 99999,
+            pointerEvents: "none",
+            boxShadow: "0 10px 25px rgba(0,0,0,0.18)",
+            maxWidth: 260
+          }}
+        >
+          <div style={{ fontWeight: 800, marginBottom: 4 }}>{tooltip.label}</div>
+          <div style={{ color: "#cbd5e1", marginBottom: 4 }}>{tooltip.cedente}</div>
+          <div>{fmtM(tooltip.value)}</div>
+          <div>{hideValues ? "-" : `${tooltip.pct.toFixed(2).replace(".", ",")}%`}</div>
         </div>
       )}
     </div>
@@ -1471,6 +1604,7 @@ export default function MicroDashboard({ session, onSidebarToggle, hideValues, s
   const [clienteSelecionado, setClienteSelecionado] = useState("");
   const [grupoSelecionado, setGrupoSelecionado] = useState("");
   const [sacadoSelecionado, setSacadoSelecionado] = useState("");
+  const [rowsConcentracaoSacado, setRowsConcentracaoSacado] = useState([]);
 
   // ESTADOS DE CONTROLO DA SIDEBAR
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -1710,7 +1844,22 @@ const riscoAtual = useMemo(() => {
 }, [rowsParaRiscoAtual]);
 
 const kpiData = useMemo(() => {
-    if (!rowsParaTabela || rowsParaTabela.length === 0) return { riscoAtual: 0, taxaMedia: 0, baseCalculo: 0, valorMedio: 0, prazoMedio: 0, desagioTotal: 0, encargosTotal: 0, diasOperacao: 0 };
+    if (!rowsParaTabela || rowsParaTabela.length === 0) {
+      return {
+        riscoAtual: 0,
+        taxaMedia: 0,
+        baseCalculo: 0,
+        qtdBorderos: 0,
+        qtdTitulos: 0,
+        valorMedioBordero: 0,
+        valorMedioTitulo: 0,
+        prazoMedio: 0,
+        desagioTotal: 0,
+        encargosTotal: 0,
+        diasOperacao: 0,
+        ultimasTaxas: []
+      };
+    }
 
     const borderoMap = new Map();
     let sumFaceTotal = 0;
@@ -1728,6 +1877,7 @@ const kpiData = useMemo(() => {
     const desagioKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'desagio' || k.toLowerCase() === 'deságio');
 
     const seenBorderosDesagio = new Set();
+    const latestBorderoById = new Map();
     let totalDesagio = 0;
     let totalEncargos = 0;
     
@@ -1769,6 +1919,23 @@ const kpiData = useMemo(() => {
         bData.hasRate = true;
       }
 
+      const emisDateForLatest = emisKey && r[emisKey]
+        ? new Date(String(r[emisKey]).split("T")[0] + "T00:00:00")
+        : null;
+      const prevLatest = latestBorderoById.get(bNum);
+      if (!prevLatest || ((emisDateForLatest && prevLatest.emisDate && emisDateForLatest > prevLatest.emisDate) || (emisDateForLatest && !prevLatest.emisDate))) {
+        latestBorderoById.set(bNum, {
+          bordero: bNum,
+          taxa: hasRateVal ? rate : null,
+          emisDate: emisDateForLatest
+        });
+      } else if (prevLatest && prevLatest.taxa === null && hasRateVal) {
+        latestBorderoById.set(bNum, {
+          ...prevLatest,
+          taxa: rate
+        });
+      }
+
       if (val > 0) {
         sumFaceTotal += val;
         countTitulos += 1;
@@ -1807,17 +1974,30 @@ const kpiData = useMemo(() => {
       diasOperacao = Math.max(1, diff);
     }
 
-    return {
-      riscoAtual,
-      taxaMedia: baseCalculoTaxa > 0 ? (sumTaxaWeighted / baseCalculoTaxa) : 0,
-      baseCalculo: baseCalculoTaxa,
-      qtdBorderos: borderoMap.size,
-      valorMedio: borderoMap.size > 0 ? sumFaceTotal / borderoMap.size : 0,
-      prazoMedio: sumFaceTotal > 0 ? sumPrazoWeighted / sumFaceTotal : 0,
-      desagioTotal: totalDesagio,
-      encargosTotal: totalEncargos,
-      diasOperacao
-    };
+    const ultimasTaxas = Array.from(latestBorderoById.values())
+      .filter(item => item.emisDate)
+      .sort((a, b) => b.emisDate - a.emisDate)
+      .slice(0, 5)
+      .map(item => ({
+        bordero: item.bordero,
+        taxa: item.taxa,
+        emis: item.emisDate
+      }));
+
+return {
+  riscoAtual,
+  taxaMedia: baseCalculoTaxa > 0 ? (sumTaxaWeighted / baseCalculoTaxa) : 0,
+  baseCalculo: baseCalculoTaxa,
+  qtdBorderos: borderoMap.size,
+  qtdTitulos: countTitulos,
+  valorMedioBordero: borderoMap.size > 0 ? sumFaceTotal / borderoMap.size : 0,
+  valorMedioTitulo: countTitulos > 0 ? sumFaceTotal / countTitulos : 0,
+  prazoMedio: sumFaceTotal > 0 ? sumPrazoWeighted / sumFaceTotal : 0,
+  desagioTotal: totalDesagio,
+  encargosTotal: totalEncargos,
+  diasOperacao,
+  ultimasTaxas
+};  
   }, [rowsParaTabela]);
 
   useEffect(() => {
@@ -1829,6 +2009,49 @@ const kpiData = useMemo(() => {
       buscarRelacionamentos();
     }
   }, [session]);
+
+  useEffect(() => {
+  if (!session?.user?.id) return;
+
+  const delayDebounceFn = setTimeout(async () => {
+    if (!sacadoSelecionado || clienteSelecionado || grupoSelecionado) {
+      setRowsConcentracaoSacado([]);
+      return;
+    }
+
+    const cedentesRelacionados = Array.from(
+      new Set(
+        relacionamentos
+          .filter((r) => r.Sacado === sacadoSelecionado && cedenteValido(r.Cliente))
+          .map((r) => String(r.Cliente || "").trim())
+          .filter(Boolean)
+      )
+    );
+
+    if (!cedentesRelacionados.length) {
+      setRowsConcentracaoSacado([]);
+      return;
+    }
+
+    const { data } = await supabase
+      .from("secInfo")
+      .select("*")
+      .in("Cliente", cedentesRelacionados)
+      .order("id", { ascending: false })
+      .limit(20000);
+
+    if (data) {
+      const filtrados = data.filter(
+        (r) => sacadoValido(r.Sacado) && cedenteValido(r.Cliente)
+      );
+      setRowsConcentracaoSacado(filtrados);
+    } else {
+      setRowsConcentracaoSacado([]);
+    }
+  }, 300);
+
+  return () => clearTimeout(delayDebounceFn);
+}, [session?.user?.id, sacadoSelecionado, clienteSelecionado, grupoSelecionado, relacionamentos]);
 
   const clientesDisponiveis = useMemo(() => {
     let base = relacionamentos;
@@ -2198,20 +2421,53 @@ return (
                   </div>
                 </div>
 
-                {/* INFO 2: Ticket Médio */}
+                {/* INFO 2: Ticket Médio (Borderô) */}
                 <div style={{ background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #0ea5e9", padding: "20px 16px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
                     <div style={{ background: "rgba(14, 165, 233, 0.1)", padding: "6px", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <svg width="16" height="16" fill="none" stroke="#0ea5e9" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"></rect><circle cx="12" cy="12" r="2"></circle><path d="M6 12h.01M18 12h.01"></path></svg>
+                      <svg width="16" height="16" fill="none" stroke="#0ea5e9" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                        <rect x="2" y="6" width="20" height="12" rx="2"></rect>
+                        <circle cx="12" cy="12" r="2"></circle>
+                        <path d="M6 12h.01M18 12h.01"></path>
+                      </svg>
                     </div>
-                    <h3 style={{ margin: 0, fontSize: "11px", fontWeight: "700", color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "normal" }}>Ticket Médio</h3>
+                    <h3 style={{ margin: 0, fontSize: "11px", fontWeight: "700", color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "normal" }}>
+                      Ticket Médio (Borderô)
+                    </h3>
                   </div>
                   <div style={{ display: "flex", alignItems: "baseline", gap: "4px" }}>
-                    <span style={{ fontSize: "28px", fontWeight: "700", color: "#111827", lineHeight: "1", letterSpacing: "-0.02em", wordBreak: "break-word" }}>{fmtM(kpiData.valorMedio)}</span>
+                    <span style={{ fontSize: "28px", fontWeight: "700", color: "#111827", lineHeight: "1", letterSpacing: "-0.02em", wordBreak: "break-word" }}>
+                      {fmtM(kpiData.valorMedioBordero)}
+                    </span>
                   </div>
-                <div style={{ fontSize: "12px", color: "#6b7280", marginTop: "12px", fontWeight: "500", whiteSpace: "normal" }}>
-                  Borderôs analisados: <span style={{ color: "#374151", fontWeight: "600" }}>{kpiData.qtdBorderos}</span>
+                  <div style={{ fontSize: "12px", color: "#6b7280", marginTop: "12px", fontWeight: "500", whiteSpace: "normal" }}>
+                    Borderôs analisados: <span style={{ color: "#374151", fontWeight: "600" }}>{kpiData.qtdBorderos}</span>
+                  </div>
                 </div>
+
+                {/* INFO 2.5: Ticket Médio (Título) */}
+                <div style={{ background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #06b6d4", padding: "20px 16px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
+                    <div style={{ background: "rgba(6, 182, 212, 0.1)", padding: "6px", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <svg width="16" height="16" fill="none" stroke="#06b6d4" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                        <path d="M3 7h18"></path>
+                        <path d="M6 3v8"></path>
+                        <path d="M18 3v8"></path>
+                        <rect x="3" y="11" width="18" height="10" rx="2"></rect>
+                      </svg>
+                    </div>
+                    <h3 style={{ margin: 0, fontSize: "11px", fontWeight: "700", color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "normal" }}>
+                      Ticket Médio (Título)
+                    </h3>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: "4px" }}>
+                    <span style={{ fontSize: "28px", fontWeight: "700", color: "#111827", lineHeight: "1", letterSpacing: "-0.02em", wordBreak: "break-word" }}>
+                      {fmtM(kpiData.valorMedioTitulo)}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: "12px", color: "#6b7280", marginTop: "12px", fontWeight: "500", whiteSpace: "normal" }}>
+                    Títulos analisados: <span style={{ color: "#374151", fontWeight: "600" }}>{kpiData.qtdTitulos}</span>
+                  </div>
                 </div>
 
                 {/* INFO 3: Prazo Médio */}
@@ -2286,21 +2542,105 @@ return (
                 </div>
               </div>
 
+              {/* INFO 7: Últimas Taxas */}
+              <div style={{ background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #7c3aed", padding: "20px 16px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
+                  <div style={{ background: "rgba(124, 58, 237, 0.1)", padding: "6px", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <svg width="16" height="16" fill="none" stroke="#7c3aed" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                      <path d="M3 3v18h18"></path>
+                      <path d="M7 14l4-4 3 3 4-6"></path>
+                    </svg>
+                  </div>
+                  <h3 style={{ margin: 0, fontSize: "11px", fontWeight: "700", color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "normal" }}>
+                    Últimas Taxas
+                  </h3>
+                </div>
+
+                <div style={{ border: "1px solid #e5e7eb", borderRadius: "8px", overflow: "hidden", background: "#fff" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 90px", background: "#f8fafc", borderBottom: "1px solid #e5e7eb" }}>
+                    <div style={{ padding: "8px 10px", fontSize: "11px", fontWeight: "700", color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em" }}>Borderô</div>
+                    <div style={{ padding: "8px 10px", fontSize: "11px", fontWeight: "700", color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", textAlign: "right" }}>Taxa</div>
+                  </div>
+                  {kpiData.ultimasTaxas.length > 0 ? (
+                    kpiData.ultimasTaxas.map((item, idx) => (
+                      <div key={`${item.bordero}-${idx}`} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 90px", borderBottom: idx === kpiData.ultimasTaxas.length - 1 ? "none" : "1px solid #f1f5f9" }}>
+                        <div style={{ padding: "9px 10px", fontSize: "13px", fontWeight: "600", color: "#111827", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={item.bordero}>
+                          {item.bordero}
+                        </div>
+                        <div style={{ padding: "9px 10px", fontSize: "13px", fontWeight: "700", color: "#111827", textAlign: "right" }}>
+                          {item.taxa !== null && item.taxa !== undefined ? `${Number(item.taxa).toFixed(2).replace('.', ',')}%` : "-"}
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div style={{ padding: "10px", fontSize: "13px", color: "#6b7280", textAlign: "center" }}>
+                      Sem taxas recentes
+                    </div>
+                  )}
+                </div>
+              </div>
+
               </div>
               )}
               
               <DashboardInsights processedRows={rowsFilteredByDate} insightFilter={insightFilter} setInsightFilter={setInsightFilter} setBorderoFilter={setBorderoFilter} setDctoFilter={setDctoFilter} hideValues={hideValues} />
               
-              {(clienteSelecionado || grupoSelecionado) && (
-                <SacadoConcentrationCard
-                  rows={rowsParaTabela}
-                  clienteSelecionado={clienteSelecionado}
-                  grupoSelecionado={grupoSelecionado}
-                  sacadoSelecionado={sacadoSelecionado}
-                  setSacadoSelecionado={setSacadoSelecionado}
-                  hideValues={hideValues}
-                />
-              )}
+{(clienteSelecionado || grupoSelecionado || sacadoSelecionado) && (
+  <SacadoConcentrationCard
+    rows={
+      (sacadoSelecionado && !clienteSelecionado && !grupoSelecionado)
+        ? rowsConcentracaoSacado.map((r) => {
+            const firstRow = rowsConcentracaoSacado[0];
+            if (!firstRow) return r;
+
+            const vctoKey = Object.keys(firstRow).find(
+              (k) => k.toLowerCase() === "vcto" || (k.toLowerCase().includes("vcto") && !k.toLowerCase().includes("vl"))
+            );
+            const pgtoKey = Object.keys(firstRow).find(
+              (k) => k.toLowerCase() === "pgto" || (k.toLowerCase().includes("pgto") && !k.toLowerCase().includes("vl"))
+            );
+            const statusKey = Object.keys(firstRow).find(
+              (k) => k.toLowerCase() === "status" || k.toLowerCase() === "estado"
+            );
+
+            let status = "invalido";
+            const vctoVal = vctoKey ? r[vctoKey] : null;
+            const pgtoVal = pgtoKey ? r[pgtoKey] : null;
+            const statusVal = statusKey ? String(r[statusKey]).trim().toUpperCase() : "";
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            if (statusVal === "REC" || statusVal.includes("REC")) status = "recompra";
+            else if (vctoVal) {
+              const effectiveVcto = new Date(String(vctoVal).split("T")[0] + "T00:00:00");
+              if (effectiveVcto.getDay() === 6) effectiveVcto.setDate(effectiveVcto.getDate() + 2);
+              else if (effectiveVcto.getDay() === 0) effectiveVcto.setDate(effectiveVcto.getDate() + 1);
+
+              if (pgtoVal && String(pgtoVal).trim() !== "") {
+                const pgtoDate = new Date(String(pgtoVal).split("T")[0] + "T00:00:00");
+                const clienteAtual = String(r["Cliente"] || "").trim();
+                const diasTolerancia = getDiasUteisToleranciaComissaria(clienteAtual);
+                const toleranciaFinal = diasTolerancia > 0
+                  ? adicionarDiasUteis(effectiveVcto, diasTolerancia)
+                  : effectiveVcto;
+
+                status = pgtoDate <= toleranciaFinal ? "liquidado" : "liquidadoAtraso";
+              } else {
+                status = effectiveVcto < today ? "atraso" : "aVencer";
+              }
+            }
+
+            return { ...r, _status: status };
+          })
+        : rowsParaTabela
+    }
+    clienteSelecionado={clienteSelecionado}
+    grupoSelecionado={grupoSelecionado}
+    sacadoSelecionado={sacadoSelecionado}
+    setSacadoSelecionado={setSacadoSelecionado}
+    hideValues={hideValues}
+  />
+)}
               
               <EvolutionCharts rows={evolutionRows} dateFilter={dateFilter} setDateFilter={handleSetDateFilter} setBorderoFilter={setBorderoFilter} setDctoFilter={setDctoFilter} hideValues={hideValues} />
             </div>

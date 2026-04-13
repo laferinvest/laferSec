@@ -212,6 +212,8 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
   const [hoveredNegotiationSlice, setHoveredNegotiationSlice] = useState(null);
   const [selectedSlice, setSelectedSlice] = useState(null); 
   const [volumePeriod, setVolumePeriod] = useState('mes_atual');
+  const [negotiationPage, setNegotiationPage] = useState(1);
+  const [capitalPage, setCapitalPage] = useState(1);
   const [tooltip, setTooltip] = useState({ show: false, x: 0, y: 0, label: '', value: 0, percent: 0, context: 'capital_aberto' });
 
   useEffect(() => {
@@ -417,40 +419,81 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
   }, [openRows, selectedSlice, focus]);
 
   // 3. Calcula os KPIs com base na visualização atual (Global ou Específica)
-  const kpiData = useMemo(() => {
-    const kpiRows = detailedRows || openRows; 
-    
-    if (!kpiRows || kpiRows.length === 0) return { taxaMedia: 0, baseCalculo: 0, valorMedio: 0, prazoMedio: 0 };
+  const riscoAtual = useMemo(() => {
+    const riscoRows = detailedRows || openRows;
+    if (!riscoRows || riscoRows.length === 0) return 0;
 
-    // OTIMIZAÇÃO: Extração de chaves antes do loop
+    const firstRow = riscoRows[0];
+    const valKey = Object.keys(firstRow).find(
+      k => k.toLowerCase() === 'entrada' || (k.toLowerCase().includes('valor') && !k.toLowerCase().includes('pgto'))
+    );
+
+    if (!valKey) return 0;
+
+    return riscoRows.reduce((acc, row) => acc + (Number(row[valKey]) || 0), 0);
+  }, [detailedRows, openRows]);
+
+  const kpiData = useMemo(() => {
+    const kpiRows = detailedRows || openRows;
+
+    if (!kpiRows || kpiRows.length === 0) {
+      return {
+        riscoAtual: 0,
+        taxaMedia: 0,
+        baseCalculo: 0,
+        qtdBorderos: 0,
+        qtdTitulos: 0,
+        valorMedioBordero: 0,
+        valorMedioTitulo: 0,
+        prazoMedio: 0,
+        desagioTotal: 0,
+        encargosTotal: 0,
+        diasOperacao: 0
+      };
+    }
+
+    const borderoMap = new Map();
+    let sumFaceTotal = 0;
+    let sumPrazoWeighted = 0;
+    let countTitulos = 0;
+
     const firstRow = kpiRows[0];
-    const borderoKey = Object.keys(firstRow).find(k => k.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes("border"));
+    const borderoKey = Object.keys(firstRow).find(k => k.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").includes("border"));
     const valKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'entrada' || (k.toLowerCase().includes('valor') && !k.toLowerCase().includes('pgto')));
+    const vlPgtoKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'vl pgto');
+    const pgtoKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'pgto' || (k.toLowerCase().includes('pgto') && !k.toLowerCase().includes('vl')));
     const rateKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'tx.efet' || k.toLowerCase().includes('tx.efet') || k.toLowerCase().includes('tx efet'));
     const emisKey = Object.keys(firstRow).find(k => k.toLowerCase().includes('emis'));
     const vctoKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'vcto' || (k.toLowerCase().includes('vcto') && !k.toLowerCase().includes('vl')));
     const desagioKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'desagio' || k.toLowerCase() === 'deságio');
 
-    const borderoMap = new Map();
-    const desagioBorderoSet = new Set();
-    let sumFaceTotal = 0;
-    let sumPrazoWeighted = 0;
-    let countTitulos = 0;
-    let sumDesagioTotal = 0;
+    const seenBorderosDesagio = new Set();
+    let totalDesagio = 0;
+    let totalEncargos = 0;
+    let minDate = null;
+    let maxDate = null;
 
     kpiRows.forEach((r, idx) => {
-      const bNum = (borderoKey && r[borderoKey]) ? String(r[borderoKey]).trim() : `avulso_${idx}`; 
+      const bNum = (borderoKey && r[borderoKey]) ? String(r[borderoKey]).trim() : `avulso_${idx}`;
       const val = valKey ? (Number(r[valKey]) || 0) : 0;
-      const desagioVal = desagioKey ? (Number(r[desagioKey]) || 0) : 0;
+      const vlPgto = vlPgtoKey ? (Number(r[vlPgtoKey]) || 0) : 0;
 
-      if (!desagioBorderoSet.has(bNum)) {
-        desagioBorderoSet.add(bNum);
-        sumDesagioTotal += desagioVal;
-      }
-      
       const rawRate = rateKey ? r[rateKey] : null;
       const hasRateVal = rawRate !== null && rawRate !== undefined && String(rawRate).trim() !== "";
       const rate = hasRateVal ? (Number(String(rawRate).replace('%', '').replace(',', '.')) || 0) : 0;
+
+      const desagioVal = desagioKey ? (Number(r[desagioKey]) || 0) : 0;
+      if (!seenBorderosDesagio.has(bNum)) {
+        seenBorderosDesagio.add(bNum);
+        totalDesagio += desagioVal;
+      }
+
+      const temPgto = pgtoKey && r[pgtoKey] && String(r[pgtoKey]).trim() !== "";
+      const encargoPossivel = temPgto && vlPgto > 0 && val > 0 && vlPgto !== val;
+      if (encargoPossivel && vlPgto <= val * 1.4) {
+        const encargoCalculado = vlPgto - val;
+        if (encargoCalculado > 0) totalEncargos += encargoCalculado;
+      }
 
       if (!borderoMap.has(bNum)) {
         borderoMap.set(bNum, { totalValue: 0, rate: 0, hasRate: false });
@@ -465,13 +508,18 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
       if (val > 0) {
         sumFaceTotal += val;
         countTitulos += 1;
-        
+
         let prazo = 0;
-        if (emisKey && r[emisKey] && vctoKey && r[vctoKey]) {
+        if (emisKey && r[emisKey]) {
           const eDate = new Date(String(r[emisKey]).split("T")[0] + "T00:00:00");
-          const vDate = new Date(String(r[vctoKey]).split("T")[0] + "T00:00:00");
-          const diffTime = vDate - eDate;
-          if (diffTime > 0) prazo = Math.round(diffTime / (1000 * 60 * 60 * 24));
+          if (!minDate || eDate < minDate) minDate = eDate;
+          if (!maxDate || eDate > maxDate) maxDate = eDate;
+
+          if (vctoKey && r[vctoKey]) {
+            const vDate = new Date(String(r[vctoKey]).split("T")[0] + "T00:00:00");
+            const diffTime = vDate - eDate;
+            if (diffTime > 0) prazo = Math.round(diffTime / (1000 * 60 * 60 * 24));
+          }
         }
         sumPrazoWeighted += (prazo * val);
       }
@@ -487,14 +535,26 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
       }
     });
 
+    let diasOperacao = 1;
+    if (minDate && maxDate) {
+      const diff = Math.round((maxDate - minDate) / (1000 * 60 * 60 * 24));
+      diasOperacao = Math.max(1, diff);
+    }
+
     return {
+      riscoAtual,
       taxaMedia: baseCalculoTaxa > 0 ? (sumTaxaWeighted / baseCalculoTaxa) : 0,
       baseCalculo: baseCalculoTaxa,
-      valorMedio: countTitulos > 0 ? sumFaceTotal / countTitulos : 0,
+      qtdBorderos: borderoMap.size,
+      qtdTitulos: countTitulos,
+      valorMedioBordero: borderoMap.size > 0 ? sumFaceTotal / borderoMap.size : 0,
+      valorMedioTitulo: countTitulos > 0 ? sumFaceTotal / countTitulos : 0,
       prazoMedio: sumFaceTotal > 0 ? sumPrazoWeighted / sumFaceTotal : 0,
-      desagioTotal: sumDesagioTotal
+      desagioTotal: totalDesagio,
+      encargosTotal: totalEncargos,
+      diasOperacao
     };
-  }, [detailedRows, openRows]);
+  }, [detailedRows, openRows, riscoAtual]);
 
 
   const tableData = useMemo(() => {
@@ -504,6 +564,46 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
   }, [stats.sorted, selectedSlice]);
 
   const currentNegotiationStats = negotiationStats[volumePeriod] || { totalVal: 0, sorted: [], pieData: [] };
+
+  useEffect(() => {
+    setNegotiationPage(1);
+  }, [volumePeriod, focus]);
+
+  const negotiationTableItems = useMemo(() => {
+    return (currentNegotiationStats.sorted || []).filter(item => !String(item.name || '').startsWith('Restante'));
+  }, [currentNegotiationStats]);
+
+  const negotiationItemsPerPage = 10;
+  const negotiationTotalPages = Math.max(1, Math.ceil(negotiationTableItems.length / negotiationItemsPerPage));
+  const negotiationPageSafe = Math.min(negotiationPage, negotiationTotalPages);
+  const negotiationPageItems = negotiationTableItems.slice(
+    (negotiationPageSafe - 1) * negotiationItemsPerPage,
+    negotiationPageSafe * negotiationItemsPerPage
+  );
+
+  useEffect(() => {
+    setCapitalPage(1);
+  }, [focus, selectedSlice, stats.sorted]);
+
+  const capitalTableItems = useMemo(() => {
+    return (stats.sorted || []).filter(item => !String(item.name || '').startsWith('Restante'));
+  }, [stats.sorted]);
+
+  const capitalItemsPerPage = 10;
+  const capitalTotalPages = Math.max(1, Math.ceil(capitalTableItems.length / capitalItemsPerPage));
+  const capitalPageSafe = Math.min(capitalPage, capitalTotalPages);
+  const capitalPageItems = capitalTableItems.slice(
+    (capitalPageSafe - 1) * capitalItemsPerPage,
+    capitalPageSafe * capitalItemsPerPage
+  );
+
+  const capitalTop5Percent = stats.sorted.length
+  ? stats.sorted.slice(0, 5).reduce((acc, item) => acc + item.percent, 0) * 100
+  : 0;
+
+const negotiationTop5Percent = currentNegotiationStats.sorted.length
+  ? currentNegotiationStats.sorted.slice(0, 5).reduce((acc, item) => acc + item.percent, 0) * 100
+  : 0;
 
   const handleMouseMove = (e, slice) => {
     setTooltip({ show: true, x: e.clientX, y: e.clientY, label: slice.name, value: slice.val, percent: slice.percent, context: 'capital_aberto' });
@@ -752,9 +852,9 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
                       <div style={{ fontSize: "28px", fontWeight: "900", color: "#0f172a", letterSpacing: "-0.03em", lineHeight: 1.1 }}>
                         {fmtM(currentNegotiationStats.totalVal)}
                       </div>
-                      <div style={{ marginTop: "10px", fontSize: "14px", color: "#64748b", fontWeight: "700" }}>
-                        Top {currentNegotiationStats.pieData.length} = 100,0%
-                      </div>
+                    <div style={{ marginTop: "10px", fontSize: "14px", color: "#64748b", fontWeight: "700" }}>
+                      Top 5 = {negotiationTop5Percent.toFixed(1).replace('.', ',')}%
+                    </div>
                     </div>
 
                     {renderDonutChart({
@@ -784,28 +884,56 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
                       <div style={{ padding: "16px 20px", textAlign: "right" }}>Volume Negociado</div>
                       <div style={{ padding: "16px 20px", textAlign: "right" }}>%</div>
                     </div>
-                    {currentNegotiationStats.pieData.map((slice, idx) => (
-                      <div
-                        key={slice.name}
-                        onMouseEnter={() => setHoveredNegotiationSlice(slice.name)}
-                        onMouseLeave={() => setHoveredNegotiationSlice(null)}
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns: "minmax(0, 1fr) 220px 120px",
-                          alignItems: "center",
-                          borderBottom: idx === currentNegotiationStats.pieData.length - 1 ? "none" : "1px solid #e5e7eb",
-                          background: hoveredNegotiationSlice === slice.name ? "#eff6ff" : "#fff",
-                          transition: "background 0.2s"
-                        }}
-                      >
-                        <div style={{ padding: "16px 20px", display: "flex", alignItems: "center", gap: "12px", minWidth: 0 }}>
-                          <span style={{ width: "12px", height: "12px", borderRadius: "999px", background: slice.color, flexShrink: 0 }} />
-                          <span style={{ fontSize: "16px", fontWeight: "700", color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={slice.name}>{slice.name}</span>
+                    {negotiationPageItems.map((slice, idx) => {
+                      const globalIndex = (negotiationPageSafe - 1) * negotiationItemsPerPage + idx;
+                      const pieSlice = currentNegotiationStats.pieData.find(item => item.name === slice.name);
+                      const color = pieSlice?.color || '#94a3b8';
+                      return (
+                        <div
+                          key={slice.name}
+                          onMouseEnter={() => setHoveredNegotiationSlice(slice.name)}
+                          onMouseLeave={() => setHoveredNegotiationSlice(null)}
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "minmax(0, 1fr) 220px 120px",
+                            alignItems: "center",
+                            borderBottom: globalIndex === negotiationTableItems.length - 1 ? "none" : "1px solid #e5e7eb",
+                            background: hoveredNegotiationSlice === slice.name ? "#eff6ff" : "#fff",
+                            transition: "background 0.2s"
+                          }}
+                        >
+                          <div style={{ padding: "16px 20px", display: "flex", alignItems: "center", gap: "12px", minWidth: 0 }}>
+                            <span style={{ width: "12px", height: "12px", borderRadius: "999px", background: color, flexShrink: 0 }} />
+                            <span style={{ fontSize: "16px", fontWeight: "700", color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={slice.name}>{slice.name}</span>
+                          </div>
+                          <div style={{ padding: "16px 20px", textAlign: "right", fontSize: "16px", fontWeight: "800", color: "#0f172a" }}>{fmtM(slice.val)}</div>
+                          <div style={{ padding: "16px 20px", textAlign: "right", fontSize: "16px", fontWeight: "800", color: "#475569" }}>{(slice.percent * 100).toFixed(2).replace('.', ',')}%</div>
                         </div>
-                        <div style={{ padding: "16px 20px", textAlign: "right", fontSize: "16px", fontWeight: "800", color: "#0f172a" }}>{fmtM(slice.val)}</div>
-                        <div style={{ padding: "16px 20px", textAlign: "right", fontSize: "16px", fontWeight: "800", color: "#475569" }}>{(slice.percent * 100).toFixed(2).replace('.', ',')}%</div>
+                      );
+                    })}
+                    {negotiationTableItems.length > negotiationItemsPerPage && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', padding: '14px 16px', borderTop: '1px solid #e5e7eb', background: '#fff' }}>
+                        <span style={{ fontSize: '13px', color: '#6b7280' }}>
+                          Mostrando {(negotiationPageSafe - 1) * negotiationItemsPerPage + 1} a {Math.min(negotiationPageSafe * negotiationItemsPerPage, negotiationTableItems.length)} de {negotiationTableItems.length} entradas
+                        </span>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button
+                            onClick={() => setNegotiationPage(p => Math.max(1, p - 1))}
+                            disabled={negotiationPageSafe === 1}
+                            style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #d1d5db', background: negotiationPageSafe === 1 ? '#f3f4f6' : '#fff', color: negotiationPageSafe === 1 ? '#9ca3af' : '#374151', cursor: negotiationPageSafe === 1 ? 'not-allowed' : 'pointer', fontSize: '13px', fontWeight: 600 }}
+                          >
+                            Anterior
+                          </button>
+                          <button
+                            onClick={() => setNegotiationPage(p => Math.min(negotiationTotalPages, p + 1))}
+                            disabled={negotiationPageSafe === negotiationTotalPages}
+                            style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #d1d5db', background: negotiationPageSafe === negotiationTotalPages ? '#f3f4f6' : '#fff', color: negotiationPageSafe === negotiationTotalPages ? '#9ca3af' : '#374151', cursor: negotiationPageSafe === negotiationTotalPages ? 'not-allowed' : 'pointer', fontSize: '13px', fontWeight: 600 }}
+                          >
+                            Próxima
+                          </button>
+                        </div>
                       </div>
-                    ))}
+                    )}
                   </div>
                 </div>
               )}
@@ -846,9 +974,9 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
                   <div style={{ fontSize: "28px", fontWeight: "900", color: "#0f172a", letterSpacing: "-0.03em", lineHeight: 1.1 }}>
                     {fmtM(stats.totalVal)}
                   </div>
-                  <div style={{ marginTop: "10px", fontSize: "14px", color: "#64748b", fontWeight: "700" }}>
-                    Top {stats.pieData.length} = 100,0%
-                  </div>
+                <div style={{ marginTop: "10px", fontSize: "14px", color: "#64748b", fontWeight: "700" }}>
+                  Top 5 = {capitalTop5Percent.toFixed(1).replace('.', ',')}%
+                </div>
                 </div>
 
                 {renderDonutChart({
@@ -880,7 +1008,10 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
                   <div style={{ padding: "16px 20px", textAlign: "right" }}>Capital em Aberto</div>
                   <div style={{ padding: "16px 20px", textAlign: "right" }}>%</div>
                 </div>
-                {stats.pieData.map((slice, idx) => {
+                {capitalPageItems.map((slice, idx) => {
+                  const globalIndex = (capitalPageSafe - 1) * capitalItemsPerPage + idx;
+                  const pieSlice = stats.pieData.find(item => item.name === slice.name);
+                  const color = pieSlice?.color || '#94a3b8';
                   const isDimmed = selectedSlice && selectedSlice !== slice.name;
                   const isActive = selectedSlice === slice.name;
                   return (
@@ -893,7 +1024,7 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
                         display: "grid",
                         gridTemplateColumns: "minmax(0, 1fr) 220px 120px",
                         alignItems: "center",
-                        borderBottom: idx === stats.pieData.length - 1 ? "none" : "1px solid #e5e7eb",
+                        borderBottom: globalIndex === capitalTableItems.length - 1 ? "none" : "1px solid #e5e7eb",
                         background: isActive ? "#eef2ff" : hoveredSlice === slice.name ? "#eff6ff" : "#fff",
                         opacity: isDimmed ? 0.35 : 1,
                         cursor: "pointer",
@@ -901,7 +1032,7 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
                       }}
                     >
                       <div style={{ padding: "16px 20px", display: "flex", alignItems: "center", gap: "12px", minWidth: 0 }}>
-                        <span style={{ width: "12px", height: "12px", borderRadius: "999px", background: slice.color, flexShrink: 0 }} />
+                        <span style={{ width: "12px", height: "12px", borderRadius: "999px", background: color, flexShrink: 0 }} />
                         <span style={{ fontSize: "16px", fontWeight: "700", color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={slice.name}>{slice.name}</span>
                       </div>
                       <div style={{ padding: "16px 20px", textAlign: "right", fontSize: "16px", fontWeight: "800", color: "#0f172a" }}>{fmtM(slice.val)}</div>
@@ -909,6 +1040,29 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
                     </div>
                   );
                 })}
+                {capitalTableItems.length > capitalItemsPerPage && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', padding: '14px 16px', borderTop: '1px solid #e5e7eb', background: '#fff' }}>
+                    <span style={{ fontSize: '13px', color: '#6b7280' }}>
+                      Mostrando {(capitalPageSafe - 1) * capitalItemsPerPage + 1} a {Math.min(capitalPageSafe * capitalItemsPerPage, capitalTableItems.length)} de {capitalTableItems.length} entradas
+                    </span>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button
+                        onClick={() => setCapitalPage(p => Math.max(1, p - 1))}
+                        disabled={capitalPageSafe === 1}
+                        style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #d1d5db', background: capitalPageSafe === 1 ? '#f3f4f6' : '#fff', color: capitalPageSafe === 1 ? '#9ca3af' : '#374151', cursor: capitalPageSafe === 1 ? 'not-allowed' : 'pointer', fontSize: '13px', fontWeight: 600 }}
+                      >
+                        Anterior
+                      </button>
+                      <button
+                        onClick={() => setCapitalPage(p => Math.min(capitalTotalPages, p + 1))}
+                        disabled={capitalPageSafe === capitalTotalPages}
+                        style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #d1d5db', background: capitalPageSafe === capitalTotalPages ? '#f3f4f6' : '#fff', color: capitalPageSafe === capitalTotalPages ? '#9ca3af' : '#374151', cursor: capitalPageSafe === capitalTotalPages ? 'not-allowed' : 'pointer', fontSize: '13px', fontWeight: 600 }}
+                      >
+                        Próxima
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </section>
@@ -919,88 +1073,159 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
               background: "#d1d5db",
               borderRadius: "12px",
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+              gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
               gap: "1px",
-              boxShadow: "0 14px 28px -6px rgba(0, 0, 0, 0.12), 0 4px 10px -4px rgba(0, 0, 0, 0.08)",
-              marginBottom: "36px",
+              boxShadow: "0 8px 18px rgba(0, 0, 0, 0.08)",
+              marginBottom: "32px",
               border: "1px solid #d1d5db",
               overflow: "hidden"
             }}>
-              
-              <div style={{ background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #4f46e5", padding: "24px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
-                  <div style={{ background: "rgba(79, 70, 229, 0.1)", padding: "6px", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <svg width="18" height="18" fill="none" stroke="#4f46e5" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-                      <path d="M23 6l-9.5 9.5-5-5L1 18"/>
-                      <path d="M17 6h6v6"/>
-                    </svg>
+              <div style={{ background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #7c3aed", padding: "20px 16px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
+                  <div style={{ background: "rgba(124, 58, 237, 0.1)", padding: "6px", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <svg width="16" height="16" fill="none" stroke="#7c3aed" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M12 2v20"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7H14a3.5 3.5 0 0 1 0 7H7"/></svg>
                   </div>
-                  <h3 style={{ margin: 0, fontSize: "12px", fontWeight: "700", color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em" }}>Taxa Média Ponderada</h3>
+                  <h3 style={{ margin: 0, fontSize: "11px", fontWeight: "700", color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "normal" }}>Risco Atual</h3>
                 </div>
                 <div style={{ display: "flex", alignItems: "baseline", gap: "4px" }}>
-                  <span style={{ fontSize: "36px", fontWeight: "700", color: "#111827", lineHeight: "1", letterSpacing: "-0.02em" }}>{kpiData.taxaMedia.toFixed(2).replace('.', ',')}%</span>
+                  <span style={{ fontSize: "28px", fontWeight: "700", color: "#111827", lineHeight: "1", letterSpacing: "-0.02em", wordBreak: "break-word" }}>
+                    {fmtM(kpiData.riscoAtual)}
+                  </span>
                 </div>
-                <div style={{ fontSize: "13px", color: "#6b7280", marginTop: "12px", fontWeight: "500" }}>
-                  Base: <span style={{color: "#374151", fontWeight: "600"}}>{fmtM(kpiData.baseCalculo)}</span> {selectedSlice && <span style={{color: "#4f46e5", background: "#e0e7ff", padding: "2px 6px", borderRadius: "4px", marginLeft: "4px", fontSize: "11px", fontWeight: "700"}}>FILTRO ATIVO</span>}
+                <div style={{ fontSize: "12px", color: "#6b7280", marginTop: "12px", fontWeight: "500", whiteSpace: "normal" }}>
+                  Títulos em aberto na seleção
                 </div>
               </div>
 
-              <div style={{ background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #0ea5e9", padding: "24px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
+              <div style={{ background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #4f46e5", padding: "20px 16px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
+                  <div style={{ background: "rgba(79, 70, 229, 0.1)", padding: "6px", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <svg width="16" height="16" fill="none" stroke="#4f46e5" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M23 6l-9.5 9.5-5-5L1 18"/><path d="M17 6h6v6"/></svg>
+                  </div>
+                  <h3 style={{ margin: 0, fontSize: "11px", fontWeight: "700", color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "normal" }}>Taxa Média Ponderada</h3>
+                </div>
+                <div style={{ display: "flex", alignItems: "baseline", gap: "4px" }}>
+                  <span style={{ fontSize: "28px", fontWeight: "700", color: "#111827", lineHeight: "1", letterSpacing: "-0.02em", wordBreak: "break-word" }}>{kpiData.taxaMedia.toFixed(2).replace('.', ',')}% a.m.</span>
+                </div>
+                <div style={{ fontSize: "12px", color: "#6b7280", marginTop: "12px", fontWeight: "500", whiteSpace: "normal" }}>
+                  Base: <span style={{color: "#374151", fontWeight: "600"}}>{fmtM(kpiData.baseCalculo)}</span>
+                </div>
+              </div>
+
+              <div style={{ background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #0ea5e9", padding: "20px 16px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
                   <div style={{ background: "rgba(14, 165, 233, 0.1)", padding: "6px", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <svg width="18" height="18" fill="none" stroke="#0ea5e9" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                    <svg width="16" height="16" fill="none" stroke="#0ea5e9" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
                       <rect x="2" y="6" width="20" height="12" rx="2"></rect>
                       <circle cx="12" cy="12" r="2"></circle>
                       <path d="M6 12h.01M18 12h.01"></path>
                     </svg>
                   </div>
-                  <h3 style={{ margin: 0, fontSize: "12px", fontWeight: "700", color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em" }}>Ticket Médio</h3>
+                  <h3 style={{ margin: 0, fontSize: "11px", fontWeight: "700", color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "normal" }}>
+                    Ticket Médio (Borderô)
+                  </h3>
                 </div>
                 <div style={{ display: "flex", alignItems: "baseline", gap: "4px" }}>
-                  <span style={{ fontSize: "36px", fontWeight: "700", color: "#111827", lineHeight: "1", letterSpacing: "-0.02em" }}>{fmtM(kpiData.valorMedio)}</span>
+                  <span style={{ fontSize: "28px", fontWeight: "700", color: "#111827", lineHeight: "1", letterSpacing: "-0.02em", wordBreak: "break-word" }}>
+                    {fmtM(kpiData.valorMedioBordero)}
+                  </span>
                 </div>
-                <div style={{ fontSize: "13px", color: "#6b7280", marginTop: "12px", fontWeight: "500" }}>
-                  Média por título na visualização
+                <div style={{ fontSize: "12px", color: "#6b7280", marginTop: "12px", fontWeight: "500", whiteSpace: "normal" }}>
+                  Borderôs analisados: <span style={{ color: "#374151", fontWeight: "600" }}>{kpiData.qtdBorderos}</span>
                 </div>
               </div>
 
-              <div style={{ background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #10b981", padding: "24px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
-                  <div style={{ background: "rgba(16, 185, 129, 0.1)", padding: "6px", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <svg width="18" height="18" fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-                      <circle cx="12" cy="12" r="10"></circle>
-                      <polyline points="12 6 12 12 16 14"></polyline>
+              <div style={{ background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #06b6d4", padding: "20px 16px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
+                  <div style={{ background: "rgba(6, 182, 212, 0.1)", padding: "6px", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <svg width="16" height="16" fill="none" stroke="#06b6d4" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                      <path d="M3 7h18"></path>
+                      <path d="M6 3v8"></path>
+                      <path d="M18 3v8"></path>
+                      <rect x="3" y="11" width="18" height="10" rx="2"></rect>
                     </svg>
                   </div>
-                  <h3 style={{ margin: 0, fontSize: "12px", fontWeight: "700", color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em" }}>Prazo Médio</h3>
+                  <h3 style={{ margin: 0, fontSize: "11px", fontWeight: "700", color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "normal" }}>
+                    Ticket Médio (Título)
+                  </h3>
+                </div>
+                <div style={{ display: "flex", alignItems: "baseline", gap: "4px" }}>
+                  <span style={{ fontSize: "28px", fontWeight: "700", color: "#111827", lineHeight: "1", letterSpacing: "-0.02em", wordBreak: "break-word" }}>
+                    {fmtM(kpiData.valorMedioTitulo)}
+                  </span>
+                </div>
+                <div style={{ fontSize: "12px", color: "#6b7280", marginTop: "12px", fontWeight: "500", whiteSpace: "normal" }}>
+                  Títulos analisados: <span style={{ color: "#374151", fontWeight: "600" }}>{kpiData.qtdTitulos}</span>
+                </div>
+              </div>
+
+              <div style={{ background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #10b981", padding: "20px 16px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
+                  <div style={{ background: "rgba(16, 185, 129, 0.1)", padding: "6px", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <svg width="16" height="16" fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                  </div>
+                  <h3 style={{ margin: 0, fontSize: "11px", fontWeight: "700", color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "normal" }}>Prazo Médio</h3>
                 </div>
                 <div style={{ display: "flex", alignItems: "baseline", gap: "6px" }}>
-                  <span style={{ fontSize: "36px", fontWeight: "700", color: "#111827", lineHeight: "1", letterSpacing: "-0.02em" }}>{kpiData.prazoMedio.toFixed(0)}</span>
-                  <span style={{ fontSize: "16px", color: "#6b7280", fontWeight: "600" }}>dias</span>
+                  <span style={{ fontSize: "28px", fontWeight: "700", color: "#111827", lineHeight: "1", letterSpacing: "-0.02em", wordBreak: "break-word" }}>{kpiData.prazoMedio.toFixed(0)}</span>
+                  <span style={{ fontSize: "14px", color: "#6b7280", fontWeight: "600" }}>dias</span>
                 </div>
-                <div style={{ fontSize: "13px", color: "#6b7280", marginTop: "12px", fontWeight: "500" }}>
+                <div style={{ fontSize: "12px", color: "#6b7280", marginTop: "12px", fontWeight: "500", whiteSpace: "normal" }}>
                   Ponderado pelo valor de face
                 </div>
               </div>
 
-              <div style={{ background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #f59e0b", padding: "24px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
+              <div style={{ background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #f59e0b", padding: "20px 16px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
                   <div style={{ background: "rgba(245, 158, 11, 0.1)", padding: "6px", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <svg width="18" height="18" fill="none" stroke="#f59e0b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                    <svg width="16" height="16" fill="none" stroke="#f59e0b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
                       <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
                       <line x1="7" y1="7" x2="7.01" y2="7"></line>
                     </svg>
                   </div>
-                  <h3 style={{ margin: 0, fontSize: "12px", fontWeight: "700", color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em" }}>Deságio Total</h3>
+                  <h3 style={{ margin: 0, fontSize: "11px", fontWeight: "700", color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "normal" }}>
+                    Deságio Total
+                  </h3>
                 </div>
                 <div style={{ display: "flex", alignItems: "baseline", gap: "4px" }}>
-                  <span style={{ fontSize: "36px", fontWeight: "700", color: "#111827", lineHeight: "1", letterSpacing: "-0.02em" }}>{fmtM(kpiData.desagioTotal)}</span>
+                  <span style={{ fontSize: "28px", fontWeight: "700", color: "#111827", lineHeight: "1", letterSpacing: "-0.02em", wordBreak: "break-word" }}>
+                    {fmtM(kpiData.desagioTotal)}
+                  </span>
                 </div>
-                <div style={{ fontSize: "13px", color: "#6b7280", marginTop: "12px", fontWeight: "500" }}>
-                  Total apurado na visualização {selectedSlice && <span style={{color: "#4f46e5", background: "#e0e7ff", padding: "2px 6px", borderRadius: "4px", marginLeft: "4px", fontSize: "11px", fontWeight: "700"}}>FILTRO ATIVO</span>}
+                <div style={{ fontSize: "12px", color: "#6b7280", marginTop: "12px", fontWeight: "500", whiteSpace: "normal" }}>
+                  Apurado em <span style={{color: "#374151", fontWeight: "600"}}>
+                    {kpiData.diasOperacao > 90
+                      ? (kpiData.diasOperacao / 30).toFixed(1).replace('.', ',')
+                      : kpiData.diasOperacao}
+                  </span> {kpiData.diasOperacao > 90 ? "meses" : "dias"}
                 </div>
               </div>
 
+              <div style={{ background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #ea580c", padding: "20px 16px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
+                  <div style={{ background: "rgba(234, 88, 12, 0.1)", padding: "6px", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <svg width="16" height="16" fill="none" stroke="#ea580c" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                      <path d="M12 1v22"></path>
+                      <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                    </svg>
+                  </div>
+                  <h3 style={{ margin: 0, fontSize: "11px", fontWeight: "700", color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "normal" }}>
+                    Encargos Totais
+                  </h3>
+                </div>
+                <div style={{ display: "flex", alignItems: "baseline", gap: "4px" }}>
+                  <span style={{ fontSize: "28px", fontWeight: "700", color: "#111827", lineHeight: "1", letterSpacing: "-0.02em", wordBreak: "break-word" }}>
+                    {fmtM(kpiData.encargosTotal)}
+                  </span>
+                </div>
+                <div style={{ fontSize: "12px", color: "#6b7280", marginTop: "12px", fontWeight: "500", whiteSpace: "normal" }}>
+                  Apurado em <span style={{color: "#374151", fontWeight: "600"}}>
+                    {kpiData.diasOperacao > 90
+                      ? (kpiData.diasOperacao / 30).toFixed(1).replace('.', ',')
+                      : kpiData.diasOperacao}
+                  </span> {kpiData.diasOperacao > 90 ? "meses" : "dias"}
+                </div>
+              </div>
             </div>
           )}
 
