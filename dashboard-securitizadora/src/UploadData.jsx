@@ -43,6 +43,14 @@ const formatarMoeda = (valor) => {
   }).format(numero);
 };
 
+const formatDateBR = (val) => {
+  if (!val) return "";
+  const s = String(val).split("T")[0];
+  const parts = s.split("-");
+  if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  return String(val);
+};
+
 const getTodayIso = () => {
   const d = new Date();
   const yyyy = d.getFullYear();
@@ -76,7 +84,6 @@ function calcularCreditoEmAbertoCedentesExcluidosPorMes(rows) {
 
   const cedentesExcluidos = CEDENTES_IGNORADOS;
 
-  // descobre faixa de meses com base na emissão
   const emisDates = rows
     .map((r) => r[emisKey])
     .filter(Boolean)
@@ -96,7 +103,6 @@ function calcularCreditoEmAbertoCedentesExcluidosPorMes(rows) {
     const ano = cursor.getFullYear();
     const mes = cursor.getMonth();
 
-    // corte = primeiro dia do mês seguinte
     const dataCorte = new Date(ano, mes + 1, 1);
 
     const porCedente = {};
@@ -115,7 +121,6 @@ function calcularCreditoEmAbertoCedentesExcluidosPorMes(rows) {
       const dtEmis = new Date(String(emisVal).split("T")[0] + "T00:00:00");
       if (isNaN(dtEmis)) continue;
 
-      // tem que ter sido emitido antes de 01 do mês seguinte
       if (dtEmis >= dataCorte) continue;
 
       const pgtoVal = pgtoKey ? r[pgtoKey] : null;
@@ -152,7 +157,6 @@ function calcularCreditoEmAbertoCedentesExcluidosPorMes(rows) {
 
   return resultado;
 }
-
 
 function cedenteValido(cedente) {
   if (!cedente) return false;
@@ -215,8 +219,6 @@ function calcularRiscoAtualIgualMicro(rows) {
   return riscoAtual;
 }
 
-
-
 const cardStyle = {
   background: "#fff",
   border: "1px solid #e5e7eb",
@@ -252,6 +254,8 @@ export default function UploadData() {
   const [snapshotHistorico, setSnapshotHistorico] = useState([]);
   const [snapshotHistoricoLoading, setSnapshotHistoricoLoading] = useState(false);
 
+  const [exportOpenLoading, setExportOpenLoading] = useState(false);
+
   const snapshotDate = useMemo(() => getTodayIso(), []);
 
   const readFileAsArrayBuffer = (file) => {
@@ -276,15 +280,6 @@ export default function UploadData() {
       const resultadoCedentesExcluidos =
         calcularCreditoEmAbertoCedentesExcluidosPorMes(data || []);
 
-      // resultadoCedentesExcluidos.forEach((item) => {
-      //   console.log(`\nMÊS BASE: ${item.mes} | CORTE: ${item.dataCorte}`);
-      //   console.table(
-      //     Object.entries(item.porCedente).map(([cedente, valor]) => ({
-      //       cedente,
-      //       credito_em_aberto: valor,
-      //     }))
-      //   );
-      // });
     } catch (err) {
       console.error(err);
       setSnapshotStatus(`❌ Não foi possível calcular o risco atual: ${err.message}`);
@@ -297,22 +292,22 @@ export default function UploadData() {
   }, []);
 
   const carregarHistoricoSnapshots = async () => {
-  setSnapshotHistoricoLoading(true);
-  try {
-    const { data, error } = await supabase
-      .from("secSnapshots")
-      .select('*')
-      .order("Data", { ascending: false });
+    setSnapshotHistoricoLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("secSnapshots")
+        .select("*")
+        .order("Data", { ascending: false });
 
-    if (error) throw error;
-    setSnapshotHistorico(data || []);
-  } catch (err) {
-    console.error(err);
-    setSnapshotStatus(`❌ Não foi possível carregar o histórico de snapshots: ${err.message}`);
-  } finally {
-    setSnapshotHistoricoLoading(false);
-  }
-};
+      if (error) throw error;
+      setSnapshotHistorico(data || []);
+    } catch (err) {
+      console.error(err);
+      setSnapshotStatus(`❌ Não foi possível carregar o histórico de snapshots: ${err.message}`);
+    } finally {
+      setSnapshotHistoricoLoading(false);
+    }
+  };
 
   const criarSnapshot = async () => {
     const dinheiroBancoNum = cleanNumber(dinheiroBanco);
@@ -350,6 +345,338 @@ export default function UploadData() {
     }
   };
 
+const exportarCreditoEmAberto = async () => {
+  setExportOpenLoading(true);
+  setSnapshotStatus("");
+
+  try {
+    const { data, error } = await supabase.from("secInfo").select("*");
+    if (error) throw error;
+
+    const rows = data || [];
+    if (rows.length === 0) {
+      throw new Error("Nenhum registro encontrado na tabela secInfo.");
+    }
+
+    const firstRow = rows[0];
+
+    const emisKey = Object.keys(firstRow).find(
+      (k) => k.toLowerCase().includes("emis")
+    );
+    const vctoKey = Object.keys(firstRow).find(
+      (k) =>
+        k.toLowerCase() === "vcto" ||
+        (k.toLowerCase().includes("vcto") && !k.toLowerCase().includes("vl"))
+    );
+    const pgtoKey = Object.keys(firstRow).find(
+      (k) =>
+        k.toLowerCase() === "pgto" ||
+        (k.toLowerCase().includes("pgto") && !k.toLowerCase().includes("vl"))
+    );
+    const statusKey = Object.keys(firstRow).find(
+      (k) => k.toLowerCase() === "status" || k.toLowerCase() === "estado"
+    );
+    const entradaKey = Object.keys(firstRow).find(
+      (k) => k.toLowerCase() === "entrada" || k.toLowerCase().includes("valor")
+    );
+
+    if (!vctoKey || !entradaKey) {
+      throw new Error("Não encontrei as colunas de vencimento e valor de face.");
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const titulosEmAberto = rows
+      .filter((r) => {
+        const statusVal = statusKey
+          ? String(r[statusKey] || "").trim().toUpperCase()
+          : "";
+        if (statusVal === "REC" || statusVal.includes("REC")) return false;
+
+        const pgtoVal = pgtoKey ? r[pgtoKey] : null;
+        if (pgtoVal && String(pgtoVal).trim() !== "") return false;
+
+        const vctoVal = r[vctoKey];
+        if (!vctoVal) return false;
+
+        const effectiveVcto = new Date(
+          String(vctoVal).split("T")[0] + "T00:00:00"
+        );
+        if (isNaN(effectiveVcto)) return false;
+
+        if (effectiveVcto.getDay() === 6) effectiveVcto.setDate(effectiveVcto.getDate() + 2);
+        else if (effectiveVcto.getDay() === 0) effectiveVcto.setDate(effectiveVcto.getDate() + 1);
+
+        return true;
+      })
+      .map((r) => {
+        const vctoOriginal = r[vctoKey];
+        const effectiveVcto = new Date(
+          String(vctoOriginal).split("T")[0] + "T00:00:00"
+        );
+
+        if (effectiveVcto.getDay() === 6) effectiveVcto.setDate(effectiveVcto.getDate() + 2);
+        else if (effectiveVcto.getDay() === 0) effectiveVcto.setDate(effectiveVcto.getDate() + 1);
+
+        const situacao = effectiveVcto < today ? "Vencido" : "A vencer";
+        const valorFace = Number(r[entradaKey] || 0);
+        const cedente = String(r["Cliente"] || "").trim();
+        const excluido = !cedenteValido(cedente);
+
+        return {
+          Cedente: cedente,
+          Sacado: r["Sacado"] || "",
+          "Data de Emissão": formatDateBR(emisKey ? r[emisKey] : ""),
+          "Data de Vencimento": formatDateBR(vctoOriginal),
+          "Valor de Face": valorFace,
+          Dcto: r["Dcto"] || "",
+          Bordero: r["Borderô"] || "",
+          "Tx Efet": r["Tx.Efet"] ?? "",
+          Situação: situacao,
+          "Cód.Red": r["Cód.Red"] || "",
+          "Vl Pgto": cleanNumber(r["Vl Pgto"]) || "",
+          Pgto: formatDateBR(pgtoKey ? r[pgtoKey] : ""),
+          Status: statusKey ? (r[statusKey] || "") : "",
+          Observação: "",
+          _excluido: excluido,
+          _qtdLinhasAgrupadas: Number(r["Qtd Linhas Agrupadas"] || 1),
+          _detalhesAgrupamento: r["Detalhes Agrupamento"] || "",
+        };
+      });
+
+    const titulosPrincipais = titulosEmAberto
+      .filter((item) => !item._excluido)
+      .sort((a, b) => {
+        const da = a["Data de Vencimento"].split("/").reverse().join("-");
+        const db = b["Data de Vencimento"].split("/").reverse().join("-");
+        return da.localeCompare(db);
+      });
+
+    const titulosExcluidos = titulosEmAberto
+      .filter((item) => item._excluido)
+      .sort((a, b) => {
+        const da = a["Data de Vencimento"].split("/").reverse().join("-");
+        const db = b["Data de Vencimento"].split("/").reverse().join("-");
+        return da.localeCompare(db);
+      });
+
+    if (titulosPrincipais.length === 0 && titulosExcluidos.length === 0) {
+      throw new Error("Nenhum título em aberto encontrado.");
+    }
+
+    const somaPrincipal = titulosPrincipais.reduce(
+      (acc, item) => acc + Number(item["Valor de Face"] || 0),
+      0
+    );
+
+    const somaExcluidos = titulosExcluidos.reduce(
+      (acc, item) => acc + Number(item["Valor de Face"] || 0),
+      0
+    );
+
+    const principalParaExportar = [
+      ...titulosPrincipais.map(
+        ({
+          _excluido,
+          _qtdLinhasAgrupadas,
+          _detalhesAgrupamento,
+          ...rest
+        }) => rest
+      ),
+      {
+        Cedente: "TOTAL",
+        Sacado: `${titulosPrincipais.length} título(s)`,
+        "Data de Emissão": "",
+        "Data de Vencimento": "",
+        "Valor de Face": somaPrincipal,
+        Dcto: "",
+        Bordero: "",
+        "Tx Efet": "",
+        Situação: "",
+        "Cód.Red": "",
+        "Vl Pgto": "",
+        Pgto: "",
+        Status: "",
+        Observação: "",
+      },
+    ];
+
+    const excluidosParaExportar = [];
+
+    titulosExcluidos.forEach((item) => {
+      const {
+        _excluido,
+        _qtdLinhasAgrupadas,
+        _detalhesAgrupamento,
+        ...baseRow
+      } = item;
+
+      excluidosParaExportar.push({
+        ...baseRow,
+        Observação:
+          _qtdLinhasAgrupadas > 1
+            ? `Linha consolidada por Cliente + Dcto (${_qtdLinhasAgrupadas} linhas somadas)`
+            : "",
+      });
+
+      if (_qtdLinhasAgrupadas > 1 && _detalhesAgrupamento) {
+        let detalhes = [];
+        try {
+          detalhes = JSON.parse(_detalhesAgrupamento);
+        } catch (e) {
+          detalhes = [];
+        }
+
+        detalhes.forEach((det, idx) => {
+          excluidosParaExportar.push({
+            Cedente: `→ DETALHE ${idx + 1}`,
+            Sacado: det["Sacado"] || "",
+            "Data de Emissão": formatDateBR(det["Dt.Emis"] || ""),
+            "Data de Vencimento": formatDateBR(det["Vcto"] || ""),
+            "Valor de Face": Number(det["Entrada"] || 0),
+            Dcto: det["Dcto"] || "",
+            Bordero: det["Borderô"] || "",
+            "Tx Efet": det["Tx.Efet"] ?? "",
+            Situação: "Detalhe do agrupamento",
+            "Cód.Red": det["Cód.Red"] || "",
+            "Vl Pgto": cleanNumber(det["Vl Pgto"]) || "",
+            Pgto: formatDateBR(det["Pgto"] || ""),
+            Status: det["Status"] || det["Estado"] || "",
+            Observação: "Linha original usada na soma",
+          });
+        });
+      }
+    });
+
+    excluidosParaExportar.push({
+      Cedente: "TOTAL EXCLUÍDOS",
+      Sacado: `${titulosExcluidos.length} título(s)`,
+      "Data de Emissão": "",
+      "Data de Vencimento": "",
+      "Valor de Face": somaExcluidos,
+      Dcto: "",
+      Bordero: "",
+      "Tx Efet": "",
+      Situação: "",
+      "Cód.Red": "",
+      "Vl Pgto": "",
+      Pgto: "",
+      Status: "",
+      Observação: "",
+    });
+
+    const criarSheet = (dados) => {
+      const ws = XLSX.utils.json_to_sheet(dados);
+
+      const range = XLSX.utils.decode_range(ws["!ref"]);
+      for (let row = 1; row <= range.e.r + 1; row++) {
+        const valorCell = XLSX.utils.encode_cell({ r: row, c: 4 });
+        if (ws[valorCell]) ws[valorCell].z = '"R$" #,##0.00';
+
+        const txCell = XLSX.utils.encode_cell({ r: row, c: 7 });
+        if (ws[txCell] && typeof ws[txCell].v === "number") {
+          ws[txCell].z = "0.00";
+        }
+
+        const vlPgtoCell = XLSX.utils.encode_cell({ r: row, c: 10 });
+        if (ws[vlPgtoCell] && typeof ws[vlPgtoCell].v === "number") {
+          ws[vlPgtoCell].z = '"R$" #,##0.00';
+        }
+      }
+
+      ws["!cols"] = [
+        { wch: 28 }, // Cedente
+        { wch: 35 }, // Sacado
+        { wch: 16 }, // Data Emissão
+        { wch: 18 }, // Data Vencimento
+        { wch: 18 }, // Valor de Face
+        { wch: 16 }, // Dcto
+        { wch: 14 }, // Bordero
+        { wch: 12 }, // Tx Efet
+        { wch: 20 }, // Situação
+        { wch: 14 }, // Cód.Red
+        { wch: 16 }, // Vl Pgto
+        { wch: 14 }, // Pgto
+        { wch: 14 }, // Status
+        { wch: 42 }, // Observação
+      ];
+
+      return ws;
+    };
+
+    const wb = XLSX.utils.book_new();
+
+    const wsPrincipal = criarSheet(principalParaExportar);
+    XLSX.utils.book_append_sheet(wb, wsPrincipal, "Crédito em Aberto");
+
+    if (titulosExcluidos.length > 0) {
+      const wsExcluidos = criarSheet(excluidosParaExportar);
+      XLSX.utils.book_append_sheet(wb, wsExcluidos, "Cedentes Excluídos");
+    }
+
+    const nomeArquivo = `credito_em_aberto_${getTodayIso()}.xlsx`;
+    XLSX.writeFile(wb, nomeArquivo);
+
+    setSnapshotStatus(
+      `✅ Excel exportado com sucesso! Principal: ${titulosPrincipais.length} título(s) | ${formatarMoeda(somaPrincipal)}${
+        titulosExcluidos.length > 0
+          ? ` | Excluídos: ${titulosExcluidos.length} título(s) | ${formatarMoeda(somaExcluidos)}`
+          : ""
+      }`
+    );
+  } catch (err) {
+    console.error(err);
+    setSnapshotStatus(`❌ Erro ao exportar crédito em aberto: ${err.message}`);
+  } finally {
+    setExportOpenLoading(false);
+  }
+};
+
+// const imprimirAuditoriaUpload = (auditoria) => {
+//   console.group("AUDITORIA DO UPLOAD — SOMENTE EXCLUÍDOS");
+
+//   const totalExcluido =
+//     auditoria.semCodRed.length +
+//     auditoria.clienteNumeroDeItens.length +
+//     auditoria.excluidasSacadoPlaceholder.length +
+//     auditoria.excluidasCodRedDuplicado.length;
+
+//   console.log("Resumo dos excluídos:", {
+//     semCodRed: auditoria.semCodRed.length,
+//     clienteNumeroDeItens: auditoria.clienteNumeroDeItens.length,
+//     excluidasSacadoPlaceholder: auditoria.excluidasSacadoPlaceholder.length,
+//     excluidasCodRedDuplicado: auditoria.excluidasCodRedDuplicado.length,
+//     totalExcluido,
+//   });
+
+//   if (auditoria.semCodRed.length) {
+//     console.groupCollapsed(`Sem Cód.Red (${auditoria.semCodRed.length})`);
+//     console.table(auditoria.semCodRed);
+//     console.groupEnd();
+//   }
+
+//   if (auditoria.clienteNumeroDeItens.length) {
+//     console.groupCollapsed(`Cliente = Número de Itens (${auditoria.clienteNumeroDeItens.length})`);
+//     console.table(auditoria.clienteNumeroDeItens);
+//     console.groupEnd();
+//   }
+
+//   if (auditoria.excluidasSacadoPlaceholder.length) {
+//     console.groupCollapsed(`Excluídas por Sacado placeholder (${auditoria.excluidasSacadoPlaceholder.length})`);
+//     console.table(auditoria.excluidasSacadoPlaceholder);
+//     console.groupEnd();
+//   }
+
+//   if (auditoria.excluidasCodRedDuplicado.length) {
+//     console.groupCollapsed(`Excluídas por Cód.Red duplicado (${auditoria.excluidasCodRedDuplicado.length})`);
+//     console.table(auditoria.excluidasCodRedDuplicado);
+//     console.groupEnd();
+//   }
+
+//   console.groupEnd();
+// };
+
   const processAllFiles = async () => {
     if (files.length === 0) {
       setStatus("❌ Por favor, selecione os arquivos primeiro.");
@@ -364,7 +691,6 @@ export default function UploadData() {
       const ratesFiles = [];
       const mainFiles = [];
 
-      // 1. CLASSIFICAÇÃO DOS ARQUIVOS (O "Detetive")
       for (let file of files) {
         const data = await readFileAsArrayBuffer(file);
         const workbook = XLSX.read(data, { type: "array", cellDates: true });
@@ -387,7 +713,6 @@ export default function UploadData() {
       console.log(`Arquivos de Taxas: ${ratesFiles.length} | Principais: ${mainFiles.length}`);
       setProgress("2/5: Extraindo mapa de taxas...");
 
-      // 2. EXTRAÇÃO DE TAXAS
       let globalRatesMap = {};
       for (let rf of ratesFiles) {
         const raw = rf.rawArray;
@@ -440,9 +765,6 @@ export default function UploadData() {
         }
       }
 
-      // ==========================================
-      // MODO TAXA APENAS
-      // ==========================================
       if (mainFiles.length === 0 && Object.keys(globalRatesMap).length > 0) {
         const borderos = Object.keys(globalRatesMap).map(Number);
         setProgress(`3/5: Modo Taxa — buscando registros para ${borderos.length} borderô(s) no banco...`);
@@ -485,9 +807,6 @@ export default function UploadData() {
         return;
       }
 
-      // ==========================================
-      // MODO NORMAL
-      // ==========================================
       setProgress("3/5: Processando planilhas principais...");
 
       if (mainFiles.length === 0) {
@@ -495,6 +814,16 @@ export default function UploadData() {
       }
 
       let allExtractedRows = [];
+const auditoria = {
+  extraidasBrutas: [],
+  semCodRed: [],
+  clienteNumeroDeItens: [],
+  duplicidadesDcto: [],
+  excluidasSacadoPlaceholder: [],
+  excluidasCodRedDuplicado: [],
+  finalRows: [],
+};
+
       for (let mf of mainFiles) {
         const rawData = XLSX.utils.sheet_to_json(mf.worksheet, { defval: null });
         rawData.forEach((row) => {
@@ -522,9 +851,25 @@ export default function UploadData() {
             }
           }
 
-          if (limpaChave(newRow["Cód.Red"]) !== "" && String(newRow["Cliente"]).trim() !== "Número de Itens") {
-            allExtractedRows.push(newRow);
-          }
+const codRedLimpo = limpaChave(newRow["Cód.Red"]);
+const clienteLimpo = String(newRow["Cliente"] || "").trim();
+
+auditoria.extraidasBrutas.push({ ...newRow });
+
+if (codRedLimpo === "") {
+  auditoria.semCodRed.push({ ...newRow, motivoExclusao: "Sem Cód.Red" });
+  return;
+}
+
+if (clienteLimpo === "Número de Itens") {
+  auditoria.clienteNumeroDeItens.push({
+    ...newRow,
+    motivoExclusao: 'Cliente = "Número de Itens"',
+  });
+  return;
+}
+
+allExtractedRows.push(newRow);
         });
       }
 
@@ -539,32 +884,102 @@ export default function UploadData() {
         groupedByDcto[groupKey].push(r);
       });
 
-      const rowsAfterSum = [];
-      for (let key in groupedByDcto) {
-        const group = groupedByDcto[key];
-        if (group.length === 1) rowsAfterSum.push(group[0]);
-        else {
-          let bestRow = group.find((r) => {
-            const s = String(r["Sacado"] || "").trim().replace(/\s/g, "");
-            return !(s.startsWith("0-") || s === "0" || s === "");
-          }) || group[0];
-          const totalPgto = group.reduce((acc, curr) => acc + (cleanNumber(curr["Vl Pgto"]) || 0), 0);
-          rowsAfterSum.push({ ...bestRow, "Vl Pgto": totalPgto });
-        }
+const rowsAfterSum = [];
+for (let key in groupedByDcto) {
+  const group = groupedByDcto[key];
+
+  if (group.length === 1) {
+    rowsAfterSum.push({
+      ...group[0],
+      "Qtd Linhas Agrupadas": 1,
+      "Detalhes Agrupamento": "",
+    });
+  } else {
+    const sacadoEhPlaceholder = (valor) => {
+      const s = String(valor || "").trim().replace(/\s/g, "");
+      return s.startsWith("0-") || s === "0" || s === "";
+    };
+
+    auditoria.duplicidadesDcto.push({
+  cliente: limpaChave(group[0]["Cliente"]),
+  dcto: limpaChave(group[0]["Dcto"]),
+  qtd: group.length,
+  linhas: group.map((item) => ({ ...item })),
+});
+
+    let bestRow =
+      group.find((r) => !sacadoEhPlaceholder(r["Sacado"])) || group[0];
+
+    const totalPgto = group.reduce(
+      (acc, curr) => acc + (cleanNumber(curr["Vl Pgto"]) || 0),
+      0
+    );
+
+    const entradaBestRow = cleanNumber(bestRow["Entrada"]) || 0;
+
+    const somaEntradasPlaceholder = group.reduce((acc, curr) => {
+      if (curr === bestRow) return acc;
+
+      if (sacadoEhPlaceholder(curr["Sacado"])) {
+        return acc + (cleanNumber(curr["Entrada"]) || 0);
       }
 
-      const finalRows = [];
-      const seenCodRed = new Set();
-      rowsAfterSum.forEach((r) => {
-        const codRedVal = limpaChave(r["Cód.Red"]);
-        if (!codRedVal) return;
-        const sacadoStr = String(r["Sacado"] || "").trim().replace(/\s/g, "");
-        if (sacadoStr.startsWith("0-") || sacadoStr === "0") return;
-        if (!seenCodRed.has(codRedVal)) {
-          seenCodRed.add(codRedVal);
-          finalRows.push(r);
-        }
-      });
+      return acc;
+    }, 0);
+
+    const totalEntrada = entradaBestRow + somaEntradasPlaceholder;
+
+    const detalhesAgrupamento = group.map((item) => {
+      const detalhe = {};
+      for (const k in item) {
+        detalhe[k] = item[k] ?? "";
+      }
+      return detalhe;
+    });
+
+    rowsAfterSum.push({
+      ...bestRow,
+      "Vl Pgto": totalPgto,
+      "Entrada": totalEntrada,
+      "Qtd Linhas Agrupadas": group.length,
+      "Detalhes Agrupamento": JSON.stringify(detalhesAgrupamento),
+    });
+  }
+}
+
+const finalRows = [];
+const seenCodRed = new Set();
+
+rowsAfterSum.forEach((r) => {
+  const codRedVal = limpaChave(r["Cód.Red"]);
+  if (!codRedVal) return;
+
+  const sacadoStr = String(r["Sacado"] || "").trim().replace(/\s/g, "");
+  const sacadoPlaceholder =
+    sacadoStr.startsWith("0-") || sacadoStr === "0" || sacadoStr === "";
+
+  if (sacadoPlaceholder) {
+    auditoria.excluidasSacadoPlaceholder.push({
+      ...r,
+      motivoExclusao: "Sacado placeholder no filtro final",
+    });
+    return;
+  }
+
+  if (seenCodRed.has(codRedVal)) {
+    auditoria.excluidasCodRedDuplicado.push({
+      ...r,
+      motivoExclusao: "Cód.Red duplicado no filtro final",
+    });
+    return;
+  }
+
+  seenCodRed.add(codRedVal);
+  finalRows.push(r);
+});
+
+auditoria.finalRows = finalRows.map((item) => ({ ...item }));
+// imprimirAuditoriaUpload(auditoria);
 
       setProgress(`5/5: Enviando ${finalRows.length} registros para o Supabase (Preservando taxas)...`);
 
@@ -837,6 +1252,33 @@ export default function UploadData() {
             {snapshotStatus}
           </div>
         )}
+      </div>
+
+      <div style={cardStyle}>
+        <h2 style={{ marginTop: 0, color: "#111827", fontSize: "20px" }}>
+          Exportações
+        </h2>
+        <p style={{ color: "#6b7280", fontSize: "14px", marginBottom: "16px" }}>
+          Exporta para Excel todo o crédito em aberto: títulos a vencer e vencidos sem liquidação.
+        </p>
+
+        <button
+          onClick={exportarCreditoEmAberto}
+          disabled={exportOpenLoading}
+          style={{
+            width: "100%",
+            padding: "12px",
+            borderRadius: "8px",
+            border: "none",
+            background: exportOpenLoading ? "#9ca3af" : "#2563eb",
+            color: "#fff",
+            fontWeight: 700,
+            fontSize: "15px",
+            cursor: exportOpenLoading ? "not-allowed" : "pointer",
+          }}
+        >
+          {exportOpenLoading ? "Exportando crédito em aberto..." : "Exportar Crédito em Aberto"}
+        </button>
       </div>
     </div>
   );
