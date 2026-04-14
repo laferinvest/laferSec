@@ -53,7 +53,6 @@ function MacroDetailedTable({ rows, focus, setFocus, setSelectedSlice, hideValue
 
   const columns = useMemo(() => {
     if (!rows.length) return [];
-    // OTIMIZAÇÃO: Ler apenas as chaves da primeira linha em vez de iterar sobre todas
     const firstRowKeys = Object.keys(rows[0]);
     let cols = firstRowKeys.filter(c => !colunasOcultas.includes(c));
 
@@ -210,8 +209,10 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
   
   const [hoveredSlice, setHoveredSlice] = useState(null);
   const [hoveredNegotiationSlice, setHoveredNegotiationSlice] = useState(null);
+  const [hoveredNegotiationDesEncSlice, setHoveredNegotiationDesEncSlice] = useState(null);
   const [selectedSlice, setSelectedSlice] = useState(null); 
   const [volumePeriod, setVolumePeriod] = useState('mes_atual');
+  const [volumeDateBase, setVolumeDateBase] = useState('emissao');
   const [negotiationPage, setNegotiationPage] = useState(1);
   const [capitalPage, setCapitalPage] = useState(1);
   const [tooltip, setTooltip] = useState({ show: false, x: 0, y: 0, label: '', value: 0, percent: 0, context: 'capital_aberto' });
@@ -232,7 +233,7 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
 
   // 1. Processa os registos em aberto e o volume negociado por período
   const { openRows, stats, negotiationStats } = useMemo(() => {
-    const emptyChart = { totalVal: 0, sorted: [], pieData: [] };
+    const emptyChart = { totalVal: 0, totalDesEnc: 0, sorted: [], pieData: [], pieDataDesEnc: [] };
     if (rows.length === 0) return { openRows: [], stats: emptyChart, negotiationStats: { mes_atual: emptyChart, ult_30_dias: emptyChart, ytd: emptyChart } };
 
     const today = new Date();
@@ -268,39 +269,39 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
     const statusKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'status' || k.toLowerCase() === 'estado');
     const emisKey = Object.keys(firstRow).find(k => k.toLowerCase().includes('emis'));
     const valKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'entrada' || (k.toLowerCase().includes('valor') && !k.toLowerCase().includes('pgto')));
+    const vlPgtoKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'vl pgto');
+    const borderoKey = Object.keys(firstRow).find(k => k.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").includes("border"));
+    const desagioKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'desagio' || k.toLowerCase() === 'deságio');
 
-    rows.forEach(r => {
+    const periodConfigs = {
+      mes_atual: { start: monthStart, end: today },
+      ult_30_dias: { start: thirtyDaysAgo, end: today },
+      ytd: { start: yearStart, end: today }
+    };
+
+    const seenPeriodBorderosDesagio = {
+      mes_atual: new Map(),
+      ult_30_dias: new Map(),
+      ytd: new Map()
+    };
+
+    rows.forEach((r, idx) => {
       let status = 'invalido';
       
       const vctoVal = vctoKey ? r[vctoKey] : null;
       const pgtoVal = pgtoKey ? r[pgtoKey] : null;
       const statusVal = statusKey ? String(r[statusKey]).trim().toUpperCase() : "";
       const val = valKey ? (Number(r[valKey]) || 0) : 0;
+      const vlPgto = vlPgtoKey ? (Number(r[vlPgtoKey]) || 0) : 0;
+      const desagioVal = desagioKey ? (Number(r[desagioKey]) || 0) : 0;
+      const borderoNum = (borderoKey && r[borderoKey]) ? String(r[borderoKey]).trim() : `avulso_${idx}`;
+
+      const temPgto = pgtoKey && r[pgtoKey] && String(r[pgtoKey]).trim() !== "";
+      const encargoPossivel = temPgto && vlPgto > 0 && val > 0 && vlPgto !== val;
+      const encargo = encargoPossivel && vlPgto <= val * 1.4 ? Math.max(0, vlPgto - val) : 0;
 
       const entity = focus === 'cedente' ? r.Cliente : r.Sacado;
       const eName = entity ? String(entity).trim() : null;
-
-      if (eName && emisKey && r[emisKey]) {
-        const emisDate = new Date(String(r[emisKey]).split("T")[0] + "T00:00:00");
-        
-        if (emisDate >= thirtyDaysAgo && emisDate <= today) {
-          if (!monthlyVolume[eName]) monthlyVolume[eName] = { lm: 0, plm: 0 };
-          monthlyVolume[eName].lm += val;
-        } else if (emisDate >= sixtyDaysAgo && emisDate < thirtyDaysAgo) {
-          if (!monthlyVolume[eName]) monthlyVolume[eName] = { lm: 0, plm: 0 };
-          monthlyVolume[eName].plm += val;
-        }
-
-        if (emisDate >= monthStart && emisDate <= today) {
-          negotiationGrouped.mes_atual[eName] = (negotiationGrouped.mes_atual[eName] || 0) + val;
-        }
-        if (emisDate >= thirtyDaysAgo && emisDate <= today) {
-          negotiationGrouped.ult_30_dias[eName] = (negotiationGrouped.ult_30_dias[eName] || 0) + val;
-        }
-        if (emisDate >= yearStart && emisDate <= today) {
-          negotiationGrouped.ytd[eName] = (negotiationGrouped.ytd[eName] || 0) + val;
-        }
-      }
 
       if (statusVal === "REC" || statusVal.includes("REC")) {
         status = 'recompra';
@@ -316,6 +317,49 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
         } else {
           if (effectiveVcto < today) status = 'atraso';
           else status = 'aVencer';
+        }
+      }
+
+      const emisDate = emisKey && r[emisKey]
+        ? new Date(String(r[emisKey]).split("T")[0] + "T00:00:00")
+        : null;
+
+      let effectiveVctoDate = null;
+      if (vctoVal) {
+        effectiveVctoDate = new Date(String(vctoVal).split("T")[0] + "T00:00:00");
+        if (effectiveVctoDate.getDay() === 6) effectiveVctoDate.setDate(effectiveVctoDate.getDate() + 2);
+        else if (effectiveVctoDate.getDay() === 0) effectiveVctoDate.setDate(effectiveVctoDate.getDate() + 1);
+      }
+
+      if (eName && emisDate) {
+        if (emisDate >= thirtyDaysAgo && emisDate <= today) {
+          if (!monthlyVolume[eName]) monthlyVolume[eName] = { lm: 0, plm: 0 };
+          monthlyVolume[eName].lm += val;
+        } else if (emisDate >= sixtyDaysAgo && emisDate < thirtyDaysAgo) {
+          if (!monthlyVolume[eName]) monthlyVolume[eName] = { lm: 0, plm: 0 };
+          monthlyVolume[eName].plm += val;
+        }
+
+        const negotiationDate = volumeDateBase === 'vencimento' ? effectiveVctoDate : emisDate;
+        const canUseByVencimento = volumeDateBase !== 'vencimento' || ['liquidado', 'liquidadoAtraso', 'recompra'].includes(status);
+
+        if (negotiationDate && canUseByVencimento) {
+          Object.entries(periodConfigs).forEach(([periodKey, range]) => {
+            if (negotiationDate >= range.start && negotiationDate <= range.end) {
+              if (!negotiationGrouped[periodKey][eName]) negotiationGrouped[periodKey][eName] = { val: 0, desEnc: 0 };
+              negotiationGrouped[periodKey][eName].val += val;
+              negotiationGrouped[periodKey][eName].desEnc += encargo;
+
+              if (!seenPeriodBorderosDesagio[periodKey].has(borderoNum)) {
+                seenPeriodBorderosDesagio[periodKey].set(borderoNum, new Set());
+              }
+              const entitiesSeen = seenPeriodBorderosDesagio[periodKey].get(borderoNum);
+              if (!entitiesSeen.has(eName)) {
+                entitiesSeen.add(eName);
+                negotiationGrouped[periodKey][eName].desEnc += desagioVal;
+              }
+            }
+          });
         }
       }
 
@@ -372,13 +416,18 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
     }
 
     const buildNegotiationChart = (groupMap) => {
-      const groupTotal = Object.values(groupMap).reduce((acc, curr) => acc + curr, 0);
-      const groupSorted = Object.keys(groupMap)
-        .map((name, idx) => ({
+      const entries = Object.entries(groupMap || {});
+      const groupTotal = entries.reduce((acc, [, curr]) => acc + (Number(curr?.val) || 0), 0);
+      const groupTotalDesEnc = entries.reduce((acc, [, curr]) => acc + (Number(curr?.desEnc) || 0), 0);
+
+      const groupSorted = entries
+        .map(([name, curr], idx) => ({
           rank: idx + 1,
           name,
-          val: groupMap[name],
-          percent: groupTotal > 0 ? groupMap[name] / groupTotal : 0
+          val: Number(curr?.val) || 0,
+          desEnc: Number(curr?.desEnc) || 0,
+          percent: groupTotal > 0 ? (Number(curr?.val) || 0) / groupTotal : 0,
+          percentDesEnc: groupTotalDesEnc > 0 ? (Number(curr?.desEnc) || 0) / groupTotalDesEnc : 0
         }))
         .sort((a, b) => b.val - a.val)
         .map((item, idx) => ({ ...item, rank: idx + 1 }));
@@ -387,15 +436,41 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
       const otherSlices = groupSorted.slice(9);
       if (otherSlices.length > 0) {
         const otherVal = otherSlices.reduce((acc, curr) => acc + curr.val, 0);
+        const otherDesEnc = otherSlices.reduce((acc, curr) => acc + curr.desEnc, 0);
         topSlices.push({
           name: `Restante (${otherSlices.length} outros)`,
           val: otherVal,
+          desEnc: otherDesEnc,
           percent: groupTotal > 0 ? otherVal / groupTotal : 0,
+          percentDesEnc: groupTotalDesEnc > 0 ? otherDesEnc / groupTotalDesEnc : 0,
           color: colors[9]
         });
       }
 
-      return { totalVal: groupTotal, sorted: groupSorted, pieData: topSlices };
+      const groupSortedDesEnc = [...groupSorted]
+        .sort((a, b) => b.desEnc - a.desEnc)
+        .map((item, idx) => ({ ...item, rankDesEnc: idx + 1 }));
+
+      const topSlicesDesEnc = groupSortedDesEnc.slice(0, 9).map((item, idx) => ({
+        ...item,
+        val: item.desEnc,
+        percent: item.percentDesEnc,
+        color: colors[idx]
+      }));
+      const otherSlicesDesEnc = groupSortedDesEnc.slice(9);
+      if (otherSlicesDesEnc.length > 0) {
+        const otherVal = otherSlicesDesEnc.reduce((acc, curr) => acc + curr.desEnc, 0);
+        topSlicesDesEnc.push({
+          name: `Restante (${otherSlicesDesEnc.length} outros)`,
+          val: otherVal,
+          desEnc: otherVal,
+          percent: groupTotalDesEnc > 0 ? otherVal / groupTotalDesEnc : 0,
+          percentDesEnc: groupTotalDesEnc > 0 ? otherVal / groupTotalDesEnc : 0,
+          color: colors[9]
+        });
+      }
+
+      return { totalVal: groupTotal, totalDesEnc: groupTotalDesEnc, sorted: groupSorted, sortedDesEnc: groupSortedDesEnc, pieData: topSlices, pieDataDesEnc: topSlicesDesEnc };
     };
 
     return {
@@ -407,7 +482,7 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
         ytd: buildNegotiationChart(negotiationGrouped.ytd)
       }
     };
-  }, [rows, focus]);
+  }, [rows, focus, volumeDateBase]);
 
   // 2. Extrai os detalhes da entidade selecionada
   const detailedRows = useMemo(() => {
@@ -563,7 +638,7 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
     return stats.sorted.filter(item => item.name === selectedSlice);
   }, [stats.sorted, selectedSlice]);
 
-  const currentNegotiationStats = negotiationStats[volumePeriod] || { totalVal: 0, sorted: [], pieData: [] };
+  const currentNegotiationStats = negotiationStats[volumePeriod] || { totalVal: 0, totalDesEnc: 0, sorted: [], pieData: [], pieDataDesEnc: [] };
 
   useEffect(() => {
     setNegotiationPage(1);
@@ -605,6 +680,10 @@ const negotiationTop5Percent = currentNegotiationStats.sorted.length
   ? currentNegotiationStats.sorted.slice(0, 5).reduce((acc, item) => acc + item.percent, 0) * 100
   : 0;
 
+const negotiationDesEncTop5Percent = currentNegotiationStats.sorted.length
+  ? currentNegotiationStats.sorted.slice(0, 5).reduce((acc, item) => acc + item.percentDesEnc, 0) * 100
+  : 0;
+
   const handleMouseMove = (e, slice) => {
     setTooltip({ show: true, x: e.clientX, y: e.clientY, label: slice.name, value: slice.val, percent: slice.percent, context: 'capital_aberto' });
     setHoveredSlice(slice.name);
@@ -613,6 +692,11 @@ const negotiationTop5Percent = currentNegotiationStats.sorted.length
   const handleNegotiationMouseMove = (e, slice) => {
     setTooltip({ show: true, x: e.clientX, y: e.clientY, label: slice.name, value: slice.val, percent: slice.percent, context: 'volume_negociado' });
     setHoveredNegotiationSlice(slice.name);
+  };
+
+  const handleNegotiationDesEncMouseMove = (e, slice) => {
+    setTooltip({ show: true, x: e.clientX, y: e.clientY, label: slice.name, value: slice.val, percent: slice.percent, context: 'des_enc_negociado' });
+    setHoveredNegotiationDesEncSlice(slice.name);
   };
 
   const handleSliceClick = (sliceName) => {
@@ -771,28 +855,35 @@ const negotiationTop5Percent = currentNegotiationStats.sorted.length
           <h2 style={{ margin: "0 0 8px 0", color: "#111827", fontSize: "22px" }}>Visão Macroscópica de Risco</h2>
           <p style={{ margin: 0, color: "#6b7280", fontSize: "15px" }}>Concentração de Capital em títulos <strong>Em Aberto</strong> (A Vencer e Em Atraso).</p>
         </div>
-        <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-          <button
-            onClick={() => setHideValues(v => !v)}
-            title={hideValues ? "Mostrar valores" : "Ocultar valores"}
-            style={{ padding: "8px 10px", borderRadius: "6px", border: "1px solid #d1d5db", background: hideValues ? "#f3f4f6" : "#fff", color: hideValues ? "#4f46e5" : "#6b7280", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.2s" }}
-          >
-            {hideValues ? (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
-                <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
-                <line x1="1" y1="1" x2="23" y2="23"/>
-              </svg>
-            ) : (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                <circle cx="12" cy="12" r="3"/>
-              </svg>
-            )}
-          </button>
-          <button onClick={() => { setFocus('cedente'); setSelectedSlice(null); }} style={getTabStyle(focus === 'cedente')}>Concentração Cedente</button>
-          <button onClick={() => { setFocus('sacado'); setSelectedSlice(null); }} style={getTabStyle(focus === 'sacado')}>Concentração Sacado</button>
-        </div>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "10px" }}>
+          <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+            <button
+              onClick={() => setHideValues(v => !v)}
+              title={hideValues ? "Mostrar valores" : "Ocultar valores"}
+              style={{ padding: "8px 10px", borderRadius: "6px", border: "1px solid #d1d5db", background: hideValues ? "#f3f4f6" : "#fff", color: hideValues ? "#4f46e5" : "#6b7280", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.2s" }}
+            >
+              {hideValues ? (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+                  <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+                  <line x1="1" y1="1" x2="23" y2="23"/>
+                </svg>
+              ) : (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                  <circle cx="12" cy="12" r="3"/>
+                </svg>
+              )}
+            </button>
+            <button onClick={() => { setFocus('cedente'); setSelectedSlice(null); }} style={getTabStyle(focus === 'cedente')}>Concentração Cedente</button>
+            <button onClick={() => { setFocus('sacado'); setSelectedSlice(null); }} style={getTabStyle(focus === 'sacado')}>Concentração Sacado</button>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", justifyContent: "flex-end", flexWrap: "wrap" }}>
+            <span style={{ fontSize: "13px", fontWeight: "700", color: "#6b7280" }}>Data-base</span>
+            <button onClick={() => setVolumeDateBase('emissao')} style={getVolumePeriodStyle(volumeDateBase === 'emissao')}>Emissão</button>
+            <button onClick={() => setVolumeDateBase('vencimento')} style={getVolumePeriodStyle(volumeDateBase === 'vencimento')}>Vencimento</button>
+          </div>
+        </div>       
       </div>
 
       {stats.totalVal === 0 ? (
@@ -833,7 +924,7 @@ const negotiationTop5Percent = currentNegotiationStats.sorted.length
               ) : (
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "28px", alignItems: "stretch" }}>
                   <div style={{
-                    flex: "0 0 450px",
+                    flex: "0 0 390px",
                     minWidth: "300px",
                     maxWidth: "100%",
                     border: "1px solid #d1d5db",
@@ -843,18 +934,27 @@ const negotiationTop5Percent = currentNegotiationStats.sorted.length
                     display: "flex",
                     flexDirection: "column",
                     alignItems: "center",
-                    justifyContent: "space-between"
+                    justifyContent: "flex-start",
+                    gap: "20px"
                   }}>
-                    <div style={{ textAlign: "center", marginBottom: "18px" }}>
+                    <div style={{
+                      width: "100%",
+                      background: "#ffffff",
+                      border: "1px solid #e5e7eb",
+                      boxShadow: "0 8px 18px rgba(15, 23, 42, 0.08)",
+                      borderRadius: "16px",
+                      padding: "18px 16px",
+                      textAlign: "center"
+                    }}>
                       <div style={{ fontSize: "12px", fontWeight: "800", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "8px" }}>
                         Volume Negociado
                       </div>
                       <div style={{ fontSize: "28px", fontWeight: "900", color: "#0f172a", letterSpacing: "-0.03em", lineHeight: 1.1 }}>
                         {fmtM(currentNegotiationStats.totalVal)}
                       </div>
-                    <div style={{ marginTop: "10px", fontSize: "14px", color: "#64748b", fontWeight: "700" }}>
-                      Top 5 = {negotiationTop5Percent.toFixed(1).replace('.', ',')}%
-                    </div>
+                      <div style={{ marginTop: "10px", fontSize: "14px", color: "#64748b", fontWeight: "700" }}>
+                        Top 5 = {negotiationTop5Percent.toFixed(1).replace('.', ',')}%
+                      </div>
                     </div>
 
                     {renderDonutChart({
@@ -863,26 +963,51 @@ const negotiationTop5Percent = currentNegotiationStats.sorted.length
                       onSliceHover: handleNegotiationMouseMove,
                       onMouseLeave: () => { setTooltip({ show: false }); setHoveredNegotiationSlice(null); },
                       donut: true,
-                      size: 250
+                      size: 230
                     })}
 
-                    <div style={{ marginTop: "20px", textAlign: "center", color: "#64748b", fontSize: "13px", lineHeight: 1.45, maxWidth: "320px" }}>
-                      Passe o mouse para ver os detalhes do volume negociado no período selecionado.
+                    <div style={{
+                      width: "100%",
+                      background: "#ffffff",
+                      border: "1px solid #e5e7eb",
+                      boxShadow: "0 8px 18px rgba(15, 23, 42, 0.08)",
+                      borderRadius: "16px",
+                      padding: "18px 16px",
+                      textAlign: "center"
+                    }}>
+                      <div style={{ fontSize: "12px", fontWeight: "800", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "8px" }}>
+                        Deságio + Encargos
+                      </div>
+                      <div style={{ fontSize: "28px", fontWeight: "900", color: "#0f172a", letterSpacing: "-0.03em", lineHeight: 1.1 }}>
+                        {fmtM(currentNegotiationStats.totalDesEnc)}
+                      </div>
+                      <div style={{ marginTop: "10px", fontSize: "14px", color: "#64748b", fontWeight: "700" }}>
+                        Top 5 = {negotiationDesEncTop5Percent.toFixed(1).replace('.', ',')}%
+                      </div>
                     </div>
+
+                    {renderDonutChart({
+                      pieData: currentNegotiationStats.pieDataDesEnc,
+                      hoveredName: hoveredNegotiationDesEncSlice,
+                      onSliceHover: handleNegotiationDesEncMouseMove,
+                      onMouseLeave: () => { setTooltip({ show: false }); setHoveredNegotiationDesEncSlice(null); },
+                      donut: true,
+                      size: 230
+                    })}
                   </div>
 
                   <div style={{
-                    flex: "1 1 520px",
+                    flex: "1 1 560px",
                     minWidth: "320px",
                     border: "1px solid #d1d5db",
                     borderRadius: "18px",
                     overflow: "hidden",
                     background: "#ffffff"
                   }}>
-                    <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 220px 120px", background: "#f3f4f6", color: "#526581", fontSize: "13px", fontWeight: "800", textTransform: "uppercase", letterSpacing: "0.04em", borderBottom: "1px solid #d1d5db" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 240px 240px", background: "#f3f4f6", color: "#526581", fontSize: "13px", fontWeight: "800", textTransform: "uppercase", letterSpacing: "0.04em", borderBottom: "1px solid #d1d5db" }}>
                       <div style={{ padding: "16px 20px" }}>{focus === 'cedente' ? 'Cedente' : 'Sacado'}</div>
                       <div style={{ padding: "16px 20px", textAlign: "right" }}>Volume Negociado</div>
-                      <div style={{ padding: "16px 20px", textAlign: "right" }}>%</div>
+                      <div style={{ padding: "16px 20px", textAlign: "right" }}>Deságio + Encargos</div>
                     </div>
                     {negotiationPageItems.map((slice, idx) => {
                       const globalIndex = (negotiationPageSafe - 1) * negotiationItemsPerPage + idx;
@@ -895,10 +1020,10 @@ const negotiationTop5Percent = currentNegotiationStats.sorted.length
                           onMouseLeave={() => setHoveredNegotiationSlice(null)}
                           style={{
                             display: "grid",
-                            gridTemplateColumns: "minmax(0, 1fr) 220px 120px",
+                            gridTemplateColumns: "minmax(0, 1fr) 240px 240px",
                             alignItems: "center",
                             borderBottom: globalIndex === negotiationTableItems.length - 1 ? "none" : "1px solid #e5e7eb",
-                            background: hoveredNegotiationSlice === slice.name ? "#eff6ff" : "#fff",
+                            background: hoveredNegotiationSlice === slice.name || hoveredNegotiationDesEncSlice === slice.name ? "#eff6ff" : "#fff",
                             transition: "background 0.2s"
                           }}
                         >
@@ -906,8 +1031,18 @@ const negotiationTop5Percent = currentNegotiationStats.sorted.length
                             <span style={{ width: "12px", height: "12px", borderRadius: "999px", background: color, flexShrink: 0 }} />
                             <span style={{ fontSize: "16px", fontWeight: "700", color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={slice.name}>{slice.name}</span>
                           </div>
-                          <div style={{ padding: "16px 20px", textAlign: "right", fontSize: "16px", fontWeight: "800", color: "#0f172a" }}>{fmtM(slice.val)}</div>
-                          <div style={{ padding: "16px 20px", textAlign: "right", fontSize: "16px", fontWeight: "800", color: "#475569" }}>{(slice.percent * 100).toFixed(2).replace('.', ',')}%</div>
+                          <div style={{ padding: "16px 20px", textAlign: "right", color: "#0f172a" }}>
+                            <div style={{ fontSize: "16px", fontWeight: "800" }}>{fmtM(slice.val)}</div>
+                            <div style={{ marginTop: "4px", fontSize: "12px", fontWeight: "600", color: "#64748b" }}>
+                              ({(slice.percent * 100).toFixed(2).replace('.', ',')}%)
+                            </div>
+                          </div>
+                          <div style={{ padding: "16px 20px", textAlign: "right", color: "#0f172a" }}>
+                            <div style={{ fontSize: "16px", fontWeight: "800" }}>{fmtM(slice.desEnc)}</div>
+                            <div style={{ marginTop: "4px", fontSize: "12px", fontWeight: "600", color: "#64748b" }}>
+                              ({(slice.percentDesEnc * 100).toFixed(2).replace('.', ',')}%)
+                            </div>
+                          </div>
                         </div>
                       );
                     })}
@@ -955,7 +1090,7 @@ const negotiationTop5Percent = currentNegotiationStats.sorted.length
 
             <div style={{ display: "flex", flexWrap: "wrap", gap: "28px", alignItems: "stretch" }}>
               <div style={{
-                flex: "0 0 450px",
+                flex: "0 0 390px",
                 minWidth: "300px",
                 maxWidth: "100%",
                 border: "1px solid #d1d5db",
@@ -1306,9 +1441,11 @@ const negotiationTop5Percent = currentNegotiationStats.sorted.length
           <div style={{ marginTop: '2px', fontSize: '13px', color: '#9ca3af' }}>
             {tooltip.context === 'volume_negociado'
               ? `Representa ${(tooltip.percent * 100).toFixed(1)}% do volume negociado no período`
-              : `Representa ${(tooltip.percent * 100).toFixed(1)}% do capital em aberto`}
+              : tooltip.context === 'des_enc_negociado'
+                ? `Representa ${(tooltip.percent * 100).toFixed(1)}% do total de Enc. + Des. no período`
+                : `Representa ${(tooltip.percent * 100).toFixed(1)}% do capital em aberto`}
           </div>
-          {tooltip.context !== 'volume_negociado' && (
+          {tooltip.context !== 'volume_negociado' && tooltip.context !== 'des_enc_negociado' && (
             <div style={{ marginTop: '6px', fontSize: '11px', color: '#60a5fa', fontStyle: 'italic' }}>Clique para ver os detalhes</div>
           )}
         </div>
