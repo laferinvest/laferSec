@@ -35,6 +35,29 @@ function gerarXmlCompleto(d) {
   const cNF = d.chave_acesso ? d.chave_acesso.substring(35, 43) : "00000000";
   const cDV = d.chave_acesso ? d.chave_acesso.slice(-1) : "0";
 
+  const temDuplicatas = Array.isArray(d.duplicatas) && d.duplicatas.length > 0;
+
+  const nProtFinal =
+    soNum(d.nProt || d.n_prot || d.protocolo) || "123456789123456";
+
+  const tPagFinal = temDuplicatas
+    ? "14"
+    : soNum(d.tPag || d.t_pag) || "99";
+
+  const vPagFinal = num(
+    d.vPag || d.v_pag || d.vNF || d.v_nf || d.v_nf_total
+  );
+
+  const vOrigFinal = num(
+    d.vOrig || d.v_orig || d.vNF || d.v_nf || d.v_nf_total
+  );
+
+  const vLiqFinal = num(
+    d.vLiq || d.v_liq || d.vNF || d.v_nf || d.v_nf_total
+  );
+
+  const xPagXml = tPagFinal === "99" ? `<xPag>Outros</xPag>` : "";
+
   const dupsXml = (d.duplicatas || [])
     .map(
       (dup) => `
@@ -136,18 +159,18 @@ function gerarXmlCompleto(d) {
       <cobr>
         <fat>
           <nFat>${esc(d.numero_nfe)}</nFat>
-          <vOrig>${num(d.v_nf)}</vOrig>
+          <vOrig>${vOrigFinal}</vOrig>
           <vDesc>0.00</vDesc>
-          <vLiq>${num(d.v_nf)}</vLiq>
+          <vLiq>${vLiqFinal}</vLiq>
         </fat>
         ${dupsXml}
       </cobr>
       <pag>
         <detPag>
           <indPag>1</indPag>
-          <tPag>99</tPag>
-          <xPag></xPag>
-          <vPag>0.00</vPag>
+          <tPag>${tPagFinal}</tPag>
+          ${xPagXml}
+          <vPag>${vPagFinal}</vPag>
         </detPag>
       </pag>
     </infNFe>
@@ -158,7 +181,7 @@ function gerarXmlCompleto(d) {
       <verAplic>NFe_4.00</verAplic>
       <chNFe>${soNum(d.chave_acesso)}</chNFe>
       <dhRecbto>${esc(d.data_emissao)}</dhRecbto>
-      <nProt>${soNum(d.protocolo)}</nProt>
+      <nProt>${nProtFinal}</nProt>
       <digVal></digVal>
       <cStat>100</cStat>
       <xMotivo>Autorizado o uso da NF-e</xMotivo>

@@ -61,8 +61,19 @@ const getTodayIso = () => {
 
 const CEDENTES_IGNORADOS = ["12 -", "23 -", "2 -"];
 
-function calcularCreditoEmAbertoCedentesExcluidosPorMes(rows) {
-  if (!rows || rows.length === 0) return [];
+function ultimoDiaUtilDoMes(ano, mes) {
+  const d = new Date(ano, mes + 1, 0); // último dia do mês
+  d.setHours(0, 0, 0, 0);
+
+  while (d.getDay() === 0 || d.getDay() === 6) {
+    d.setDate(d.getDate() - 1);
+  }
+
+  return d;
+}
+
+function calcularCreditoEmAbertoCedentesExcluidosPorData(rows, dataCorte) {
+  if (!rows || rows.length === 0) return { dataCorte: null, porCedente: {}, total: 0 };
 
   const firstRow = rows[0];
 
@@ -70,7 +81,8 @@ function calcularCreditoEmAbertoCedentesExcluidosPorMes(rows) {
     (k) => k.toLowerCase().includes("emis")
   );
   const pgtoKey = Object.keys(firstRow).find(
-    (k) => k.toLowerCase() === "pgto" ||
+    (k) =>
+      k.toLowerCase() === "pgto" ||
       (k.toLowerCase().includes("pgto") && !k.toLowerCase().includes("vl"))
   );
   const entradaKey = Object.keys(firstRow).find(
@@ -79,10 +91,69 @@ function calcularCreditoEmAbertoCedentesExcluidosPorMes(rows) {
 
   if (!emisKey || !entradaKey) {
     console.log("Não achei as chaves necessárias:", { emisKey, pgtoKey, entradaKey });
-    return [];
+    return { dataCorte: null, porCedente: {}, total: 0 };
   }
 
-  const cedentesExcluidos = CEDENTES_IGNORADOS;
+  const corte = new Date(dataCorte);
+  corte.setHours(23, 59, 59, 999);
+
+  const porCedente = {};
+
+  for (const r of rows) {
+    const cliente = String(r.Cliente || "").trim();
+
+    const ehExcluido = CEDENTES_IGNORADOS.some((prefixo) =>
+      cliente.startsWith(prefixo)
+    );
+    if (!ehExcluido) continue;
+
+    const emisVal = r[emisKey];
+    if (!emisVal) continue;
+
+    const dtEmis = new Date(String(emisVal).split("T")[0] + "T00:00:00");
+    if (isNaN(dtEmis)) continue;
+
+    if (dtEmis > corte) continue;
+
+    const pgtoVal = pgtoKey ? r[pgtoKey] : null;
+    let emAberto = false;
+
+    if (!pgtoVal || String(pgtoVal).trim() === "") {
+      emAberto = true;
+    } else {
+      const dtPgto = new Date(String(pgtoVal).split("T")[0] + "T00:00:00");
+      if (isNaN(dtPgto) || dtPgto > corte) {
+        emAberto = true;
+      }
+    }
+
+    if (!emAberto) continue;
+
+    const valor = Number(r[entradaKey] || 0);
+    porCedente[cliente] = (porCedente[cliente] || 0) + valor;
+  }
+
+  const total = Object.values(porCedente).reduce((acc, v) => acc + Number(v || 0), 0);
+
+  return {
+    dataCorte: corte.toISOString().split("T")[0],
+    porCedente,
+    total,
+  };
+}
+
+function calcularCreditoEmAbertoCedentesExcluidosSerie(rows) {
+  if (!rows || rows.length === 0) return [];
+
+  const firstRow = rows[0];
+  const emisKey = Object.keys(firstRow).find(
+    (k) => k.toLowerCase().includes("emis")
+  );
+
+  if (!emisKey) {
+    console.log("Não achei a chave de emissão.");
+    return [];
+  }
 
   const emisDates = rows
     .map((r) => r[emisKey])
@@ -93,69 +164,82 @@ function calcularCreditoEmAbertoCedentesExcluidosPorMes(rows) {
   if (emisDates.length === 0) return [];
 
   const minDate = new Date(Math.min(...emisDates));
-  const cursor = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
   const hoje = new Date();
-  const end = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+  hoje.setHours(0, 0, 0, 0);
 
   const resultado = [];
 
-  while (cursor <= end) {
-    const ano = cursor.getFullYear();
-    const mes = cursor.getMonth();
+  let ano = minDate.getFullYear();
+  let mes = minDate.getMonth();
 
-    const dataCorte = new Date(ano, mes + 1, 1);
-
-    const porCedente = {};
-
-    for (const r of rows) {
-      const cliente = String(r.Cliente || "").trim();
-
-      const ehExcluido = cedentesExcluidos.some((prefixo) =>
-        cliente.startsWith(prefixo)
-      );
-      if (!ehExcluido) continue;
-
-      const emisVal = r[emisKey];
-      if (!emisVal) continue;
-
-      const dtEmis = new Date(String(emisVal).split("T")[0] + "T00:00:00");
-      if (isNaN(dtEmis)) continue;
-
-      if (dtEmis >= dataCorte) continue;
-
-      const pgtoVal = pgtoKey ? r[pgtoKey] : null;
-      let emAberto = false;
-
-      if (!pgtoVal || String(pgtoVal).trim() === "") {
-        emAberto = true;
-      } else {
-        const dtPgto = new Date(String(pgtoVal).split("T")[0] + "T00:00:00");
-        if (isNaN(dtPgto) || dtPgto >= dataCorte) {
-          emAberto = true;
-        }
-      }
-
-      if (!emAberto) continue;
-
-      const valor = Number(r[entradaKey] || 0);
-
-      if (!porCedente[cliente]) {
-        porCedente[cliente] = 0;
-      }
-
-      porCedente[cliente] += valor;
-    }
+  while (ano < hoje.getFullYear() || (ano === hoje.getFullYear() && mes <= hoje.getMonth())) {
+    const corteMes = ultimoDiaUtilDoMes(ano, mes);
+    const apuracaoMes = calcularCreditoEmAbertoCedentesExcluidosPorData(rows, corteMes);
 
     resultado.push({
-      mes: `${ano}-${String(mes + 1).padStart(2, "0")}`,
-      dataCorte: dataCorte.toISOString().split("T")[0],
-      porCedente,
+      referencia: `${ano}-${String(mes + 1).padStart(2, "0")}`,
+      tipo: "ultimo_dia_util_mes",
+      ...apuracaoMes,
     });
 
-    cursor.setMonth(cursor.getMonth() + 1);
+    mes += 1;
+    if (mes > 11) {
+      mes = 0;
+      ano += 1;
+    }
   }
 
+  const apuracaoHoje = calcularCreditoEmAbertoCedentesExcluidosPorData(rows, hoje);
+
+  resultado.push({
+    referencia: "hoje",
+    tipo: "dia_atual",
+    ...apuracaoHoje,
+  });
+
   return resultado;
+}
+
+function imprimirCreditoEmAbertoCedentesExcluidos(serie) {
+  if (!serie || serie.length === 0) {
+    console.log("Nenhum dado de crédito em aberto dos cedentes ignorados.");
+    return;
+  }
+
+  console.group("CRÉDITO EM ABERTO — CEDENTES IGNORADOS");
+
+  const resumo = serie.map((item) => ({
+    Referencia: item.referencia,
+    Tipo: item.tipo,
+    "Data Corte": item.dataCorte,
+    Total: Number(item.total || 0),
+  }));
+
+  console.log("Resumo geral:");
+  console.table(resumo);
+
+  serie.forEach((item) => {
+    const linhasCedentes = Object.entries(item.porCedente || {})
+      .sort((a, b) => b[1] - a[1])
+      .map(([cedente, valor]) => ({
+        Cedente: cedente,
+        "Crédito em Aberto": Number(valor || 0),
+      }));
+
+    console.groupCollapsed(
+      `${item.referencia} | ${item.dataCorte} | Total: ${formatarMoeda(item.total || 0)}`
+    );
+
+    if (linhasCedentes.length === 0) {
+      console.log("Sem crédito em aberto dos cedentes ignorados nesta data.");
+    } else {
+      console.table(linhasCedentes);
+    }
+
+    console.groupEnd();
+  });
+
+  console.groupEnd();
 }
 
 function cedenteValido(cedente) {
@@ -277,8 +361,10 @@ export default function UploadData() {
       setSnapshotRiscoAtual(recebiveis);
       setSnapshotLastUpdated(new Date().toLocaleString("pt-BR"));
 
-      const resultadoCedentesExcluidos =
-        calcularCreditoEmAbertoCedentesExcluidosPorMes(data || []);
+      // const resultadoCedentesExcluidos =
+      //   calcularCreditoEmAbertoCedentesExcluidosSerie(data || []);
+
+      // imprimirCreditoEmAbertoCedentesExcluidos(resultadoCedentesExcluidos);
 
     } catch (err) {
       console.error(err);

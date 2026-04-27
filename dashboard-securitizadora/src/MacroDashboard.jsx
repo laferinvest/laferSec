@@ -204,6 +204,7 @@ function MacroDetailedTable({ rows, focus, setFocus, setSelectedSlice, hideValue
 export default function MacroDashboard({ session, hideValues, setHideValues }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [latestPatrimonio, setLatestPatrimonio] = useState(0);
   const [focus, setFocus] = useState('cedente'); 
   const fmtM = (valor) => hideValues ? "R$ -" : formatarMoeda(valor);
   
@@ -220,13 +221,30 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
   useEffect(() => {
     async function fetchData() {
       setLoading(true);
-      const { data, error } = await supabase.from("secInfo").select("*").order("id", { ascending: false }).limit(10000);
-      if (data) {
-        const dadosLimpos = data.filter(r => sacadoValido(r.Sacado) && cedenteValido(r.Cliente));
+
+      try {
+        const [{ data: secInfoData, error: secInfoError }, { data: snapshotData, error: snapshotError }] = await Promise.all([
+          supabase.from("secInfo").select("*").order("id", { ascending: false }).limit(10000),
+          supabase.from("secSnapshots").select("Data, Recebiveis, Dinheiro Banco").order("Data", { ascending: false }).limit(1)
+        ]);
+
+        if (secInfoError) throw secInfoError;
+        if (snapshotError) throw snapshotError;
+
+        const dadosLimpos = (secInfoData || []).filter(r => sacadoValido(r.Sacado) && cedenteValido(r.Cliente));
         setRows(dadosLimpos);
+
+        const ultimoSnapshot = snapshotData?.[0];
+        const patrimonioAtual = ultimoSnapshot
+          ? (Number(ultimoSnapshot["Recebiveis"] ?? ultimoSnapshot.recebiveis ?? 0) + Number(ultimoSnapshot["Dinheiro Banco"] ?? ultimoSnapshot.dinheiro_banco ?? ultimoSnapshot.dinheiroBanco ?? 0))
+          : 0;
+
+        setLatestPatrimonio(patrimonioAtual);
+      } catch (error) {
+        console.error("Erro ao buscar dados Macro:", error);
+      } finally {
+        setLoading(false);
       }
-      if (error) console.error("Erro ao buscar dados Macro:", error);
-      setLoading(false);
     }
     fetchData();
   }, []);
@@ -376,6 +394,8 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
       }
     });
 
+    const patrimonioReferencia = latestPatrimonio > 0 ? latestPatrimonio : totalVal;
+
     const sorted = Object.keys(grouped).map(k => {
       const vol = monthlyVolume[k] || { lm: 0, plm: 0 };
       let varPct = 0;
@@ -393,7 +413,7 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
         name: k,
         val: grouped[k].val,
         count: grouped[k].count,
-        percent: totalVal > 0 ? grouped[k].val / totalVal : 0,
+        percent: patrimonioReferencia > 0 ? grouped[k].val / patrimonioReferencia : 0,
         varPct,
         hasVar
       };
@@ -410,7 +430,7 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
         name: `Restante (${rest.length} outros)`,
         val: restVal,
         count: restCount,
-        percent: totalVal > 0 ? restVal / totalVal : 0,
+        percent: patrimonioReferencia > 0 ? restVal / patrimonioReferencia : 0,
         color: colors[9] 
       });
     }
@@ -482,7 +502,7 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
         ytd: buildNegotiationChart(negotiationGrouped.ytd)
       }
     };
-  }, [rows, focus, volumeDateBase]);
+  }, [rows, focus, volumeDateBase, latestPatrimonio]);
 
   // 2. Extrai os detalhes da entidade selecionada
   const detailedRows = useMemo(() => {
@@ -853,7 +873,7 @@ const negotiationDesEncTop5Percent = currentNegotiationStats.sorted.length
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "32px", flexWrap: "wrap", gap: "16px" }}>
         <div>
           <h2 style={{ margin: "0 0 8px 0", color: "#111827", fontSize: "22px" }}>Visão Macroscópica de Risco</h2>
-          <p style={{ margin: 0, color: "#6b7280", fontSize: "15px" }}>Concentração de Capital em títulos <strong>Em Aberto</strong> (A Vencer e Em Atraso).</p>
+          <p style={{ margin: 0, color: "#6b7280", fontSize: "15px" }}>Exposição dos títulos <strong>Em Aberto</strong> (A Vencer e Em Atraso), com percentual calculado sobre o patrimônio mais recente da securitizadora.</p>
         </div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "10px" }}>
           <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
@@ -1083,7 +1103,7 @@ const negotiationDesEncTop5Percent = currentNegotiationStats.sorted.length
                   Concentração por {focus === 'cedente' ? 'Cedente' : 'Sacado'}
                 </h3>
                 <p style={{ margin: 0, color: "#6b7280", fontSize: "14px" }}>
-                  Capital em aberto concentrado nos principais {focus === 'cedente' ? 'cedentes' : 'sacados'}.
+                  Risco em aberto concentrado nos principais {focus === 'cedente' ? 'cedentes' : 'sacados'}.
                 </p>
               </div>
             </div>
@@ -1109,8 +1129,11 @@ const negotiationDesEncTop5Percent = currentNegotiationStats.sorted.length
                   <div style={{ fontSize: "28px", fontWeight: "900", color: "#0f172a", letterSpacing: "-0.03em", lineHeight: 1.1 }}>
                     {fmtM(stats.totalVal)}
                   </div>
+                  <div style={{ marginTop: "8px", fontSize: "12px", color: "#64748b", fontWeight: "700" }}>
+                    PL referência: {fmtM(latestPatrimonio)}
+                  </div>
                 <div style={{ marginTop: "10px", fontSize: "14px", color: "#64748b", fontWeight: "700" }}>
-                  Top 5 = {capitalTop5Percent.toFixed(1).replace('.', ',')}%
+                  Top 5 / PL = {capitalTop5Percent.toFixed(1).replace('.', ',')}%
                 </div>
                 </div>
 
@@ -1140,8 +1163,8 @@ const negotiationDesEncTop5Percent = currentNegotiationStats.sorted.length
               }}>
                 <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 220px 120px", background: "#f3f4f6", color: "#526581", fontSize: "13px", fontWeight: "800", textTransform: "uppercase", letterSpacing: "0.04em", borderBottom: "1px solid #d1d5db" }}>
                   <div style={{ padding: "16px 20px" }}>{focus === 'cedente' ? 'Cedente' : 'Sacado'}</div>
-                  <div style={{ padding: "16px 20px", textAlign: "right" }}>Capital em Aberto</div>
-                  <div style={{ padding: "16px 20px", textAlign: "right" }}>%</div>
+                  <div style={{ padding: "16px 20px", textAlign: "right" }}>Risco em Aberto</div>
+                  <div style={{ padding: "16px 20px", textAlign: "right" }}>% do PL</div>
                 </div>
                 {capitalPageItems.map((slice, idx) => {
                   const globalIndex = (capitalPageSafe - 1) * capitalItemsPerPage + idx;
@@ -1404,7 +1427,7 @@ const negotiationDesEncTop5Percent = currentNegotiationStats.sorted.length
                       <th style={{ padding: "14px 16px", borderBottom: "2px solid #e5e7eb" }}>Var. Vol. (Últ. 30d)</th>
                       <th style={{ padding: "14px 16px", borderBottom: "2px solid #e5e7eb" }}>Qtd. Títulos</th>
                       <th style={{ padding: "14px 16px", borderBottom: "2px solid #e5e7eb" }}>Capital Alocado</th>
-                      <th style={{ padding: "14px 16px", borderBottom: "2px solid #e5e7eb" }}>% do Total</th>
+                      <th style={{ padding: "14px 16px", borderBottom: "2px solid #e5e7eb" }}>% do PL</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1443,7 +1466,7 @@ const negotiationDesEncTop5Percent = currentNegotiationStats.sorted.length
               ? `Representa ${(tooltip.percent * 100).toFixed(1)}% do volume negociado no período`
               : tooltip.context === 'des_enc_negociado'
                 ? `Representa ${(tooltip.percent * 100).toFixed(1)}% do total de Enc. + Des. no período`
-                : `Representa ${(tooltip.percent * 100).toFixed(1)}% do capital em aberto`}
+                : `Representa ${(tooltip.percent * 100).toFixed(1)}% do patrimônio da securitizadora`}
           </div>
           {tooltip.context !== 'volume_negociado' && tooltip.context !== 'des_enc_negociado' && (
             <div style={{ marginTop: '6px', fontSize: '11px', color: '#60a5fa', fontStyle: 'italic' }}>Clique para ver os detalhes</div>

@@ -51,16 +51,6 @@ type GeminiSemanticResult = {
   codigo_acesso: NullableString;
   codigo_verificacao: NullableString;
   access_code_best: NullableString;
-
-  nProt: NullableString;
-
-  vProd: NullableString;
-  vNF: NullableString;
-  vTotTrib: NullableString;
-  vOrig: NullableString;
-  vLiq: NullableString;
-  tPag: NullableString;
-  vPag: NullableString;
 };
 
 type FinalLegacyResult = {
@@ -96,27 +86,6 @@ type FinalLegacyResult = {
   codigo_acesso: NullableString;
   codigo_verificacao: NullableString;
   access_code_best: NullableString;
-
-  nProt: NullableString;
-
-  vProd: NullableString;
-  vNF: NullableString;
-  vTotTrib: NullableString;
-  vOrig: NullableString;
-  vLiq: NullableString;
-  tPag: NullableString;
-  vPag: NullableString;
-
-  // Aliases para gerador de XML/front antigo que lê snake_case.
-  // Isso evita XML com 0.00/99/nProt vazio quando a extração já veio correta.
-  n_prot: NullableString;
-  v_prod: NullableString;
-  v_nf: NullableString;
-  v_tot_trib: NullableString;
-  v_orig: NullableString;
-  v_liq: NullableString;
-  t_pag: NullableString;
-  v_pag: NullableString;
 };
 
 type ValidationResult = {
@@ -243,68 +212,6 @@ function normalizeAccessCode(value: NullableString): NullableString {
     .toUpperCase();
 
   return compact || null;
-}
-
-function normalizeProtocol(value: NullableString): NullableString {
-  const digits = onlyDigits(value);
-  if (!digits) return null;
-  return digits.slice(0, 15);
-}
-
-function randomDigits(length: number): string {
-  const bytes = new Uint8Array(length);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes, (b) => String(b % 10)).join("");
-}
-
-function getNProtOrFallback(...candidates: NullableString[]): string {
-  for (const candidate of candidates) {
-    const normalized = normalizeProtocol(candidate);
-    if (normalized) return normalized.padEnd(15, "0").slice(0, 15);
-  }
-
-  // Fallback pedido: se não conseguir extrair, gerar 15 dígitos aleatórios.
-  // Exemplo de formato aceito: 123456789123456.
-  return randomDigits(15);
-}
-
-function sumDuplicatasMoney(duplicatas: Duplicata[]): NullableString {
-  if (!duplicatas.length) return null;
-
-  const cents = duplicatas.reduce((acc, dup) => {
-    const value = Number(normalizeMoney(dup.vDup));
-    if (Number.isNaN(value)) return acc;
-    return acc + Math.round(value * 100);
-  }, 0);
-
-  return cents > 0 ? (cents / 100).toFixed(2) : null;
-}
-
-function firstNormalizedMoney(...values: NullableString[]): NullableString {
-  for (const value of values) {
-    const normalized = normalizeMoney(value);
-    if (normalized) return normalized;
-  }
-  return null;
-}
-
-function firstNonZeroNormalizedMoney(...values: NullableString[]): NullableString {
-  for (const value of values) {
-    const normalized = normalizeMoney(value);
-    if (normalized && Number(normalized) > 0) return normalized;
-  }
-  return firstNormalizedMoney(...values);
-}
-
-function normalizePaymentType(value: NullableString, duplicatas: Duplicata[]): NullableString {
-  // Regra operacional: se existem duplicatas, NÃO deixe o Gemini ou o template empurrar 99.
-  // Esse era exatamente o bug do XML: tinha duplicata, mas tPag saía 99.
-  if (duplicatas.length > 0) return "14";
-
-  const digits = onlyDigits(value);
-  if (digits) return digits.padStart(2, "0").slice(-2);
-
-  return "99";
 }
 
 function composeEnderecoLimpo(
@@ -503,35 +410,6 @@ function normalizeSemanticResult(raw: any): GeminiSemanticResult {
   const datas_fatura = normalizeDatasFatura(raw?.datas_fatura, data_emissao);
   const accessCodes = extractAndNormalizeAccessCodes(raw);
 
-  const duplicatas = normalizeDuplicatas(
-    raw?.duplicatas,
-    data_emissao,
-    v_nf_total,
-    datas_fatura,
-  );
-
-  const somaDuplicatas = sumDuplicatasMoney(duplicatas);
-
-  // IMPORTANTE: valores 0.00 vindos do Gemini/template não podem ganhar de duplicatas reais.
-  // Se existem duplicatas somando > 0, elas viram a base financeira.
-  const totalBase = firstNonZeroNormalizedMoney(v_nf_total, somaDuplicatas, "0.00") ?? "0.00";
-
-  const vProd = firstNonZeroNormalizedMoney(asString(raw?.vProd), asString(raw?.v_prod), totalBase);
-  const vNF = firstNonZeroNormalizedMoney(asString(raw?.vNF), asString(raw?.v_nf), v_nf_total, somaDuplicatas, vProd, totalBase);
-  const vTotTrib = firstNormalizedMoney(asString(raw?.vTotTrib), asString(raw?.v_tot_trib), "0.00");
-  const vOrig = firstNonZeroNormalizedMoney(asString(raw?.vOrig), asString(raw?.v_orig), vNF, totalBase);
-  const vLiq = firstNonZeroNormalizedMoney(asString(raw?.vLiq), asString(raw?.v_liq), vOrig, vNF, totalBase);
-  const tPag = normalizePaymentType(asString(raw?.tPag) ?? asString(raw?.t_pag), duplicatas);
-  const vPag = firstNonZeroNormalizedMoney(asString(raw?.vPag), asString(raw?.v_pag), somaDuplicatas, vLiq, vNF, totalBase);
-
-  const nProt = getNProtOrFallback(
-    asString(raw?.nProt),
-    asString(raw?.n_prot),
-    asString(raw?.numero_protocolo),
-    asString(raw?.protocolo_autorizacao),
-    asString(raw?.protocolo),
-  );
-
   return {
     document_type,
     numero_nfe: normalizeNumberLike(asString(raw?.numero_nfe)),
@@ -540,9 +418,14 @@ function normalizeSemanticResult(raw: any): GeminiSemanticResult {
     issuer: normalizeIssuer(raw?.issuer),
     counterparty: normalizeCounterparty(raw?.counterparty),
 
-    v_nf_total: firstNonZeroNormalizedMoney(v_nf_total, vNF, totalBase),
+    v_nf_total,
 
-    duplicatas,
+    duplicatas: normalizeDuplicatas(
+      raw?.duplicatas,
+      data_emissao,
+      v_nf_total,
+      datas_fatura,
+    ),
 
     datas_fatura,
 
@@ -550,15 +433,6 @@ function normalizeSemanticResult(raw: any): GeminiSemanticResult {
     codigo_acesso: accessCodes.codigo_acesso,
     codigo_verificacao: accessCodes.codigo_verificacao,
     access_code_best: accessCodes.access_code_best,
-
-    nProt,
-    vProd,
-    vNF,
-    vTotTrib,
-    vOrig,
-    vLiq,
-    tPag,
-    vPag,
   };
 }
 
@@ -607,25 +481,6 @@ function mapToLegacyFields(parsed: GeminiSemanticResult): FinalLegacyResult {
     codigo_acesso: parsed.codigo_acesso,
     codigo_verificacao: parsed.codigo_verificacao,
     access_code_best: parsed.access_code_best,
-
-    nProt: parsed.nProt,
-    vProd: parsed.vProd,
-    vNF: parsed.vNF,
-    vTotTrib: parsed.vTotTrib,
-    vOrig: parsed.vOrig,
-    vLiq: parsed.vLiq,
-    tPag: parsed.tPag,
-    vPag: parsed.vPag,
-
-    // Aliases snake_case para evitar XML zerado quando o gerador antigo lê nomes diferentes.
-    n_prot: parsed.nProt,
-    v_prod: parsed.vProd,
-    v_nf: parsed.vNF,
-    v_tot_trib: parsed.vTotTrib,
-    v_orig: parsed.vOrig,
-    v_liq: parsed.vLiq,
-    t_pag: parsed.tPag,
-    v_pag: parsed.vPag,
   };
 }
 
@@ -727,23 +582,6 @@ function validateSemanticResult(parsed: GeminiSemanticResult): ValidationResult 
     critical.push("Nenhuma duplicata foi gerada.");
   }
 
-  if (!parsed.nProt || !/^\d{15}$/.test(parsed.nProt)) {
-    critical.push("nProt inválido após fallback.");
-  }
-
-  const requiredFinancials: Array<[string, NullableString]> = [
-    ["vProd", parsed.vProd],
-    ["vNF", parsed.vNF],
-    ["vOrig", parsed.vOrig],
-    ["vLiq", parsed.vLiq],
-    ["tPag", parsed.tPag],
-    ["vPag", parsed.vPag],
-  ];
-
-  for (const [field, value] of requiredFinancials) {
-    if (!value) critical.push(`${field} ausente após normalização.`);
-  }
-
   return { critical, warnings };
 }
 
@@ -811,15 +649,6 @@ Regras:
 - numero_nfe sem pontos e sem zeros à esquerda.
 - data_emissao em YYYY-MM-DDTHH:mm:ss-03:00; se só houver data, use T00:00:00-03:00.
 - v_nf_total = valor total final da nota/documento.
-- Extraia também os campos fiscais/financeiros quando existirem no PDF: nProt, vProd, vNF, vTotTrib, vOrig, vLiq, tPag e vPag.
-- nProt = número do protocolo de autorização da NF-e. Procure por "Protocolo", "Protocolo de autorização", "Nº Protocolo", "nProt" ou equivalente. Deve conter exatamente 15 dígitos. Se não aparecer no PDF ou estiver ilegível, RETORNE MESMO ASSIM um número aleatório com exatamente 15 dígitos, por exemplo "123456789123456". Nunca retorne null, vazio ou texto neste campo.
-- vProd = valor total dos produtos/serviços. Se não houver campo específico, use v_nf_total.
-- vNF = valor total da NF. Se não houver campo específico, use v_nf_total.
-- vTotTrib = valor aproximado total dos tributos. Se não houver, use "0.00".
-- vOrig = valor original da fatura/cobrança. Se não houver, use v_nf_total.
-- vLiq = valor líquido da fatura/cobrança. Se não houver, use vOrig ou v_nf_total.
-- tPag = código da forma de pagamento. Se houver duplicatas/boletos, prefira "14". Use "99" apenas quando a forma for realmente outros/outro e houver descrição.
-- vPag = valor pago/valor do pagamento. Se houver parcelas/duplicatas, deve bater com a soma das duplicatas ou com v_nf_total.
 - Extraia também, quando existir, identificadores de acesso/validação da nota.
 - Procure expressões equivalentes como:
   - "Cód. de Acesso"
@@ -866,14 +695,6 @@ Saída:
     "cep": "string | null"
   },
   "v_nf_total": "string | null",
-  "nProt": "string",
-  "vProd": "string",
-  "vNF": "string",
-  "vTotTrib": "string",
-  "vOrig": "string",
-  "vLiq": "string",
-  "tPag": "string",
-  "vPag": "string",
   "chave_acesso": "string | null",
   "codigo_acesso": "string | null",
   "codigo_verificacao": "string | null",
@@ -926,14 +747,6 @@ function buildResponseSchema() {
       },
 
       v_nf_total: { type: "STRING" },
-      nProt: { type: "STRING" },
-      vProd: { type: "STRING" },
-      vNF: { type: "STRING" },
-      vTotTrib: { type: "STRING" },
-      vOrig: { type: "STRING" },
-      vLiq: { type: "STRING" },
-      tPag: { type: "STRING" },
-      vPag: { type: "STRING" },
 
       chave_acesso: { type: "STRING" },
       codigo_acesso: { type: "STRING" },
@@ -962,20 +775,11 @@ function buildResponseSchema() {
       "issuer",
       "counterparty",
       "v_nf_total",
-      "nProt",
-      "vProd",
-      "vNF",
-      "vTotTrib",
-      "vOrig",
-      "vLiq",
-      "tPag",
-      "vPag",
       "datas_fatura",
       "duplicatas",
     ],
   };
 }
-
 
 async function callGeminiExtraction(
   pdfBase64: string,
@@ -989,12 +793,6 @@ async function callGeminiExtraction(
   const modelName = Deno.env.get("GEMINI_MODEL") || "gemini-3.1-flash-lite-preview";
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent`;
 
-  const promptText = buildPrompt(retryReason);
-
-  console.log("===== PROMPT ENVIADO AO GEMINI =====");
-  console.log(promptText);
-  console.log("===== FIM DO PROMPT =====");
-
   const payload = {
     contents: [
       {
@@ -1006,7 +804,7 @@ async function callGeminiExtraction(
             },
           },
           {
-            text: promptText,
+            text: buildPrompt(retryReason),
           },
         ],
       },
@@ -1047,10 +845,6 @@ async function callGeminiExtraction(
     throw new Error("O Gemini retornou JSON inválido.");
   }
 
-  console.log("===== JSON CRU DO GEMINI =====");
-  console.log(JSON.stringify(parsedRaw, null, 2));
-  console.log("===== FIM JSON CRU DO GEMINI =====");
-
   return normalizeSemanticResult(parsedRaw);
 }
 
@@ -1090,40 +884,6 @@ serve(async (req) => {
 
     const resultadoJson = mapToLegacyFields(semanticResult);
 
-console.log("===== KEYS DO resultadoJson =====");
-console.log(Object.keys(resultadoJson));
-
-console.log("===== CAMPOS CRÍTICOS DO resultadoJson =====");
-console.log({
-  nProt: resultadoJson.nProt,
-  n_prot: resultadoJson.n_prot,
-
-  vProd: resultadoJson.vProd,
-  v_prod: resultadoJson.v_prod,
-
-  vNF: resultadoJson.vNF,
-  v_nf: resultadoJson.v_nf,
-
-  vTotTrib: resultadoJson.vTotTrib,
-  v_tot_trib: resultadoJson.v_tot_trib,
-
-  vOrig: resultadoJson.vOrig,
-  v_orig: resultadoJson.v_orig,
-
-  vLiq: resultadoJson.vLiq,
-  v_liq: resultadoJson.v_liq,
-
-  tPag: resultadoJson.tPag,
-  t_pag: resultadoJson.t_pag,
-
-  vPag: resultadoJson.vPag,
-  v_pag: resultadoJson.v_pag,
-});
-
-
-    console.log("===== RESULTADO JSON FINAL DA INDEX =====");
-    console.log(JSON.stringify(resultadoJson, null, 2));
-    console.log("===== FIM RESULTADO JSON FINAL DA INDEX =====");
     if (validation.critical.length > 0) {
       return new Response(
         JSON.stringify({
