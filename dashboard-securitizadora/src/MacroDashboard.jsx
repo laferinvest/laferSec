@@ -225,7 +225,7 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
       try {
         const [{ data: secInfoData, error: secInfoError }, { data: snapshotData, error: snapshotError }] = await Promise.all([
           supabase.from("secInfo").select("*").order("id", { ascending: false }).limit(10000),
-          supabase.from("secSnapshots").select("Data, Recebiveis, Dinheiro Banco").order("Data", { ascending: false }).limit(1)
+          supabase.from("secSnapshots").select('Data, Recebiveis, "Dinheiro Banco"').order("Data", { ascending: false }).limit(1)
         ]);
 
         if (secInfoError) throw secInfoError;
