@@ -236,7 +236,7 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
 
         const ultimoSnapshot = snapshotData?.[0];
         const patrimonioAtual = ultimoSnapshot
-          ? (Number(ultimoSnapshot["Recebiveis"] ?? ultimoSnapshot.recebiveis ?? 0) + Number(ultimoSnapshot["Dinheiro Banco"] ?? ultimoSnapshot.dinheiro_banco ?? ultimoSnapshot.dinheiroBanco ?? 0))
+          ? (Number(ultimoSnapshot["Recebiveis"] ?? ultimoSnapshot.recebiveis ?? 0) + Number(ultimoSnapshot["Dinheiro Banco"] ?? ultimoSnapshot.dinheiro_banco ?? 0))
           : 0;
 
         setLatestPatrimonio(patrimonioAtual);
