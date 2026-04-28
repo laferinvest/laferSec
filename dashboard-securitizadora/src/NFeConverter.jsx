@@ -198,6 +198,224 @@ const fileToBase64 = (file) =>
     reader.onerror = (error) => reject(error);
   });
 
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function parseMoney(value) {
+  if (value === undefined || value === null) return null;
+
+  let s = String(value).trim();
+  if (!s) return null;
+
+  s = s.replace(/R\$/gi, "").replace(/\s+/g, "");
+
+  const hasComma = s.includes(",");
+  const hasDot = s.includes(".");
+
+  if (hasComma && hasDot) {
+    if (s.lastIndexOf(",") > s.lastIndexOf(".")) {
+      s = s.replace(/\./g, "").replace(",", ".");
+    } else {
+      s = s.replace(/,/g, "");
+    }
+  } else if (hasComma) {
+    s = s.replace(/\./g, "").replace(",", ".");
+  }
+
+  s = s.replace(/[^0-9.-]/g, "");
+
+  const num = Number(s);
+  return Number.isFinite(num) ? num : null;
+}
+
+function formatCurrencyBRL(value) {
+  const num = parseMoney(value);
+
+  if (num === null) {
+    return "R$ [valor]";
+  }
+
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  }).format(num);
+}
+
+function formatDateBRShort(value) {
+  if (!value) return "[vencimento]";
+
+  const text = String(value).trim();
+  const iso = text.slice(0, 10);
+  const isoMatch = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+
+  if (isoMatch) {
+    const [, year, month, day] = isoMatch;
+    return `${day}/${month}/${year.slice(-2)}`;
+  }
+
+  const brMatch = text.match(/^(\d{2})\/(\d{2})\/(\d{2}|\d{4})$/);
+
+  if (brMatch) {
+    const [, day, month, year] = brMatch;
+    return `${day}/${month}/${year.slice(-2)}`;
+  }
+
+  return text;
+}
+
+function formatCount(value) {
+  const raw = String(value ?? "").trim();
+  const digits = raw.match(/\d+/)?.[0];
+
+  if (!digits) {
+    return "[quantidade]";
+  }
+
+  return String(Number(digits));
+}
+
+function pluralProduto(qtdFormatada) {
+  return qtdFormatada === "1" ? "produto distinto" : "produtos distintos";
+}
+
+function montarEmailConfirmacao(d) {
+  const sacado = d.dest_nome || "[NOME DO SACADO]";
+  const cedente = d.emit_nome || "[NOME DO CEDENTE]";
+  const numeroNfe = d.numero_nfe || "[NÚMERO DA NF]";
+  const qtdItens = formatCount(
+    d.qtd_itens_distintos ??
+      d.quantidade_itens_distintos ??
+      d.itens_distintos_count
+  );
+  const totalNota = formatCurrencyBRL(
+    d.v_nf_total || d.vNF || d.v_nf || d.vProd || d.v_prod
+  );
+
+  const duplicatas =
+    Array.isArray(d.duplicatas) && d.duplicatas.length > 0
+      ? d.duplicatas
+      : [
+          {
+            nDup: "1",
+            dVenc: null,
+            vDup: d.v_nf_total || d.vNF || d.v_nf || d.vPag || d.v_pag,
+          },
+        ];
+
+  const linhasTabelaHtml = duplicatas
+    .map((dup, index) => {
+      const parcela = escapeHtml(dup.nDup || String(index + 1));
+      const vencimento = escapeHtml(formatDateBRShort(dup.dVenc));
+      const valor = escapeHtml(formatCurrencyBRL(dup.vDup));
+
+      return `
+        <tr>
+          <td style="border:1px solid #d9d9d9;padding:8px 10px;text-align:center;">${parcela}</td>
+          <td style="border:1px solid #d9d9d9;padding:8px 10px;text-align:center;">${vencimento}</td>
+          <td style="border:1px solid #d9d9d9;padding:8px 10px;text-align:right;">${valor}</td>
+        </tr>`;
+    })
+    .join("");
+
+  const linhasTabelaPlain = duplicatas
+    .map((dup, index) => {
+      const parcela = dup.nDup || String(index + 1);
+      const vencimento = formatDateBRShort(dup.dVenc);
+      const valor = formatCurrencyBRL(dup.vDup);
+      return `${parcela}\t${vencimento}\t${valor}`;
+    })
+    .join("\n");
+
+  const html = `
+    <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111827;line-height:1.55;">
+      <p>À ${escapeHtml(sacado)},<br />A/C de [RESPONSÁVEL].</p>
+
+      <p>Meu nome é Daniel Ferreira, trabalho na Lafer Invest Securitizadora S/A, empresa parceira da ${escapeHtml(cedente)}.</p>
+
+      <p>Nós negociamos com eles a NF de número ${escapeHtml(numeroNfe)}:</p>
+
+      <p>Venda de ${escapeHtml(qtdItens)} ${escapeHtml(pluralProduto(qtdItens))}, totalizando ${escapeHtml(totalNota)}, dividido conforme segue a fatura abaixo:</p>
+
+      <table style="border-collapse:collapse;width:100%;max-width:560px;margin:8px 0 18px 0;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111827;">
+        <thead>
+          <tr>
+            <th style="border:1px solid #d9d9d9;background:#f3f4f6;padding:8px 10px;text-align:center;">Parcela</th>
+            <th style="border:1px solid #d9d9d9;background:#f3f4f6;padding:8px 10px;text-align:center;">Vencimento</th>
+            <th style="border:1px solid #d9d9d9;background:#f3f4f6;padding:8px 10px;text-align:right;">Valor</th>
+          </tr>
+        </thead>
+        <tbody>${linhasTabelaHtml}
+        </tbody>
+      </table>
+
+      <p>Pode me confirmar se a mercadoria foi entregue em <strong>perfeita e boa ordem, dentro do prazo e das condições estabelecidas</strong>, incluindo valores e vencimentos?</p>
+
+      <p>Caso positivo, peço, por gentileza, que retorne o email afirmando que foi entregue em perfeita e boa ordem, dentro do prazo e condições estabelecidas.</p>
+
+      <p>Att,</p>
+    </div>
+  `.trim();
+
+  const plainText = `À ${sacado},
+A/C de [RESPONSÁVEL].
+
+Meu nome é Daniel Ferreira, trabalho na Lafer Invest Securitizadora S/A, empresa parceira da ${cedente}.
+
+Nós negociamos com eles a NF de número ${numeroNfe}:
+
+Venda de ${qtdItens} ${pluralProduto(qtdItens)}, totalizando ${totalNota}, dividido conforme segue a fatura abaixo:
+
+Parcela	Vencimento	Valor
+${linhasTabelaPlain}
+
+Pode me confirmar se a mercadoria foi entregue em perfeita e boa ordem, dentro do prazo e das condições estabelecidas, incluindo valores e vencimentos?
+
+Caso positivo, peço, por gentileza, que retorne o email afirmando que foi entregue em perfeita e boa ordem, dentro do prazo e condições estabelecidas.
+
+Att,`;
+
+  return { html, plainText };
+}
+
+async function copiarEmailConfirmacao(emailConfirmacao) {
+  if (!emailConfirmacao) return;
+
+  if (navigator.clipboard?.write && window.ClipboardItem) {
+    await navigator.clipboard.write([
+      new window.ClipboardItem({
+        "text/html": new Blob([emailConfirmacao.html], {
+          type: "text/html",
+        }),
+        "text/plain": new Blob([emailConfirmacao.plainText], {
+          type: "text/plain",
+        }),
+      }),
+    ]);
+    return;
+  }
+
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(emailConfirmacao.plainText);
+    return;
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = emailConfirmacao.plainText;
+  textarea.style.position = "fixed";
+  textarea.style.left = "-9999px";
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+  document.execCommand("copy");
+  document.body.removeChild(textarea);
+}
+
 // =============================================================================
 // SUBCOMPONENTE: TOGGLE
 // =============================================================================
@@ -489,6 +707,7 @@ export default function NFeConverter() {
   const [status, setStatus] = useState("");
   const [progress, setProgress] = useState("");
   const [resultados, setResultados] = useState([]);
+  const [copyMsg, setCopyMsg] = useState("");
 
   const [configAberta, setConfigAberta] = useState(false);
   const [savingPrefs, setSavingPrefs] = useState(false);
@@ -672,6 +891,7 @@ export default function NFeConverter() {
     setStatus("");
     setProgress("");
     setResultados([]);
+    setCopyMsg("");
 
     const novosResultados = [];
     const cnpjsParaConsultar = [];
@@ -691,6 +911,7 @@ export default function NFeConverter() {
         if (data.error) throw new Error(data.error);
 
         const xmlString = gerarXmlCompleto(data);
+        const emailConfirmacao = montarEmailConfirmacao(data);
 
         if (downloadXml) {
           baixarXML(xmlString, file.name);
@@ -705,6 +926,10 @@ export default function NFeConverter() {
           lat: data.lat,
           lng: data.lng,
           xmlFalso: xmlString,
+          dadosNfe: data,
+          emailConfirmacao,
+          cedente: data.emit_nome || "Não identificado",
+          numeroNfe: data.numero_nfe || "Não identificado",
           protesto: null,
         });
 
@@ -841,6 +1066,7 @@ export default function NFeConverter() {
             setFiles(Array.from(e.target.files));
             setStatus("");
             setResultados([]);
+            setCopyMsg("");
           }}
           disabled={loading}
           style={{
@@ -1022,6 +1248,137 @@ export default function NFeConverter() {
           </div>
         )}
       </div>
+
+      {resultados.some((r) => r.ok && r.emailConfirmacao) && (
+        <div
+          style={{
+            marginTop: "16px",
+            borderRadius: "10px",
+            border: "1px solid #c7d2fe",
+            background: "#eef2ff",
+            overflow: "hidden",
+          }}
+        >
+          <div
+            style={{
+              padding: "14px 16px",
+              borderBottom: "1px solid #c7d2fe",
+              background: "#e0e7ff",
+            }}
+          >
+            <div
+              style={{
+                fontSize: "15px",
+                fontWeight: "700",
+                color: "#312e81",
+              }}
+            >
+              ✉️ Email padrão de confirmação
+            </div>
+            <div
+              style={{
+                marginTop: "4px",
+                fontSize: "12px",
+                color: "#4338ca",
+                lineHeight: "1.45",
+              }}
+            >
+              Use o botão de copiar para colar no Zoho/Gmail mantendo a tabela.
+              O campo “A/C” fica como marcador para você preencher o responsável.
+            </div>
+          </div>
+
+          <div
+            style={{
+              padding: "16px",
+              display: "flex",
+              flexDirection: "column",
+              gap: "14px",
+            }}
+          >
+            {resultados.map((r, i) => {
+              if (!r.ok || !r.emailConfirmacao) return null;
+
+              return (
+                <div
+                  key={`email-${i}`}
+                  style={{
+                    borderRadius: "8px",
+                    border: "1px solid #cbd5e1",
+                    background: "#fff",
+                    overflow: "hidden",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: "12px",
+                      padding: "12px",
+                      borderBottom: "1px solid #e2e8f0",
+                      background: "#f8fafc",
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: "12px",
+                        color: "#475569",
+                        lineHeight: "1.4",
+                      }}
+                    >
+                      <strong style={{ color: "#0f172a" }}>
+                        {r.nome}
+                      </strong>
+                      <br />
+                      Cedente: {r.cedente} | NF: {r.numeroNfe}
+                    </div>
+
+                    <button
+                      onClick={async () => {
+                        try {
+                          await copiarEmailConfirmacao(r.emailConfirmacao);
+                          setCopyMsg(`email-${i}`);
+                          setTimeout(() => setCopyMsg(""), 1800);
+                        } catch (err) {
+                          console.error(err);
+                          setCopyMsg(`erro-${i}`);
+                          setTimeout(() => setCopyMsg(""), 2500);
+                        }
+                      }}
+                      style={{
+                        border: "none",
+                        borderRadius: "7px",
+                        background: copyMsg === `email-${i}` ? "#059669" : "#4f46e5",
+                        color: "#fff",
+                        padding: "9px 12px",
+                        fontSize: "12px",
+                        fontWeight: "700",
+                        cursor: "pointer",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {copyMsg === `email-${i}`
+                        ? "Copiado!"
+                        : copyMsg === `erro-${i}`
+                          ? "Erro ao copiar"
+                          : "Copiar email"}
+                    </button>
+                  </div>
+
+                  <div
+                    style={{
+                      padding: "16px",
+                      overflowX: "auto",
+                    }}
+                    dangerouslySetInnerHTML={{ __html: r.emailConfirmacao.html }}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {progress && (
         <div

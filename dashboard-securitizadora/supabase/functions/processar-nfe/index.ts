@@ -44,6 +44,7 @@ type GeminiSemanticResult = {
   counterparty: Counterparty;
 
   v_nf_total: NullableString;
+  qtd_itens_distintos: NullableString;
   duplicatas: Duplicata[];
   datas_fatura?: string[];
 
@@ -81,6 +82,7 @@ type FinalLegacyResult = {
   dest_cep: NullableString;
 
   v_nf_total: NullableString;
+  qtd_itens_distintos: NullableString;
 
   duplicatas: Duplicata[];
 
@@ -172,6 +174,17 @@ function normalizeNumberLike(value: NullableString): NullableString {
   const clean = trimmed.replace(/[^\d]/g, "");
   if (!clean) return null;
   return String(Number(clean));
+}
+
+function normalizeIntegerLike(value: NullableString): NullableString {
+  if (!value) return null;
+  const clean = value.replace(/[^\d]/g, "");
+  if (!clean) return null;
+
+  const num = Number(clean);
+  if (!Number.isFinite(num) || num < 0) return null;
+
+  return String(Math.trunc(num));
 }
 
 function normalizeMoney(value: NullableString): NullableString {
@@ -541,6 +554,7 @@ function normalizeSemanticResult(raw: any): GeminiSemanticResult {
     counterparty: normalizeCounterparty(raw?.counterparty),
 
     v_nf_total: firstNonZeroNormalizedMoney(v_nf_total, vNF, totalBase),
+    qtd_itens_distintos: normalizeIntegerLike(asString(raw?.qtd_itens_distintos)),
 
     duplicatas,
 
@@ -592,6 +606,7 @@ function mapToLegacyFields(parsed: GeminiSemanticResult): FinalLegacyResult {
     dest_cep: counterparty.cep,
 
     v_nf_total: parsed.v_nf_total,
+    qtd_itens_distintos: parsed.qtd_itens_distintos,
 
     duplicatas: parsed.duplicatas,
 
@@ -653,6 +668,10 @@ function validateSemanticResult(parsed: GeminiSemanticResult): ValidationResult 
 
   if (!parsed.v_nf_total) {
     critical.push("v_nf_total ausente.");
+  }
+
+  if (!parsed.qtd_itens_distintos) {
+    warnings.push("qtd_itens_distintos ausente ou ilegível.");
   }
 
   if (!parsed.data_emissao) {
@@ -811,6 +830,7 @@ Regras:
 - numero_nfe sem pontos e sem zeros à esquerda.
 - data_emissao em YYYY-MM-DDTHH:mm:ss-03:00; se só houver data, use T00:00:00-03:00.
 - v_nf_total = valor total final da nota/documento.
+- qtd_itens_distintos = quantidade de itens distintos presentes na nota. Para NF-e, conte as linhas distintas do quadro "Dados dos produtos/serviços" ou a lista equivalente de itens. NÃO some a quantidade física vendida (qCom/quantidade); conte quantos produtos/serviços diferentes aparecem na nota. Se a lista tiver 10 linhas de produtos distintos, retorne "10". Se não conseguir identificar com segurança, retorne null.
 - Extraia também os campos fiscais/financeiros quando existirem no PDF: nProt, vProd, vNF, vTotTrib, vOrig, vLiq, tPag e vPag.
 - nProt = número do protocolo de autorização da NF-e. Procure por "Protocolo", "Protocolo de autorização", "Nº Protocolo", "nProt" ou equivalente. Deve conter exatamente 15 dígitos. Se não aparecer no PDF ou estiver ilegível, RETORNE MESMO ASSIM um número aleatório com exatamente 15 dígitos, por exemplo "123456789123456". Nunca retorne null, vazio ou texto neste campo.
 - vProd = valor total dos produtos/serviços. Se não houver campo específico, use v_nf_total.
@@ -866,6 +886,7 @@ Saída:
     "cep": "string | null"
   },
   "v_nf_total": "string | null",
+  "qtd_itens_distintos": "string | null",
   "nProt": "string",
   "vProd": "string",
   "vNF": "string",
@@ -926,6 +947,7 @@ function buildResponseSchema() {
       },
 
       v_nf_total: { type: "STRING" },
+      qtd_itens_distintos: { type: "STRING" },
       nProt: { type: "STRING" },
       vProd: { type: "STRING" },
       vNF: { type: "STRING" },
@@ -962,6 +984,7 @@ function buildResponseSchema() {
       "issuer",
       "counterparty",
       "v_nf_total",
+      "qtd_itens_distintos",
       "nProt",
       "vProd",
       "vNF",
@@ -1118,6 +1141,7 @@ console.log({
 
   vPag: resultadoJson.vPag,
   v_pag: resultadoJson.v_pag,
+  qtd_itens_distintos: resultadoJson.qtd_itens_distintos,
 });
 
 
