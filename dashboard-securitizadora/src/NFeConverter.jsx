@@ -749,6 +749,71 @@ function StreetView({ lat, lng, label, endereco }) {
 // COMPONENTE PRINCIPAL
 // =============================================================================
 
+
+const RESULTADOS_CACHE_KEY = "nfe_converter_resultados_v1";
+const RESULTADOS_CACHE_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 3; // 3 dias
+
+function prepararResultadosParaCache(resultados) {
+  return resultados.map((r) => ({
+    nome: r.nome,
+    ok: Boolean(r.ok),
+    msg: r.msg || "",
+    estabelecimento: r.estabelecimento || "",
+    cnpj: r.cnpj || "",
+    endereco: r.endereco || "",
+    lat: r.lat ?? null,
+    lng: r.lng ?? null,
+    emailConfirmacao: r.emailConfirmacao || null,
+    textoBoletos: r.textoBoletos || null,
+    cedente: r.cedente || "",
+    numeroNfe: r.numeroNfe || "",
+  }));
+}
+
+function salvarResultadosNoCache(resultados) {
+  try {
+    const payload = {
+      cachedAt: Date.now(),
+      resultados: prepararResultadosParaCache(resultados),
+    };
+
+    localStorage.setItem(RESULTADOS_CACHE_KEY, JSON.stringify(payload));
+  } catch (err) {
+    console.warn("Não foi possível salvar os textos no navegador:", err);
+  }
+}
+
+function carregarResultadosDoCache() {
+  try {
+    const raw = localStorage.getItem(RESULTADOS_CACHE_KEY);
+    if (!raw) return [];
+
+    const payload = JSON.parse(raw);
+
+    if (!payload?.cachedAt || !Array.isArray(payload?.resultados)) {
+      localStorage.removeItem(RESULTADOS_CACHE_KEY);
+      return [];
+    }
+
+    const expirou = Date.now() - payload.cachedAt > RESULTADOS_CACHE_MAX_AGE_MS;
+
+    if (expirou) {
+      localStorage.removeItem(RESULTADOS_CACHE_KEY);
+      return [];
+    }
+
+    return payload.resultados;
+  } catch (err) {
+    console.warn("Não foi possível carregar os textos salvos:", err);
+    localStorage.removeItem(RESULTADOS_CACHE_KEY);
+    return [];
+  }
+}
+
+function limparResultadosDoCache() {
+  localStorage.removeItem(RESULTADOS_CACHE_KEY);
+}
+
 export default function NFeConverter() {
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -765,6 +830,16 @@ export default function NFeConverter() {
   const [downloadXml, setDownloadXml] = useState(true);
   const [prefsCarregadas, setPrefsCarregadas] = useState(false);
 
+  useEffect(() => {
+    const resultadosSalvos = carregarResultadosDoCache();
+
+    if (resultadosSalvos.length > 0) {
+      setResultados(resultadosSalvos);
+      setStatus(
+        `ℹ️ ${resultadosSalvos.length} resultado(s) restaurado(s) do navegador.`
+      );
+    }
+  }, []);
 
   useEffect(() => {
     async function carregarPrefs() {
@@ -900,6 +975,7 @@ export default function NFeConverter() {
     }
 
     setResultados(novosResultados);
+    salvarResultadosNoCache(novosResultados);
     setProgress("");
     setLoading(false);
 
@@ -1302,6 +1378,36 @@ export default function NFeConverter() {
             })}
           </div>
         </div>
+      )}
+
+      {resultados.length > 0 && (
+        <button
+          onClick={() => {
+            setResultados([]);
+            setStatus("");
+            setCopyMsg("");
+            limparResultadosDoCache();
+
+            const input = document.getElementById("nfe-converter-input");
+            if (input) input.value = "";
+          }}
+          disabled={loading}
+          style={{
+            marginTop: "12px",
+            width: "100%",
+            padding: "10px 12px",
+            borderRadius: "8px",
+            border: "1px solid #cbd5e1",
+            background: "#fff",
+            color: "#475569",
+            fontSize: "13px",
+            fontWeight: "700",
+            cursor: loading ? "not-allowed" : "pointer",
+            opacity: loading ? 0.6 : 1,
+          }}
+        >
+          Limpar textos salvos
+        </button>
       )}
 
       {progress && (
