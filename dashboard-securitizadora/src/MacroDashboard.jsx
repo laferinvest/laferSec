@@ -730,12 +730,16 @@ const negotiationDesEncTop5Percent = currentNegotiationStats.sorted.length
   });
 
   const buildPieSegments = (pieData) => {
+    const totalPercent = pieData.reduce((acc, slice) => acc + (Number(slice.percent) || 0), 0);
     let cumulative = 0;
+
     return pieData.map((slice) => {
+      const anglePercent = totalPercent > 0 ? (Number(slice.percent) || 0) / totalPercent : 0;
       const startPercent = cumulative;
-      cumulative += slice.percent;
+      cumulative += anglePercent;
       const endPercent = cumulative;
-      return { ...slice, startPercent, endPercent };
+
+      return { ...slice, anglePercent, startPercent, endPercent };
     });
   };
 
@@ -754,7 +758,7 @@ const negotiationDesEncTop5Percent = currentNegotiationStats.sorted.length
             const sliceOpacity = isDimmed ? 0.25 : 1;
             const isHovered = hoveredName === slice.name;
 
-            if (slice.percent >= 0.9999) {
+            if (slice.anglePercent >= 0.9999) {
               return donut ? (
                 <circle
                   key={slice.name}
@@ -786,7 +790,7 @@ const negotiationDesEncTop5Percent = currentNegotiationStats.sorted.length
             if (donut) {
               const radius = 0.92;
               const circumference = 2 * Math.PI * radius;
-              const length = slice.percent * circumference;
+              const length = slice.anglePercent * circumference;
               const gap = Math.max(circumference - length, 0);
               return (
                 <circle
@@ -811,7 +815,7 @@ const negotiationDesEncTop5Percent = currentNegotiationStats.sorted.length
             const startY = Math.sin(2 * Math.PI * slice.startPercent);
             const endX = Math.cos(2 * Math.PI * slice.endPercent);
             const endY = Math.sin(2 * Math.PI * slice.endPercent);
-            const largeArcFlag = slice.percent > 0.5 ? 1 : 0;
+            const largeArcFlag = slice.anglePercent > 0.5 ? 1 : 0;
             const pathData = `M 0 0 L ${startX} ${startY} A 1 1 0 ${largeArcFlag} 1 ${endX} ${endY} Z`;
 
             return (
@@ -873,7 +877,7 @@ const negotiationDesEncTop5Percent = currentNegotiationStats.sorted.length
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "32px", flexWrap: "wrap", gap: "16px" }}>
         <div>
           <h2 style={{ margin: "0 0 8px 0", color: "#111827", fontSize: "22px" }}>Visão Macroscópica de Risco</h2>
-          <p style={{ margin: 0, color: "#6b7280", fontSize: "15px" }}>Exposição dos títulos <strong>Em Aberto</strong> (A Vencer e Em Atraso), com percentual calculado sobre o patrimônio mais recente da securitizadora.</p>
+          <p style={{ margin: 0, color: "#6b7280", fontSize: "15px" }}>Concentração de Capital em títulos <strong>Em Aberto</strong> (A Vencer e Em Atraso).</p>
         </div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "10px" }}>
           <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
