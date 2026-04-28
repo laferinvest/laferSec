@@ -383,6 +383,60 @@ Att,`;
   return { html, plainText };
 }
 
+function montarTextoBoletos(d) {
+  const sacado = d.dest_nome || "[NOME DO SACADO]";
+  const cedente = d.emit_nome || "[NOME DO CEDENTE]";
+  const duplicatas =
+    Array.isArray(d.duplicatas) && d.duplicatas.length > 0
+      ? d.duplicatas
+      : [
+          {
+            nDup: "1",
+            dVenc: null,
+            vDup: d.v_nf_total || d.vNF || d.v_nf || d.vPag || d.v_pag,
+          },
+        ];
+  const fraseBoletos =
+    duplicatas.length === 1
+      ? "Segue em anexo o boleto para pagamento. <strong>Poderia me confirmar, por favor, o recebimento do mesmo?</strong>"
+      : "Seguem em anexo os boletos para pagamento. <strong>Poderia me confirmar, por favor, o recebimento dos mesmos?</strong>";
+
+  const html = `
+    <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111827;line-height:1.55;">
+      <p>À ${escapeHtml(sacado)},<br />A/C de _______;</p>
+
+      <p>A Lafer Invest Securitizadora S/A vem confirmar por meio desta a cessão (antecipação) das duplicatas elencadas no e-mail anterior.</p>
+
+      <p>${fraseBoletos}</p>
+
+      <p>A omissão de resposta, ou respostas como “ok”, “sim” e similares, implicará em consentimento e responsabilidade quanto ao teor desta notificação.</p>
+
+      <p>Ressaltamos ainda que a cessão foi realizada conforme rito previsto na Lei 10406/02, Art. 286 a 298, assim sendo, <strong>o pagamento das duplicatas supra descritas devem ser realizadas somente a Lafer Invest Securitizadora S/A</strong> e não mais a ${escapeHtml(cedente)}. Qualquer dúvida, por favor entre em contato com a Lafer Invest através desse e-mail ou do nosso telefone.</p>
+
+      <p>Também em conformidade com a Lei 13775/18, Art. 10: “São nulas de pleno direito as cláusulas contratuais que vedam, limitam ou oneram, de forma direta ou indireta, a emissão ou a circulação de duplicatas [...]”.</p>
+
+      <p>Att,</p>
+    </div>
+  `.trim();
+
+  const plainText = `À ${sacado},
+A/C de _______;
+
+A Lafer Invest Securitizadora S/A vem confirmar por meio desta a cessão (antecipação) das duplicatas elencadas no e-mail anterior.
+
+${fraseBoletos}
+
+A omissão de resposta, ou respostas como “ok”, “sim” e similares, implicará em consentimento e responsabilidade quanto ao teor desta notificação.
+
+Ressaltamos ainda que a cessão foi realizada conforme rito previsto na Lei 10406/02, Art. 286 a 298, assim sendo, o pagamento das duplicatas supra descritas devem ser realizadas somente a Lafer Invest Securitizadora S/A e não mais a ${cedente}.
+
+Também em conformidade com a Lei 13775/18, Art. 10: “São nulas de pleno direito as cláusulas contratuais que vedam, limitam ou oneram, de forma direta ou indireta, a emissão ou a circulação de duplicatas [...]”.
+
+Att,`;
+
+  return { html, plainText };
+}
+
 async function copiarEmailConfirmacao(emailConfirmacao) {
   if (!emailConfirmacao) return;
 
@@ -467,13 +521,7 @@ function Toggle({
           flexShrink: 0,
           opacity: bloqueado ? 0.6 : 1,
         }}
-        title={
-          disabled
-            ? "Extensão Lafer Invest não detectada"
-            : enabled
-              ? "Clique para desativar"
-              : "Clique para ativar"
-        }
+        title={enabled ? "Clique para desativar" : "Clique para ativar"}
       >
         <span
           style={{
@@ -715,47 +763,11 @@ export default function NFeConverter() {
 
   const [mostrarMaps, setMostrarMaps] = useState(true);
   const [downloadXml, setDownloadXml] = useState(true);
-  const [pesquisarCenprot, setPesquisarCenprot] = useState(true);
   const [prefsCarregadas, setPrefsCarregadas] = useState(false);
 
-  const [extensaoLaferInstalada, setExtensaoLaferInstalada] = useState(false);
-  const [checandoExtensao, setChecandoExtensao] = useState(true);
-
-  async function verificarExtensaoLafer() {
-    return new Promise((resolve) => {
-      let respondeu = false;
-
-      function onMessage(event) {
-        if (event.data?.type === "LAFER_EXTENSION_PONG") {
-          if (respondeu) return;
-          respondeu = true;
-          clearTimeout(timeout);
-          window.removeEventListener("message", onMessage);
-          resolve(true);
-        }
-      }
-
-      const timeout = setTimeout(() => {
-        if (!respondeu) {
-          respondeu = true;
-          window.removeEventListener("message", onMessage);
-          resolve(false);
-        }
-      }, 1500);
-
-      window.addEventListener("message", onMessage);
-
-      window.postMessage(
-        {
-          type: "LAFER_EXTENSION_PING",
-        },
-        "*"
-      );
-    });
-  }
 
   useEffect(() => {
-    async function carregarPrefsEExtensao() {
+    async function carregarPrefs() {
       try {
         const {
           data: { user },
@@ -763,13 +775,12 @@ export default function NFeConverter() {
 
         if (!user) {
           setPrefsCarregadas(true);
-          setChecandoExtensao(false);
           return;
         }
 
         const { data, error } = await supabase
           .from("user_preferences")
-          .select("mostrar_maps, download_xml, pesquisar_cenprot")
+          .select("mostrar_maps, download_xml")
           .eq("user_id", user.id)
           .maybeSingle();
 
@@ -784,38 +795,15 @@ export default function NFeConverter() {
               ? true
               : data.download_xml
           );
-          setPesquisarCenprot(
-            data.pesquisar_cenprot === null ||
-              data.pesquisar_cenprot === undefined
-              ? true
-              : data.pesquisar_cenprot
-          );
-        }
-
-        const instalada = await verificarExtensaoLafer();
-        setExtensaoLaferInstalada(instalada);
-
-        if (!instalada) {
-          setPesquisarCenprot(false);
-
-          await supabase
-            .from("user_preferences")
-            .upsert(
-              { user_id: user.id, pesquisar_cenprot: false },
-              { onConflict: "user_id" }
-            );
         }
       } catch (err) {
-        console.error("Erro ao carregar prefs/extensão:", err);
-        setExtensaoLaferInstalada(false);
-        setPesquisarCenprot(false);
+        console.error("Erro ao carregar preferências:", err);
       } finally {
         setPrefsCarregadas(true);
-        setChecandoExtensao(false);
       }
     }
 
-    carregarPrefsEExtensao();
+    carregarPrefs();
   }, []);
 
   async function salvarToggle(campo, valor) {
@@ -846,43 +834,12 @@ export default function NFeConverter() {
   }
 
   function handleToggle(campo, setter, valor) {
-    if (campo === "pesquisar_cenprot" && !extensaoLaferInstalada) {
-      setPesquisarCenprot(false);
-      setPrefsMsg(
-        "⚠️ Para usar o CENPROT, instale a extensão Lafer Invest."
-      );
-      setTimeout(() => setPrefsMsg(""), 3500);
-      return;
-    }
-
     setter(valor);
     salvarToggle(campo, valor);
   }
 
-  useEffect(() => {
-    const handleMessage = (event) => {
-      if (event.data && event.data.type === "LAFER_RESULTADO_PROTESTO") {
-        const res = event.data.resultado;
-        const resCnpjLimpo = (res.cnpj || "").replace(/\D/g, "");
-
-        setResultados((prev) =>
-          prev.map((r) => {
-            const rCnpjLimpo = (r.cnpj || "").replace(/\D/g, "");
-            if (rCnpjLimpo === resCnpjLimpo && rCnpjLimpo !== "") {
-              return { ...r, protesto: res };
-            }
-            return r;
-          })
-        );
-      }
-    };
-
-    window.addEventListener("message", handleMessage);
-    return () => window.removeEventListener("message", handleMessage);
-  }, []);
-
-  const processar = async () => {
-    if (files.length === 0) {
+  const processar = async (arquivosSelecionados = files) => {
+    if (arquivosSelecionados.length === 0) {
       setStatus("❌ Selecione ao menos um arquivo PDF.");
       return;
     }
@@ -894,10 +851,9 @@ export default function NFeConverter() {
     setCopyMsg("");
 
     const novosResultados = [];
-    const cnpjsParaConsultar = [];
 
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
+    for (let i = 0; i < arquivosSelecionados.length; i++) {
+      const file = arquivosSelecionados[i];
       setProgress(`Processando ${i + 1} / ${files.length}: ${file.name}...`);
 
       try {
@@ -912,6 +868,7 @@ export default function NFeConverter() {
 
         const xmlString = gerarXmlCompleto(data);
         const emailConfirmacao = montarEmailConfirmacao(data);
+        const textoBoletos = montarTextoBoletos(data);
 
         if (downloadXml) {
           baixarXML(xmlString, file.name);
@@ -928,14 +885,11 @@ export default function NFeConverter() {
           xmlFalso: xmlString,
           dadosNfe: data,
           emailConfirmacao,
+          textoBoletos,
           cedente: data.emit_nome || "Não identificado",
           numeroNfe: data.numero_nfe || "Não identificado",
-          protesto: null,
         });
 
-        if (data.dest_cnpj_cpf) {
-          cnpjsParaConsultar.push(data.dest_cnpj_cpf.replace(/\D/g, ""));
-        }
       } catch (err) {
         novosResultados.push({
           nome: file.name,
@@ -949,58 +903,18 @@ export default function NFeConverter() {
     setProgress("");
     setLoading(false);
 
-    if (
-      pesquisarCenprot &&
-      extensaoLaferInstalada &&
-      cnpjsParaConsultar.length > 0
-    ) {
-      window.postMessage(
-        {
-          type: "LAFER_CONSULTA_PROTESTO",
-          cnpjs: cnpjsParaConsultar,
-        },
-        "*"
-      );
-    }
-
     const erros = novosResultados.filter((r) => !r.ok).length;
-
-    const sufixoCenprot =
-      pesquisarCenprot && extensaoLaferInstalada
-        ? " Iniciando consulta de protestos..."
-        : pesquisarCenprot && !extensaoLaferInstalada
-          ? " Consulta de protestos indisponível: instale a extensão Lafer Invest."
-          : "";
 
     setStatus(
       erros === 0
-        ? `✅ ${files.length} arquivo(s) processado(s)!${sufixoCenprot}`
-        : `⚠️ ${files.length - erros} sucesso(s), ${erros} erro(s).`
+        ? `✅ ${arquivosSelecionados.length} arquivo(s) processado(s)!`
+        : `⚠️ ${arquivosSelecionados.length - erros} sucesso(s), ${erros} erro(s).`
     );
 
     setFiles([]);
     const input = document.getElementById("nfe-converter-input");
     if (input) input.value = "";
   };
-
-  useEffect(() => {
-    if (resultados.length > 0 && pesquisarCenprot && extensaoLaferInstalada) {
-      // Verifica se todos os arquivos que deram 'ok' já receberam o objeto 'protesto'
-      const todasConsultasFinalizadas = resultados.every(
-        (r) => !r.ok || r.protesto !== null
-      );
-
-      if (todasConsultasFinalizadas) {
-        const erros = resultados.filter((r) => !r.ok).length;
-        setStatus(
-          erros === 0
-            ? `✅ ${resultados.length} arquivo(s) processado(s) e consultado(s) com sucesso!`
-            : `⚠️ Consultas concluídas: ${resultados.length - erros} sucesso(s), ${erros} erro(s).`
-        );
-      }
-    }
-  }, [resultados, pesquisarCenprot, extensaoLaferInstalada]);
-  // --------------------------------
 
   const isDisabled = loading || files.length === 0;
 
@@ -1019,14 +933,13 @@ export default function NFeConverter() {
       }}
     >
       <h2 style={{ marginTop: 0, color: "#111827", fontSize: "20px" }}>
-        Consulta no CENPROT, Visão no Maps e Conversão para XML
+        Visão no Maps e Conversão para XML
       </h2>
 
       <p style={{ color: "#6b7280", fontSize: "14px", marginBottom: "20px" }}>
         Selecione uma ou mais DANFEs em PDF. Os dados do sacado serão extraídos
-        via IA e a extensão fará o download do XML da NFe, uma consulta
-        automática de protestos no Cenprot e dará a visão no Google Maps se o
-        endereço estiver correto.
+        via IA, o XML da NFe será gerado para download e a fachada será exibida
+        no Google Maps quando o endereço estiver correto.
       </p>
 
       <div
@@ -1047,11 +960,11 @@ export default function NFeConverter() {
         <ol style={{ margin: "8px 0 0 0", paddingLeft: "20px" }}>
           <li>Selecione os PDFs das notas</li>
           <li>
-            Clique em <strong>Extrair Dados e Consultar</strong>
+            Clique em <strong>Extrair Dados</strong>
           </li>
           <li>
-            A IA processa o documento, faz o download do XML, busca a fachada no
-            Google Maps e a extensão Lafer Invest pesquisa os protestos na hora!
+            A IA processa o documento, gera o XML, monta o email padrão e busca a
+            fachada no Google Maps quando houver coordenadas disponíveis.
           </li>
         </ol>
       </div>
@@ -1063,10 +976,16 @@ export default function NFeConverter() {
           multiple
           accept=".pdf"
           onChange={(e) => {
-            setFiles(Array.from(e.target.files));
+            const arquivosSelecionados = Array.from(e.target.files || []);
+
+            setFiles(arquivosSelecionados);
             setStatus("");
             setResultados([]);
             setCopyMsg("");
+
+            if (arquivosSelecionados.length > 0) {
+              processar(arquivosSelecionados);
+            }
           }}
           disabled={loading}
           style={{
@@ -1108,7 +1027,7 @@ export default function NFeConverter() {
           transition: "background 0.2s",
         }}
       >
-        {loading ? "Processando IA..." : "Extrair Dados e Consultar"}
+        {loading ? "Processando IA..." : "Extrair Dados"}
       </button>
 
       <div
@@ -1182,49 +1101,7 @@ export default function NFeConverter() {
                     }
                     saving={savingPrefs}
                   />
-
-                  <Toggle
-                    label="Pesquisar no CENPROT"
-                    descricao={
-                      checandoExtensao
-                        ? "Verificando se a extensão Lafer Invest está instalada..."
-                        : extensaoLaferInstalada
-                          ? "Aciona a extensão Lafer para consulta de protestos automaticamente"
-                          : "Extensão Lafer Invest não detectada. Instale a extensão para habilitar esta função."
-                    }
-                    enabled={pesquisarCenprot && extensaoLaferInstalada}
-                    onChange={(val) =>
-                      handleToggle(
-                        "pesquisar_cenprot",
-                        setPesquisarCenprot,
-                        val
-                      )
-                    }
-                    saving={savingPrefs}
-                    disabled={checandoExtensao || !extensaoLaferInstalada}
-                  />
                 </>
-              )}
-
-              {!checandoExtensao && !extensaoLaferInstalada && (
-                <div
-                  style={{
-                    marginTop: "12px",
-                    padding: "12px",
-                    borderRadius: "8px",
-                    background: "#fff7ed",
-                    border: "1px solid #fdba74",
-                    color: "#9a3412",
-                    fontSize: "12px",
-                    lineHeight: "1.5",
-                  }}
-                >
-                  <strong>Extensão Lafer Invest não encontrada.</strong>
-                  <div style={{ marginTop: "4px" }}>
-                    Para habilitar a pesquisa automática no CENPROT, instale e
-                    ative a extensão no navegador.
-                  </div>
-                </div>
               )}
 
               {prefsMsg && (
@@ -1249,7 +1126,7 @@ export default function NFeConverter() {
         )}
       </div>
 
-      {resultados.some((r) => r.ok && r.emailConfirmacao) && (
+      {resultados.some((r) => r.ok && (r.emailConfirmacao || r.textoBoletos)) && (
         <div
           style={{
             marginTop: "16px",
@@ -1273,7 +1150,7 @@ export default function NFeConverter() {
                 color: "#312e81",
               }}
             >
-              ✉️ Email padrão de confirmação
+              ✉️ Textos padrão de email
             </div>
             <div
               style={{
@@ -1283,8 +1160,9 @@ export default function NFeConverter() {
                 lineHeight: "1.45",
               }}
             >
-              Use o botão de copiar para colar no Zoho/Gmail mantendo a tabela.
-              O campo “A/C” fica como marcador para você preencher o responsável.
+              Use os botões de copiar para colar no Zoho/Gmail mantendo a
+              formatação. Os campos “A/C” ficam como marcadores para você
+              preencher o responsável.
             </div>
           </div>
 
@@ -1297,7 +1175,22 @@ export default function NFeConverter() {
             }}
           >
             {resultados.map((r, i) => {
-              if (!r.ok || !r.emailConfirmacao) return null;
+              if (!r.ok || (!r.emailConfirmacao && !r.textoBoletos)) return null;
+
+              const textos = [
+                {
+                  titulo: "Texto de Checagem",
+                  conteudo: r.emailConfirmacao,
+                  copyKey: `checagem-${i}`,
+                  botao: "Copiar checagem",
+                },
+                {
+                  titulo: "Texto para Boletos",
+                  conteudo: r.textoBoletos,
+                  copyKey: `boletos-${i}`,
+                  botao: "Copiar boletos",
+                },
+              ].filter((item) => item.conteudo);
 
               return (
                 <div
@@ -1311,68 +1204,99 @@ export default function NFeConverter() {
                 >
                   <div
                     style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      gap: "12px",
                       padding: "12px",
                       borderBottom: "1px solid #e2e8f0",
                       background: "#f8fafc",
+                      fontSize: "12px",
+                      color: "#475569",
+                      lineHeight: "1.4",
                     }}
                   >
-                    <div
-                      style={{
-                        fontSize: "12px",
-                        color: "#475569",
-                        lineHeight: "1.4",
-                      }}
-                    >
-                      <strong style={{ color: "#0f172a" }}>
-                        {r.nome}
-                      </strong>
-                      <br />
-                      Cedente: {r.cedente} | NF: {r.numeroNfe}
-                    </div>
-
-                    <button
-                      onClick={async () => {
-                        try {
-                          await copiarEmailConfirmacao(r.emailConfirmacao);
-                          setCopyMsg(`email-${i}`);
-                          setTimeout(() => setCopyMsg(""), 1800);
-                        } catch (err) {
-                          console.error(err);
-                          setCopyMsg(`erro-${i}`);
-                          setTimeout(() => setCopyMsg(""), 2500);
-                        }
-                      }}
-                      style={{
-                        border: "none",
-                        borderRadius: "7px",
-                        background: copyMsg === `email-${i}` ? "#059669" : "#4f46e5",
-                        color: "#fff",
-                        padding: "9px 12px",
-                        fontSize: "12px",
-                        fontWeight: "700",
-                        cursor: "pointer",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {copyMsg === `email-${i}`
-                        ? "Copiado!"
-                        : copyMsg === `erro-${i}`
-                          ? "Erro ao copiar"
-                          : "Copiar email"}
-                    </button>
+                    <strong style={{ color: "#0f172a" }}>{r.nome}</strong>
+                    <br />
+                    Cedente: {r.cedente} | NF: {r.numeroNfe}
                   </div>
 
                   <div
                     style={{
-                      padding: "16px",
-                      overflowX: "auto",
+                      padding: "14px",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "14px",
                     }}
-                    dangerouslySetInnerHTML={{ __html: r.emailConfirmacao.html }}
-                  />
+                  >
+                    {textos.map((item, textIndex) => (
+                      <div
+                        key={item.copyKey}
+                        style={{
+                          borderRadius: "8px",
+                          border: "1px solid #e5e7eb",
+                          overflow: "hidden",
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            gap: "12px",
+                            padding: "10px 12px",
+                            borderBottom: "1px solid #e5e7eb",
+                            background: textIndex === 0 ? "#f8fafc" : "#fefce8",
+                          }}
+                        >
+                          <strong
+                            style={{
+                              color: textIndex === 0 ? "#0f172a" : "#713f12",
+                              fontSize: "13px",
+                            }}
+                          >
+                            {item.titulo}
+                          </strong>
+
+                          <button
+                            onClick={async () => {
+                              try {
+                                await copiarEmailConfirmacao(item.conteudo);
+                                setCopyMsg(item.copyKey);
+                                setTimeout(() => setCopyMsg(""), 1800);
+                              } catch (err) {
+                                console.error(err);
+                                setCopyMsg(`erro-${item.copyKey}`);
+                                setTimeout(() => setCopyMsg(""), 2500);
+                              }
+                            }}
+                            style={{
+                              border: "none",
+                              borderRadius: "7px",
+                              background:
+                                copyMsg === item.copyKey ? "#059669" : "#4f46e5",
+                              color: "#fff",
+                              padding: "8px 11px",
+                              fontSize: "12px",
+                              fontWeight: "700",
+                              cursor: "pointer",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {copyMsg === item.copyKey
+                              ? "Copiado!"
+                              : copyMsg === `erro-${item.copyKey}`
+                                ? "Erro ao copiar"
+                                : item.botao}
+                          </button>
+                        </div>
+
+                        <div
+                          style={{
+                            padding: "16px",
+                            overflowX: "auto",
+                          }}
+                          dangerouslySetInnerHTML={{ __html: item.conteudo.html }}
+                        />
+                      </div>
+                    ))}
+                  </div>
                 </div>
               );
             })}
@@ -1404,9 +1328,7 @@ export default function NFeConverter() {
           }}
         >
           {resultados.map((r, i) => {
-            const hasProtest =
-              r.protesto && r.protesto.status === "PROTESTADO";
-            const isRed = !r.ok || hasProtest;
+            const isRed = !r.ok;
 
             return (
               <div
@@ -1457,57 +1379,6 @@ export default function NFeConverter() {
                         endereco={r.endereco}
                       />
                     )}
-
-                    <div
-                      style={{
-                        marginTop: "4px",
-                        padding: "10px",
-                        background: "#fff",
-                        borderRadius: "6px",
-                        border: "1px dashed #cbd5e1",
-                      }}
-                    >
-                      <strong>Cenprot (Protestos): </strong>
-
-                      {!extensaoLaferInstalada ? (
-                        <span
-                          style={{ color: "#94a3b8", fontWeight: "bold" }}
-                        >
-                          — Extensão Lafer Invest não instalada
-                        </span>
-                      ) : !pesquisarCenprot ? (
-                        <span
-                          style={{ color: "#94a3b8", fontWeight: "bold" }}
-                        >
-                          — Consulta desativada
-                        </span>
-                      ) : !r.protesto ? (
-                        <span
-                          style={{ color: "#d97706", fontWeight: "bold" }}
-                        >
-                          ⏳ Pesquisando em segundo plano...
-                        </span>
-                      ) : r.protesto.status === "LIMPO" ? (
-                        <span
-                          style={{ color: "#059669", fontWeight: "bold" }}
-                        >
-                          ✅ LIMPO (0 títulos)
-                        </span>
-                      ) : r.protesto.status === "PROTESTADO" ? (
-                        <span
-                          style={{ color: "#dc2626", fontWeight: "bold" }}
-                        >
-                          ⚠️ PROTESTADO ({r.protesto.totalTitulos} títulos em
-                          cartórios)
-                        </span>
-                      ) : (
-                        <span
-                          style={{ color: "#991b1b", fontWeight: "bold" }}
-                        >
-                          ❓ Falha na consulta
-                        </span>
-                      )}
-                    </div>
                   </div>
                 ) : (
                   <div style={{ fontWeight: "500" }}>{r.msg}</div>
