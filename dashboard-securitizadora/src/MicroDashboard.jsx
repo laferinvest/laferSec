@@ -60,6 +60,14 @@ function escapeText(v) {
   return String(v);
 }
 
+function formatarNomeEntidade(nome) {
+  return String(nome || "").trim().replace(/^\d+\s*-\s*/, "");
+}
+
+function normalizarChave(campo) {
+  return String(campo || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
+}
+
 function formatarMesAno(ym) {
   if (!ym) return "";
   const [y, m] = ym.split('-');
@@ -136,7 +144,7 @@ function sacadoValido(sacado) {
 }
 
 // --- COMPONENTE DE EVOLUÇÃO ---
-function EvolutionCharts({ rows, dateFilter, setDateFilter, setBorderoFilter, setDctoFilter, hideValues }) {
+function EvolutionCharts({ rows, dateFilter, setDateFilter, setBorderoFilter, setDctoFilter, hideValues, dataSourceTable = "secInfo" }) {
   const fmtM = (v) => hideValues ? "R$ -" : formatarMoeda(v);
   const [isCollapsed, setIsCollapsed] = useState(false);
 
@@ -161,6 +169,7 @@ function EvolutionCharts({ rows, dateFilter, setDateFilter, setBorderoFilter, se
     const borderoKey = Object.keys(firstRow).find(k => k.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes("border"));
     const rateKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'tx.efet' || k.toLowerCase().includes('tx.efet') || k.toLowerCase().includes('tx efet'));
     const desagioKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'desagio' || k.toLowerCase() === 'deságio');
+    const isSmartDataSource = dataSourceTable === "secInfoSmart";
 
     rows.forEach((r, idx) => {
       const bNum = (borderoKey && r[borderoKey]) ? String(r[borderoKey]).trim() : `avulso_${idx}`; 
@@ -190,8 +199,10 @@ function EvolutionCharts({ rows, dateFilter, setDateFilter, setBorderoFilter, se
              bData.hasRate = true;
           }
 
-          if (!groupedDesagio[ym]) groupedDesagio[ym] = new Map();
-          if (!groupedDesagio[ym].has(bNum)) {
+          if (!groupedDesagio[ym]) groupedDesagio[ym] = isSmartDataSource ? 0 : new Map();
+          if (isSmartDataSource) {
+            groupedDesagio[ym] += desagioVal;
+          } else if (!groupedDesagio[ym].has(bNum)) {
             groupedDesagio[ym].set(bNum, desagioVal);
           }
         }
@@ -240,13 +251,17 @@ function EvolutionCharts({ rows, dateFilter, setDateFilter, setBorderoFilter, se
     const cDataDesagio = sortedMonths.map(ym => {
       let sumDesagio = 0;
       if (groupedDesagio[ym]) {
-        groupedDesagio[ym].forEach(val => sumDesagio += val);
+        if (isSmartDataSource) {
+          sumDesagio = groupedDesagio[ym];
+        } else {
+          groupedDesagio[ym].forEach(val => sumDesagio += val);
+        }
       }
       return { ym, label: formatarMesAno(ym), value: sumDesagio };
     });
 
     return { chartData: cData, chartDataRate: cDataRate, chartDataDesagio: cDataDesagio };
-  }, [rows]);
+  }, [rows, dataSourceTable]);
 
   useEffect(() => {
     const handleMouseUp = () => {
@@ -1035,7 +1050,7 @@ function SacadoConcentrationCard({
                   Cedente
                 </div>
                 <div style={{ fontSize: "20px", color: "#111827", fontWeight: 800, marginTop: 6, wordBreak: "break-word" }}>
-                  {card.cedente}
+                  {formatarNomeEntidade(card.cedente)}
                 </div>
               </div>
 
@@ -1139,9 +1154,9 @@ function SacadoConcentrationCard({
                                   overflow: "hidden",
                                   textOverflow: "ellipsis"
                                 }}
-                                title={item.sacado}
+                                title={formatarNomeEntidade(item.sacado)}
                               >
-                                {item.sacado}
+                                {formatarNomeEntidade(item.sacado)}
                               </span>
                             </div>
                             <div style={{ textAlign: "right", color: "#111827", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
@@ -1179,8 +1194,8 @@ function SacadoConcentrationCard({
             maxWidth: 260
           }}
         >
-          <div style={{ fontWeight: 800, marginBottom: 4 }}>{tooltip.label}</div>
-          <div style={{ color: "#cbd5e1", marginBottom: 4 }}>{tooltip.cedente}</div>
+          <div style={{ fontWeight: 800, marginBottom: 4 }}>{formatarNomeEntidade(tooltip.label)}</div>
+          <div style={{ color: "#cbd5e1", marginBottom: 4 }}>{formatarNomeEntidade(tooltip.cedente)}</div>
           <div>{fmtM(tooltip.value)}</div>
           <div>{hideValues ? "-" : `${tooltip.pct.toFixed(2).replace(".", ",")}%`}</div>
         </div>
@@ -1218,7 +1233,7 @@ const sectionSubtitleStyle = {
   color: "#6b7280",
 };
 
-function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, borderoFilter, setBorderoFilter, dctoFilter, setDctoFilter, setDateFilter, setInsightFilter, setClienteSelecionado, setSacadoSelecionado, hideValues }) {
+function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, borderoFilter, setBorderoFilter, dctoFilter, setDctoFilter, setDateFilter, setInsightFilter, setClienteSelecionado, setSacadoSelecionado, hideValues, dataSourceTable = "secInfo" }) {
   const fmtM = (v) => hideValues ? "R$ -" : formatarMoeda(v);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [sortConfig, setSortConfig] = useState(null);
@@ -1228,7 +1243,7 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
 
   useEffect(() => { setCurrentPage(1); }, [rows, dateFilter, sortConfig]);
 
-  const colunasOcultas = ["id", "created_at", "Cód.Red", "UF", "Banco", "Rec.", "Estado", "_status"];
+  const colunasOcultas = ["id", "created_at", "Cód.Red", "UF", "Banco", "Rec.", "Estado", "_status", "Juros e Multa"];
   const columns = useMemo(() => {
     if (!rows.length) return [];
     const firstRowKeys = Object.keys(rows[0]);
@@ -1259,10 +1274,20 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
   const rowsWithEncargo = useMemo(() => {
     if (!rows.length) return rows;
     const firstRow = rows[0];
+    const isSmartDataSource = dataSourceTable === "secInfoSmart";
+    const jurosMultaKey = Object.keys(firstRow).find(k => {
+      const key = normalizarChave(k);
+      return key.includes("juros") && key.includes("multa");
+    });
     const vlPgtoKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'vl pgto');
     const pgtoKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'pgto' || (k.toLowerCase().includes('pgto') && !k.toLowerCase().includes('vl')));
     const valKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'entrada' || (k.toLowerCase().includes('valor') && !k.toLowerCase().includes('pgto')));
     return rows.map(r => {
+      if (isSmartDataSource) {
+        const encargoSmart = jurosMultaKey ? (Number(r[jurosMultaKey]) || 0) : 0;
+        return { ...r, __encargo__: encargoSmart > 0 ? encargoSmart : 0 };
+      }
+
       const vlPgto = vlPgtoKey ? (Number(r[vlPgtoKey]) || 0) : 0;
       const val = valKey ? (Number(r[valKey]) || 0) : 0;
       const temPgto = pgtoKey && r[pgtoKey] && String(r[pgtoKey]).trim() !== "";
@@ -1273,7 +1298,7 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
       const encargo = encargoCalculado > 0 ? encargoCalculado : 0;
       return { ...r, __encargo__: encargo };
     });
-  }, [rows]);
+  }, [rows, dataSourceTable]);
 
   const sortedRows = useMemo(() => {
     let sortableItems = [...rowsWithEncargo];
@@ -1302,7 +1327,7 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
       });
     }
     return sortableItems;
-  }, [rows, activeSort]);
+  }, [rowsWithEncargo, activeSort]);
 
   const currentItems = sortedRows.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
   const totalPages = Math.ceil(sortedRows.length / itemsPerPage);
@@ -1323,6 +1348,7 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
     const vctoKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'vcto' || (k.toLowerCase().includes('vcto') && !k.toLowerCase().includes('vl')));
     const desagioKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'desagio' || k.toLowerCase() === 'deságio');
     const rateKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'tx.efet' || k.toLowerCase().includes('tx.efet') || k.toLowerCase().includes('tx efet'));
+    const isSmartDataSource = dataSourceTable === "secInfoSmart";
 
     sortedRows.forEach((row, idx) => {
       const bNum = (borderoKey && row[borderoKey]) ? String(row[borderoKey]).trim() : `avulso_${idx}`; 
@@ -1347,7 +1373,9 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
       }
 
       const desagioVal = desagioKey ? (Number(row[desagioKey]) || 0) : 0;
-      if (!seenBorderosDesagio.has(bNum)) {
+      if (isSmartDataSource) {
+        d += desagioVal;
+      } else if (!seenBorderosDesagio.has(bNum)) {
         seenBorderosDesagio.add(bNum);
         d += desagioVal;
       }
@@ -1387,7 +1415,7 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
       valorMedio: borderoMapTicket.size > 0 ? f / borderoMapTicket.size : 0,
       prazoMedio: f > 0 ? (sumPrazoWeighted / f) : 0 
     };
-  }, [sortedRows]);
+  }, [sortedRows, dataSourceTable]);
 
   const requestSort = (key) => setSortConfig({ key, direction: activeSort?.key === key && activeSort.direction === 'asc' ? 'desc' : 'asc' });
 
@@ -1433,7 +1461,8 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
                   return (
                     <tr key={r.id ?? idx} className={`table-row-${r._status || 'default'}`} style={{ borderBottom: "1px solid #e5e7eb", transition: "background 0.2s" }}>
                       {columns.map((c) => {
-                        let valor = r[c];
+                    let valor = r[c];
+                    const valorOriginal = valor;
                         const cLower = c.toLowerCase();
                         const isCurrency = cLower === "entrada" || cLower === "vl pgto" || cLower.includes("valor") || cLower === "desagio" || cLower === "deságio";
                         const isRate = cLower.includes("tx") || cLower.includes("taxa");
@@ -1452,6 +1481,7 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
                           const valNum = Number(String(valor).replace('%', '').replace(',', '.'));
                           valor = !isNaN(valNum) && valor ? `${valNum.toFixed(2).replace('.', ',')}%` : escapeText(valor);
                         }
+                        if (c === "Cliente" || c === "Sacado") valor = formatarNomeEntidade(valorOriginal);
 
                         // Calcular encargo deste título
                         const encargoCellVal = isDesagioCol ? (r.__encargo__ || 0) : null;
@@ -1464,9 +1494,9 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
                             ) : isDctoCol ? (
                               <span onClick={(e) => { e.stopPropagation(); if (isThisDctoFiltered) setDctoFilter(null); else { setDctoFilter({ key: c, value: valor }); setBorderoFilter(null); setDateFilter({ type: 'emis', start: '', end: '' }); if (setInsightFilter) setInsightFilter(null); } }} style={{ background: isThisDctoFiltered ? "#0ea5e9" : "rgba(14, 165, 233, 0.08)", color: isThisDctoFiltered ? "#fff" : "#0ea5e9", padding: "4px 8px", borderRadius: "6px", fontWeight: "600", cursor: "pointer" }}>{escapeText(valor)}</span>
                             ) : c === "Cliente" ? (
-                              <span onClick={(e) => { e.stopPropagation(); setClienteSelecionado(valor); }} className="clickable-entity">{escapeText(valor)}</span>
+                              <span onClick={(e) => { e.stopPropagation(); setClienteSelecionado(valorOriginal); }} className="clickable-entity">{escapeText(valor)}</span>
                             ) : c === "Sacado" ? (
-                              <span onClick={(e) => { e.stopPropagation(); setSacadoSelecionado(valor); }} className="clickable-entity">{escapeText(valor)}</span>
+                              <span onClick={(e) => { e.stopPropagation(); setSacadoSelecionado(valorOriginal); }} className="clickable-entity">{escapeText(valor)}</span>
                             ) : ( escapeText(valor) )}
                           </td>
                           {isDesagioCol && (
@@ -1537,7 +1567,7 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
 }
 
 // DROPDOWN CUSTOMIZADO
-function CustomDropdown({ value, options, onChange, placeholder }) {
+function CustomDropdown({ value, options, onChange, placeholder, formatOption = (opt) => opt }) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [isMobileDevice, setIsMobileDevice] = useState(false);
@@ -1555,9 +1585,12 @@ function CustomDropdown({ value, options, onChange, placeholder }) {
     document.addEventListener("mousedown", handleClickOutside); return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const filteredOptions = options.filter(opt => opt.toLowerCase().includes(searchTerm.toLowerCase()));
+  const filteredOptions = options.filter(opt =>
+    opt.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    formatOption(opt).toLowerCase().includes(searchTerm.toLowerCase())
+  );
   const handleKeyDown = (e) => { if (e.key === 'Enter') { e.preventDefault(); if (isOpen && filteredOptions.length > 0) { onChange(filteredOptions[0]); setSearchTerm(""); setIsOpen(false); } } };
-  const displayValue = isOpen ? searchTerm : value;
+  const displayValue = isOpen ? searchTerm : formatOption(value);
 
   // Em mobile, usa select nativo para evitar que o teclado virtual cause resize e feche o sidebar
   if (isMobileDevice) {
@@ -1569,7 +1602,7 @@ function CustomDropdown({ value, options, onChange, placeholder }) {
           style={{ width: "100%", padding: "11px", paddingRight: "32px", borderRadius: "6px", border: "1px solid #d1d5db", background: "#fff", fontSize: "14px", color: value ? "#111827" : "#9ca3af", outline: "none", boxSizing: "border-box", appearance: "none", WebkitAppearance: "none" }}
         >
           <option value="">{placeholder}</option>
-          {options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+          {options.map(opt => <option key={opt} value={opt}>{formatOption(opt)}</option>)}
         </select>
         <div style={{ position: "absolute", right: "12px", top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: "#6b7280", fontSize: "12px" }}>▼</div>
       </div>
@@ -1583,7 +1616,7 @@ function CustomDropdown({ value, options, onChange, placeholder }) {
       {isOpen && (
         <div style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: "4px", background: "#fff", border: "1px solid #d1d5db", borderRadius: "8px", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1)", zIndex: 50, maxHeight: "250px", overflowY: "auto" }}>
           {value && <div onClick={() => { onChange(""); setSearchTerm(""); setIsOpen(false); }} style={{ padding: "10px 12px", cursor: "pointer", borderBottom: "1px solid #e5e7eb", fontSize: "14px", color: "#dc2626", fontStyle: "italic" }}>-- Limpar Seleção --</div>}
-          {filteredOptions.length > 0 ? filteredOptions.map(opt => <div key={opt} onClick={() => { onChange(opt); setSearchTerm(""); setIsOpen(false); }} style={{ padding: "10px 12px", cursor: "pointer", borderBottom: "1px solid #f3f4f6", fontSize: "14px", color: "#374151" }} onMouseOver={(e) => e.currentTarget.style.background = "#eff6ff"} onMouseOut={(e) => e.currentTarget.style.background = "#fff"}>{opt}</div>) : <div style={{ padding: "10px 12px", fontSize: "14px", color: "#6b7280" }}>Nenhum encontrado</div>}
+          {filteredOptions.length > 0 ? filteredOptions.map(opt => <div key={opt} onClick={() => { onChange(opt); setSearchTerm(""); setIsOpen(false); }} style={{ padding: "10px 12px", cursor: "pointer", borderBottom: "1px solid #f3f4f6", fontSize: "14px", color: "#374151" }} onMouseOver={(e) => e.currentTarget.style.background = "#eff6ff"} onMouseOut={(e) => e.currentTarget.style.background = "#fff"}>{formatOption(opt)}</div>) : <div style={{ padding: "10px 12px", fontSize: "14px", color: "#6b7280" }}>Nenhum encontrado</div>}
         </div>
       )}
     </div>
@@ -1594,6 +1627,7 @@ function CustomDropdown({ value, options, onChange, placeholder }) {
 export default function MicroDashboard({ session, onSidebarToggle, hideValues, setHideValues }) {
   const [loading, setLoading] = useState(false);
   const [rows, setRows] = useState([]);
+  const [dataSourceTable, setDataSourceTable] = useState("secInfo");
   
   const [viewMode, setViewMode] = useState('all'); 
   const [insightFilter, setInsightFilter] = useState(null);
@@ -1668,6 +1702,18 @@ export default function MicroDashboard({ session, onSidebarToggle, hideValues, s
     setActiveQuickDate(null);
     setDateFilter(newFilter);
   };
+
+  useEffect(() => {
+    setRows([]);
+    setRelacionamentos([]);
+    setRowsConcentracaoSacado([]);
+    setClienteSelecionado("");
+    setSacadoSelecionado("");
+    setGrupoSelecionado("");
+    setInsightFilter(null);
+    setBorderoFilter(null);
+    setDctoFilter(null);
+  }, [dataSourceTable]);
 
   useEffect(() => {
     setInputDateStart(dateFilter.start);
@@ -1875,6 +1921,11 @@ const kpiData = useMemo(() => {
     const emisKey = Object.keys(firstRow).find(k => k.toLowerCase().includes('emis'));
     const vctoKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'vcto' || (k.toLowerCase().includes('vcto') && !k.toLowerCase().includes('vl')));
     const desagioKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'desagio' || k.toLowerCase() === 'deságio');
+    const isSmartDataSource = dataSourceTable === "secInfoSmart";
+    const jurosMultaKey = Object.keys(firstRow).find(k => {
+      const key = normalizarChave(k);
+      return key.includes("juros") && key.includes("multa");
+    });
 
     const seenBorderosDesagio = new Set();
     const latestBorderoById = new Map();
@@ -1890,23 +1941,30 @@ const kpiData = useMemo(() => {
       const val = valKey ? (Number(r[valKey]) || 0) : 0;
 
       const vlPgto = vlPgtoKey ? (Number(r[vlPgtoKey]) || 0) : 0;
+      const jurosMulta = jurosMultaKey ? (Number(r[jurosMultaKey]) || 0) : 0;
       
       const rawRate = rateKey ? r[rateKey] : null;
       const hasRateVal = rawRate !== null && rawRate !== undefined && String(rawRate).trim() !== "";
       const rate = hasRateVal ? (Number(String(rawRate).replace('%', '').replace(',', '.')) || 0) : 0;
 
       const desagioVal = desagioKey ? (Number(r[desagioKey]) || 0) : 0;
-      if (!seenBorderosDesagio.has(bNum)) {
+      if (isSmartDataSource) {
+         totalDesagio += desagioVal;
+      } else if (!seenBorderosDesagio.has(bNum)) {
          seenBorderosDesagio.add(bNum);
          totalDesagio += desagioVal;
       }
 
       // Encargo por título (não deduplicado por borderô)
-      const temPgto = pgtoKey && r[pgtoKey] && String(r[pgtoKey]).trim() !== "";
-      const encargoPossivel = temPgto && vlPgto > 0 && val > 0 && vlPgto !== val;
-      if (encargoPossivel && vlPgto <= val * 1.4) {
-        const encargoCalculado = vlPgto - val;
-        if (encargoCalculado > 0) totalEncargos += encargoCalculado;
+      if (isSmartDataSource) {
+        if (jurosMulta > 0) totalEncargos += jurosMulta;
+      } else {
+        const temPgto = pgtoKey && r[pgtoKey] && String(r[pgtoKey]).trim() !== "";
+        const encargoPossivel = temPgto && vlPgto > 0 && val > 0 && vlPgto !== val;
+        if (encargoPossivel && vlPgto <= val * 1.4) {
+          const encargoCalculado = vlPgto - val;
+          if (encargoCalculado > 0) totalEncargos += encargoCalculado;
+        }
       }
 
       if (!borderoMap.has(bNum)) {
@@ -1998,17 +2056,17 @@ return {
   diasOperacao,
   ultimasTaxas
 };  
-  }, [rowsParaTabela]);
+  }, [rowsParaTabela, dataSourceTable]);
 
   useEffect(() => {
     if (session) {
       async function buscarRelacionamentos() {
-        const { data } = await supabase.from("secInfo").select("Cliente, Sacado");
+        const { data } = await supabase.from(dataSourceTable).select("Cliente, Sacado");
         if (data) setRelacionamentos(data.filter(r => sacadoValido(r.Sacado) && cedenteValido(r.Cliente)));
       }
       buscarRelacionamentos();
     }
-  }, [session]);
+  }, [session, dataSourceTable]);
 
   useEffect(() => {
   if (!session?.user?.id) return;
@@ -2034,7 +2092,7 @@ return {
     }
 
     const { data } = await supabase
-      .from("secInfo")
+      .from(dataSourceTable)
       .select("*")
       .in("Cliente", cedentesRelacionados)
       .order("id", { ascending: false })
@@ -2051,7 +2109,7 @@ return {
   }, 300);
 
   return () => clearTimeout(delayDebounceFn);
-}, [session?.user?.id, sacadoSelecionado, clienteSelecionado, grupoSelecionado, relacionamentos]);
+}, [session?.user?.id, sacadoSelecionado, clienteSelecionado, grupoSelecionado, relacionamentos, dataSourceTable]);
 
   const clientesDisponiveis = useMemo(() => {
     let base = relacionamentos;
@@ -2069,7 +2127,7 @@ return {
     if (!session?.user?.id) return;
     const delayDebounceFn = setTimeout(async () => {
       setLoading(true);
-      let query = supabase.from("secInfo").select("*");
+      let query = supabase.from(dataSourceTable).select("*");
       if (clienteSelecionado) {
         query = query.eq("Cliente", clienteSelecionado);
       } else if (grupoSelecionado) {
@@ -2096,7 +2154,7 @@ return {
       setLoading(false);
     }, 300);
     return () => clearTimeout(delayDebounceFn);
-  }, [clienteSelecionado, sacadoSelecionado, grupoSelecionado, session?.user?.id]);
+  }, [clienteSelecionado, sacadoSelecionado, grupoSelecionado, session?.user?.id, dataSourceTable]);
 
   const limparFiltroEntidades = () => {
     setClienteSelecionado(""); 
@@ -2207,10 +2265,41 @@ return (
       }}>
         <h2 style={{ margin: 0, color: "#111827", fontSize: "18px", borderBottom: "2px solid #f3f4f6", paddingBottom: "12px" }}>Filtros de Análise</h2>
 
+        <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+          <label style={{ display: "block", fontSize: "13px", fontWeight: "700", color: "#111827" }}>Fonte de Dados</label>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+            {[
+              { table: "secInfo", label: "WBA" },
+              { table: "secInfoSmart", label: "Smart" },
+            ].map((source) => {
+              const active = dataSourceTable === source.table;
+              return (
+                <button
+                  key={source.table}
+                  type="button"
+                  onClick={() => setDataSourceTable(source.table)}
+                  style={{
+                    padding: "9px 10px",
+                    borderRadius: "8px",
+                    border: `1px solid ${active ? "#0f766e" : "#d1d5db"}`,
+                    background: active ? "#ccfbf1" : "#fff",
+                    color: active ? "#0f766e" : "#374151",
+                    fontWeight: 800,
+                    fontSize: "12px",
+                    cursor: "pointer",
+                  }}
+                >
+                  {source.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
           <div>
             <label style={{ display: "block", marginBottom: 6, fontSize: "13px", fontWeight: "600", color: "#374151" }}>Cedente</label>
-            <CustomDropdown value={clienteSelecionado} onChange={(v) => { setClienteSelecionado(v); if (v) setGrupoSelecionado(""); }} options={clientesDisponiveis} placeholder="Selecione o Cedente..." />
+            <CustomDropdown value={clienteSelecionado} onChange={(v) => { setClienteSelecionado(v); if (v) setGrupoSelecionado(""); }} options={clientesDisponiveis} placeholder="Selecione o Cedente..." formatOption={formatarNomeEntidade} />
           </div>
           <div>
             <label style={{ display: "block", marginBottom: 6, fontSize: "13px", fontWeight: "600", color: "#374151" }}>Grupo Econômico</label>
@@ -2223,7 +2312,7 @@ return (
           </div>
           <div>
             <label style={{ display: "block", marginBottom: 6, fontSize: "13px", fontWeight: "600", color: "#374151" }}>Sacado</label>
-            <CustomDropdown value={sacadoSelecionado} onChange={setSacadoSelecionado} options={sacadosDisponiveis} placeholder="Selecione o Sacado..." />
+            <CustomDropdown value={sacadoSelecionado} onChange={setSacadoSelecionado} options={sacadosDisponiveis} placeholder="Selecione o Sacado..." formatOption={formatarNomeEntidade} />
           </div>
           <button onClick={limparFiltroEntidades} disabled={!hasEntityFilter} style={{ padding: "10px", borderRadius: "8px", border: "1px solid #d1d5db", background: (!hasEntityFilter) ? "#f9fafb" : "#fff", color: (!hasEntityFilter) ? "#9ca3af" : "#ef4444", fontWeight: "600", fontSize: "13px", cursor: (!hasEntityFilter) ? "not-allowed" : "pointer", transition: "all 0.2s" }}>
             Limpar Nomes
@@ -2642,7 +2731,7 @@ return (
   />
 )}
               
-              <EvolutionCharts rows={evolutionRows} dateFilter={dateFilter} setDateFilter={handleSetDateFilter} setBorderoFilter={setBorderoFilter} setDctoFilter={setDctoFilter} hideValues={hideValues} />
+              <EvolutionCharts rows={evolutionRows} dateFilter={dateFilter} setDateFilter={handleSetDateFilter} setBorderoFilter={setBorderoFilter} setDctoFilter={setDctoFilter} hideValues={hideValues} dataSourceTable={dataSourceTable} />
             </div>
           )}
 
@@ -2665,7 +2754,7 @@ return (
               </div>
             ) : (
               (!loading || rowsParaTabela.length > 0) && (
-                <SimpleTable rows={rowsParaTabela} clienteSelecionado={clienteSelecionado} sacadoSelecionado={sacadoSelecionado} dateFilter={dateFilter} borderoFilter={borderoFilter} setBorderoFilter={setBorderoFilter} dctoFilter={dctoFilter} setDctoFilter={setDctoFilter} setDateFilter={handleSetDateFilter} setInsightFilter={setInsightFilter} setClienteSelecionado={setClienteSelecionado} setSacadoSelecionado={setSacadoSelecionado} hideValues={hideValues} />
+                <SimpleTable rows={rowsParaTabela} clienteSelecionado={clienteSelecionado} sacadoSelecionado={sacadoSelecionado} dateFilter={dateFilter} borderoFilter={borderoFilter} setBorderoFilter={setBorderoFilter} dctoFilter={dctoFilter} setDctoFilter={setDctoFilter} setDateFilter={handleSetDateFilter} setInsightFilter={setInsightFilter} setClienteSelecionado={setClienteSelecionado} setSacadoSelecionado={setSacadoSelecionado} hideValues={hideValues} dataSourceTable={dataSourceTable} />
               )
             )}
           </div>

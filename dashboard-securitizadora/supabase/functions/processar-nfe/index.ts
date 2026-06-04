@@ -1009,7 +1009,7 @@ async function callGeminiExtraction(
     throw new Error("GEMINI_API_KEY não configurada.");
   }
 
-  const modelName = Deno.env.get("GEMINI_MODEL") || "gemini-3.1-flash-lite-preview";
+  const modelName = "gemini-3.1-flash-lite";
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent`;
 
   const promptText = buildPrompt(retryReason);

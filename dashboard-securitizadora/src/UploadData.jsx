@@ -322,11 +322,278 @@ const inputStyle = {
   background: "#fff",
 };
 
+const SMART_TABLE = "secInfoSmart";
+const SMART_BATCH_SIZE = 500;
+
+const SMART_HEADER_ALIASES = {
+  Cliente: ["Cedente", "Cliente"],
+  "Dt.Emis": ["Data emissao", "Data emissão", "DATA EMISSÃO", "Dt.Emis"],
+  Vcto: ["Vencimento", "Vcto"],
+  Pgto: ["Data de quitação", "DATA DE QUITAÇÃO", "Pgto"],
+  "Vl Pgto": ["Liquidado", "LIQUIDADO(R$)", "Vl Pgto"],
+  Dcto: ["Documento", "Dcto"],
+  "Borderô": ["OP", "Bordero", "Borderô"],
+  Entrada: ["Total", "TOTAL(R$)", "Entrada"],
+  Juros: ["JUROS(R$)", "Juros(R$)", "Juros"],
+  Multa: ["MULTA(R$)", "Multa(R$)", "Multa"],
+  Sacado: ["Sacado"],
+  Status: ["Situação", "Status"],
+  Desagio: ["Desagio", "Deságio"],
+};
+
+const normalizeSmartHeader = (value) =>
+  String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9]/g, "")
+    .toLowerCase();
+
+const decodeSmartWorkbookText = (buffer) => {
+  const decoders = ["windows-1252", "iso-8859-1", "utf-8"];
+  for (const encoding of decoders) {
+    try {
+      const text = new TextDecoder(encoding).decode(buffer);
+      if (/<\s*(html|table|!doctype)/i.test(text)) return text;
+    } catch (err) {
+      console.debug(`Falha ao decodificar arquivo Smart como ${encoding}`, err);
+    }
+  }
+  return "";
+};
+
+const parseSmartHtmlWorkbook = (buffer) => {
+  const html = decodeSmartWorkbookText(buffer);
+  if (!html) return null;
+
+  const document = new DOMParser().parseFromString(html, "text/html");
+  const table = document.querySelector("table");
+  if (!table) return null;
+
+  return Array.from(table.querySelectorAll("tr"))
+    .map((tr) =>
+      Array.from(tr.querySelectorAll("th,td")).map((td) =>
+        td.textContent.replace(/\s+/g, " ").trim()
+      )
+    )
+    .filter((row) => row.some(Boolean));
+};
+
+const parseSmartBinaryWorkbook = (buffer) => {
+  const workbook = XLSX.read(buffer, { type: "array", cellDates: false });
+  const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+  return XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: "" });
+};
+
+const findSmartHeaderRow = (rows) =>
+  rows.findIndex((row) => {
+    const normalized = row.map(normalizeSmartHeader);
+    return (
+      normalized.includes(normalizeSmartHeader("Documento")) &&
+      (normalized.includes(normalizeSmartHeader("Cedente")) ||
+        normalized.includes(normalizeSmartHeader("Cliente"))) &&
+      (normalized.includes(normalizeSmartHeader("Sacado")) ||
+        normalized.includes(normalizeSmartHeader("Vcto")))
+    );
+  });
+
+const buildSmartSourceRow = (headers, row) =>
+  headers.reduce((acc, header, index) => {
+    const key = String(header || "").trim();
+    if (key) acc[key] = row[index];
+    return acc;
+  }, {});
+
+const getSmartValue = (row, aliases) => {
+  const normalizedMap = Object.entries(row).reduce((acc, [key, value]) => {
+    acc[normalizeSmartHeader(key)] = value;
+    return acc;
+  }, {});
+
+  for (const alias of aliases) {
+    const value = normalizedMap[normalizeSmartHeader(alias)];
+    if (value !== undefined && value !== "") return value;
+  }
+  return null;
+};
+
+const mapSmartRow = (row, index) => {
+  const bordero = cleanNumber(getSmartValue(row, SMART_HEADER_ALIASES["Borderô"]));
+  const juros = cleanNumber(getSmartValue(row, SMART_HEADER_ALIASES.Juros)) || 0;
+  const multa = cleanNumber(getSmartValue(row, SMART_HEADER_ALIASES.Multa)) || 0;
+
+  return {
+    Cliente: getSmartValue(row, SMART_HEADER_ALIASES.Cliente),
+    "Dt.Emis": cleanDate(getSmartValue(row, SMART_HEADER_ALIASES["Dt.Emis"])),
+    Vcto: cleanDate(getSmartValue(row, SMART_HEADER_ALIASES.Vcto)),
+    Pgto: cleanDate(getSmartValue(row, SMART_HEADER_ALIASES.Pgto)),
+    "Vl Pgto": cleanNumber(getSmartValue(row, SMART_HEADER_ALIASES["Vl Pgto"])),
+    Dcto: getSmartValue(row, SMART_HEADER_ALIASES.Dcto),
+    "Cód.Red": index + 1,
+    "Borderô": bordero,
+    Entrada: cleanNumber(getSmartValue(row, SMART_HEADER_ALIASES.Entrada)),
+    "Juros e Multa": juros + multa,
+    Sacado: getSmartValue(row, SMART_HEADER_ALIASES.Sacado),
+    Status: getSmartValue(row, SMART_HEADER_ALIASES.Status),
+    Estado: "A confirmar",
+    Desagio: cleanNumber(getSmartValue(row, SMART_HEADER_ALIASES.Desagio)),
+    "Tx.Efet": null,
+  };
+};
+
+const isUsefulSmartRow = (row) =>
+  Number.isFinite(row["Borderô"]) &&
+  Boolean(row.Dcto || row.Cliente || row.Sacado || row.Entrada);
+
+const parseSmartIsoDate = (value) => {
+  if (!value) return null;
+  const parts = String(value).split("T")[0].split("-");
+  if (parts.length !== 3) return null;
+  const [year, month, day] = parts.map(Number);
+  if (!year || !month || !day) return null;
+  return new Date(year, month - 1, day);
+};
+
+const isWeekend = (date) => date.getDay() === 0 || date.getDay() === 6;
+
+const adjustToNextBusinessDay = (date) => {
+  const adjusted = new Date(date);
+  if (adjusted.getDay() === 6) adjusted.setDate(adjusted.getDate() + 2);
+  if (adjusted.getDay() === 0) adjusted.setDate(adjusted.getDate() + 1);
+  return adjusted;
+};
+
+const addBusinessDays = (date, daysToAdd) => {
+  const result = new Date(date);
+  let added = 0;
+  while (added < daysToAdd) {
+    result.setDate(result.getDate() + 1);
+    if (!isWeekend(result)) added += 1;
+  }
+  return result;
+};
+
+const diffCalendarDays = (startDate, endDate) => {
+  const startUtc = Date.UTC(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+  const endUtc = Date.UTC(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+  return Math.round((endUtc - startUtc) / 86400000);
+};
+
+const getSmartPrazoTotal = (row) => {
+  const dataBase = parseSmartIsoDate(row["Dt.Emis"]);
+  const vencimento = parseSmartIsoDate(row.Vcto);
+  if (!dataBase || !vencimento) return null;
+
+  const vencimentoAjustado = adjustToNextBusinessDay(vencimento);
+  const dataFinal = addBusinessDays(vencimentoAjustado, 2);
+  const prazo = diffCalendarDays(dataBase, dataFinal);
+
+  return prazo > 0 ? prazo : null;
+};
+
+const applySmartEffectiveRates = (rows) => {
+  const grouped = {};
+
+  rows.forEach((row) => {
+    const key = limpaChave(row["Borderô"]);
+    if (!key) return;
+    if (!grouped[key]) grouped[key] = [];
+    grouped[key].push(row);
+  });
+
+  Object.values(grouped).forEach((group) => {
+    let totalDescontado = 0;
+    let totalDesagio = 0;
+    let weightedPrazo = 0;
+
+    group.forEach((row) => {
+      const valorFace = cleanNumber(row.Entrada) || 0;
+      const desagio = cleanNumber(row.Desagio) || 0;
+      const valorDescontado = valorFace - desagio;
+      const prazo = getSmartPrazoTotal(row);
+
+      if (valorDescontado > 0 && prazo) {
+        totalDescontado += valorDescontado;
+        totalDesagio += desagio;
+        weightedPrazo += valorDescontado * prazo;
+      }
+    });
+
+    const prazoMedio = totalDescontado > 0 ? weightedPrazo / totalDescontado : null;
+    const txEfetiva = totalDescontado > 0 && prazoMedio > 0
+      ? (Math.pow(1 + totalDesagio / totalDescontado, 30 / prazoMedio) - 1) * 100
+      : null;
+
+    group.forEach((row) => {
+      row["Tx.Efet"] = txEfetiva === null ? null : Number(txEfetiva.toFixed(6));
+    });
+  });
+
+  return rows;
+};
+
+const smartKey = (row) =>
+  `${limpaChave(row.Dcto)}__${limpaChave(row["Borderô"])}__${limpaChave(row.Vcto)}`;
+
+const withoutSmartCodRed = (row) => {
+  const copy = { ...row };
+  delete copy["Cód.Red"];
+  return copy;
+};
+
+const parseUniqueViolation = (error) => {
+  const raw = [error?.message, error?.details, error?.hint]
+    .filter(Boolean)
+    .join(" | ");
+
+  const keyMatch = raw.match(/Key \(([^)]+)\)=\(([^)]+)\)/i);
+  const constraintMatch = raw.match(/unique constraint "([^"]+)"/i);
+
+  return {
+    isUniqueViolation:
+      error?.code === "23505" ||
+      /duplicate key|violates unique constraint/i.test(raw),
+    constraint: constraintMatch?.[1] || "constraint unique não informada",
+    columns: keyMatch?.[1] || "colunas não informadas",
+    values: keyMatch?.[2] || "valores não informados",
+    raw,
+  };
+};
+
+const logSmartUniqueViolation = (error, rows, action) => {
+  const info = parseUniqueViolation(error);
+  if (!info.isUniqueViolation) return null;
+
+  const possibleRows = rows.filter((row) => {
+    const columns = info.columns
+      .split(",")
+      .map((column) => column.replace(/"/g, "").trim());
+    const values = info.values.split(",").map((value) => value.trim());
+
+    return columns.every((column, index) =>
+      limpaChave(row[column]) === limpaChave(values[index])
+    );
+  });
+
+  console.group(`Violação unique Smart (${action})`);
+  console.log("Constraint:", info.constraint);
+  console.log("Colunas:", info.columns);
+  console.log("Valores:", info.values);
+  console.log("Erro completo:", error);
+  console.table(possibleRows.length > 0 ? possibleRows : rows);
+  console.groupEnd();
+
+  return `Violação unique em ${info.constraint}: (${info.columns})=(${info.values})`;
+};
+
 export default function UploadData() {
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("");
   const [progress, setProgress] = useState("");
+  const [smartFiles, setSmartFiles] = useState([]);
+  const [smartLoading, setSmartLoading] = useState(false);
+  const [smartStatus, setSmartStatus] = useState("");
+  const [smartProgress, setSmartProgress] = useState("");
 
   const [snapshotLoading, setSnapshotLoading] = useState(false);
   const [snapshotStatus, setSnapshotStatus] = useState("");
@@ -349,6 +616,146 @@ export default function UploadData() {
       reader.onerror = (e) => reject(e);
       reader.readAsArrayBuffer(file);
     });
+  };
+
+  const readSmartRows = async (file) => {
+    const buffer = await file.arrayBuffer();
+    const rows = parseSmartHtmlWorkbook(buffer) || parseSmartBinaryWorkbook(buffer);
+    const headerIndex = findSmartHeaderRow(rows);
+
+    if (headerIndex < 0) {
+      throw new Error("Não encontrei a linha de cabeçalho no arquivo Smart.");
+    }
+
+    const headers = rows[headerIndex];
+    return rows
+      .slice(headerIndex + 1)
+      .map((row) => buildSmartSourceRow(headers, row))
+      .map(mapSmartRow)
+      .filter(isUsefulSmartRow);
+  };
+
+  const processSmartFiles = async () => {
+    if (smartFiles.length === 0) {
+      setSmartStatus("❌ Selecione um ou mais arquivos Excel para atualizar a secInfoSmart.");
+      return;
+    }
+
+    setSmartLoading(true);
+    setSmartStatus("");
+    setSmartProgress(`Processando ${smartFiles.length} arquivo(s)...`);
+
+    try {
+      const rowsByFile = await Promise.all(smartFiles.map(readSmartRows));
+      const rowsByKey = new Map();
+
+      rowsByFile.flat().forEach((row) => {
+        rowsByKey.set(smartKey(row), row);
+      });
+
+      const smartRows = applySmartEffectiveRates(
+        Array.from(rowsByKey.values()).map((row, index) => ({
+          ...row,
+          "Cód.Red": index + 1,
+        }))
+      );
+
+      if (smartRows.length === 0) {
+        throw new Error("Nenhuma linha válida encontrada nos arquivos Smart.");
+      }
+
+      const borderos = Array.from(new Set(smartRows.map((row) => row["Borderô"])));
+      setSmartProgress(`Checando ${smartRows.length} registros em ${SMART_TABLE}...`);
+
+      const { data: existingRows, error: existingError } = await supabase
+        .from(SMART_TABLE)
+        .select('id,Dcto,"Borderô",Vcto')
+        .in('"Borderô"', borderos);
+
+      if (existingError) {
+        throw new Error(`Erro ao checar registros Smart: ${existingError.message}`);
+      }
+
+      const existingMap = {};
+      (existingRows || []).forEach((row) => {
+        existingMap[smartKey(row)] = row;
+      });
+
+      const rowsToInsert = [];
+      const rowsToUpdate = [];
+
+      smartRows.forEach((row) => {
+        const existingRow = existingMap[smartKey(row)];
+        if (existingRow?.id) {
+          rowsToUpdate.push({ id: existingRow.id, row });
+        } else {
+          rowsToInsert.push(row);
+        }
+      });
+
+      let insertedCount = 0;
+      let updatedCount = 0;
+      let rowsToInsertWithCodRed = [];
+
+      if (rowsToInsert.length > 0) {
+        const { data: lastCodRedRows, error: lastCodRedError } = await supabase
+          .from(SMART_TABLE)
+          .select('"Cód.Red"')
+          .order('"Cód.Red"', { ascending: false })
+          .limit(1);
+
+        if (lastCodRedError) {
+          throw new Error(`Erro ao buscar próximo Cód.Red Smart: ${lastCodRedError.message}`);
+        }
+
+        const lastCodRed = cleanNumber(lastCodRedRows?.[0]?.["Cód.Red"]) || 0;
+        rowsToInsertWithCodRed = rowsToInsert.map((row, index) => ({
+          ...row,
+          "Cód.Red": lastCodRed + index + 1,
+        }));
+      }
+
+      for (let i = 0; i < rowsToInsertWithCodRed.length; i += SMART_BATCH_SIZE) {
+        const batch = rowsToInsertWithCodRed.slice(i, i + SMART_BATCH_SIZE);
+        const { error } = await supabase.from(SMART_TABLE).insert(batch);
+        if (error) {
+          const uniqueMessage = logSmartUniqueViolation(error, batch, "insert");
+          throw new Error(uniqueMessage || `Erro ao inserir Smart: ${error.message}`);
+        }
+
+        insertedCount += batch.length;
+        setSmartProgress(`Inserindo novos... ${insertedCount} / ${rowsToInsertWithCodRed.length}`);
+      }
+
+      for (let i = 0; i < rowsToUpdate.length; i += 1) {
+        const item = rowsToUpdate[i];
+        const { error } = await supabase
+          .from(SMART_TABLE)
+          .update(withoutSmartCodRed(item.row))
+          .eq("id", item.id);
+
+        if (error) {
+          const uniqueMessage = logSmartUniqueViolation(error, [item.row], "update");
+          throw new Error(uniqueMessage || `Erro ao atualizar Smart: ${error.message}`);
+        }
+
+        updatedCount += 1;
+        if (updatedCount % 25 === 0 || updatedCount === rowsToUpdate.length) {
+          setSmartProgress(`Atualizando existentes... ${updatedCount} / ${rowsToUpdate.length}`);
+        }
+      }
+
+      setSmartStatus(`✅ secInfoSmart atualizada: ${insertedCount} novo(s), ${updatedCount} atualizado(s).`);
+      setSmartProgress("");
+      setSmartFiles([]);
+      document.getElementById("smart-upload-input").value = "";
+    } catch (err) {
+      setSmartStatus(`❌ Erro: ${err.message}`);
+      setSmartProgress("");
+      console.error(err);
+    } finally {
+      setSmartLoading(false);
+    }
   };
 
   const carregarRiscoAtualSnapshot = async () => {
@@ -1209,6 +1616,75 @@ auditoria.finalRows = finalRows.map((item) => ({ ...item }));
         {status && (
           <div style={{ marginTop: "16px", padding: "12px", borderRadius: "8px", background: status.includes("❌") ? "#fef2f2" : "#ecfdf5", color: status.includes("❌") ? "#991b1b" : "#065f46", fontWeight: "500", fontSize: "14px", textAlign: "center" }}>
             {status}
+          </div>
+        )}
+      </div>
+
+      <div style={cardStyle}>
+        <h2 style={{ marginTop: 0, color: "#111827", fontSize: "20px" }}>Atualização Smart</h2>
+        <p style={{ color: "#6b7280", fontSize: "14px", marginBottom: "20px" }}>
+          Selecione um ou mais Excels de títulos para processar o novo layout e enviar para a tabela secInfoSmart.
+        </p>
+
+        <div style={{ background: "#f0fdfa", padding: "16px", borderRadius: "8px", border: "1px solid #99f6e4", marginBottom: "24px", fontSize: "13px", color: "#134e4a", lineHeight: "1.5" }}>
+          O arquivo será convertido para as colunas Cliente, Dt.Emis, Vcto, Pgto, Vl Pgto, Dcto,
+          Cód.Red, Borderô, Entrada, Juros e Multa, Sacado, Status, Estado, Desagio e Tx.Efet.
+        </div>
+
+        <div style={{ marginBottom: "20px" }}>
+          <input
+            id="smart-upload-input"
+            type="file"
+            multiple
+            accept=".xlsx, .xls, .html"
+            onChange={(e) => setSmartFiles(Array.from(e.target.files || []))}
+            disabled={smartLoading}
+            style={{
+              boxSizing: "border-box",
+              width: "100%",
+              padding: "12px",
+              border: "2px dashed #99f6e4",
+              borderRadius: "8px",
+              background: "#f0fdfa",
+              cursor: "pointer",
+            }}
+          />
+          <div style={{ fontSize: "13px", color: "#0f766e", marginTop: "8px", fontWeight: "600" }}>
+            {smartFiles.length > 0
+              ? `${smartFiles.length} arquivo(s) selecionado(s): ${smartFiles.map((file) => file.name).join(", ")}`
+              : "Nenhum arquivo Smart selecionado."}
+          </div>
+        </div>
+
+        <button
+          onClick={processSmartFiles}
+          disabled={smartLoading || smartFiles.length === 0}
+          style={{
+            boxSizing: "border-box",
+            width: "100%",
+            padding: "12px",
+            borderRadius: "8px",
+            border: "none",
+            background: (smartLoading || smartFiles.length === 0) ? "#9ca3af" : "#0f766e",
+            color: "#fff",
+            fontWeight: "700",
+            fontSize: "15px",
+            cursor: (smartLoading || smartFiles.length === 0) ? "not-allowed" : "pointer",
+            transition: "background 0.2s",
+          }}
+        >
+          {smartLoading ? "Processando Smart..." : "Processar e Enviar Smart"}
+        </button>
+
+        {smartProgress && (
+          <div style={{ marginTop: "16px", fontSize: "14px", color: "#0f766e", fontWeight: "700", textAlign: "center" }}>
+            {smartProgress}
+          </div>
+        )}
+
+        {smartStatus && (
+          <div style={{ marginTop: "16px", padding: "12px", borderRadius: "8px", background: smartStatus.includes("❌") ? "#fef2f2" : "#ecfdf5", color: smartStatus.includes("❌") ? "#991b1b" : "#065f46", fontWeight: "500", fontSize: "14px", textAlign: "center" }}>
+            {smartStatus}
           </div>
         )}
       </div>
