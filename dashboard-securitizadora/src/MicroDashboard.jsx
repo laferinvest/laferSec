@@ -61,11 +61,53 @@ function escapeText(v) {
 }
 
 function formatarNomeEntidade(nome) {
-  return String(nome || "").trim().replace(/^\d+\s*-\s*/, "");
+  return String(nome || "").trim().replace(/^\d+\s*-\s*/, "").replace(/\s*-\s*sacado\s*$/i, "");
 }
 
 function normalizarChave(campo) {
   return String(campo || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
+}
+
+function parseNumeroOrdenacao(valor) {
+  if (valor === null || valor === undefined || valor === "") return null;
+  const numero = Number(String(valor).trim().replace(/\./g, "").replace(",", "."));
+  return Number.isFinite(numero) ? numero : null;
+}
+
+function parseIsoDateLocal(valor) {
+  if (!valor) return null;
+  const parts = String(valor).split("T")[0].split("-");
+  if (parts.length !== 3) return null;
+  const [year, month, day] = parts.map(Number);
+  if (!year || !month || !day) return null;
+  return new Date(year, month - 1, day);
+}
+
+function isWeekendDate(date) {
+  return date.getDay() === 0 || date.getDay() === 6;
+}
+
+function adjustToNextBusinessDay(date) {
+  const adjusted = new Date(date);
+  if (adjusted.getDay() === 6) adjusted.setDate(adjusted.getDate() + 2);
+  if (adjusted.getDay() === 0) adjusted.setDate(adjusted.getDate() + 1);
+  return adjusted;
+}
+
+function addBusinessDays(date, daysToAdd) {
+  const result = new Date(date);
+  let added = 0;
+  while (added < daysToAdd) {
+    result.setDate(result.getDate() + 1);
+    if (!isWeekendDate(result)) added += 1;
+  }
+  return result;
+}
+
+function diffCalendarDays(startDate, endDate) {
+  const startUtc = Date.UTC(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+  const endUtc = Date.UTC(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+  return Math.round((endUtc - startUtc) / 86400000);
 }
 
 function formatarMesAno(ym) {
@@ -87,8 +129,6 @@ const getInitDateStr = () => {
   const start = new Date(end.getFullYear(), 0, 1); // 01/jan do ano atual
   return { start: formatToLocalISO(start), end: formatToLocalISO(end) };
 };
-
-const CEDENTES_IGNORADOS = ["12 -", "23 -", "2 -"];
 
 const GRUPOS_ECONOMICOS = [
   {
@@ -133,14 +173,22 @@ function adicionarDiasUteis(baseDate, qtdDiasUteis) {
 }
 
 
-function cedenteValido(cedente) {
-  if (!cedente) return false;
-  return !CEDENTES_IGNORADOS.some(ignorado => String(cedente).trim().startsWith(ignorado));
+function isInadimplente(row) {
+  return normalizarChave(row?.inadimplencia ?? row?.Inadimplencia ?? row?.["Inadimplência"]) === "sim";
 }
+
+function cedenteValido(cedente) {
+  return Boolean(cedente);
+}
+
 function sacadoValido(sacado) {
   if (!sacado) return false;
   const s = String(sacado).trim();
   return !(s === "0s" || s.startsWith("0 s-") || s.startsWith("0s-"));
+}
+
+function registroValidoParaAnalise(row) {
+  return sacadoValido(row?.Sacado) && cedenteValido(row?.Cliente) && !isInadimplente(row);
 }
 
 // --- COMPONENTE DE EVOLUÇÃO ---
@@ -903,7 +951,7 @@ function SacadoConcentrationCard({
       const status = r._status;
       const valor = Number(r[entradaKey]) || 0;
 
-      if (!cedenteValido(cedente) || !sacadoValido(sacado)) return;
+      if (!registroValidoParaAnalise(r)) return;
       if (status !== "aVencer" && status !== "atraso") return;
       if (valor <= 0) return;
 
@@ -1233,7 +1281,7 @@ const sectionSubtitleStyle = {
   color: "#6b7280",
 };
 
-function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, borderoFilter, setBorderoFilter, dctoFilter, setDctoFilter, setDateFilter, setInsightFilter, setClienteSelecionado, setSacadoSelecionado, hideValues, dataSourceTable = "secInfo" }) {
+function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, borderoFilter, setBorderoFilter, dctoFilter, setDctoFilter, setDateFilter, setInsightFilter, setClienteSelecionado, setSacadoSelecionado, hideValues, dataSourceTable = "secInfo", onBorderoDrill, onDctoDrill }) {
   const fmtM = (v) => hideValues ? "R$ -" : formatarMoeda(v);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [sortConfig, setSortConfig] = useState(null);
@@ -1243,7 +1291,7 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
 
   useEffect(() => { setCurrentPage(1); }, [rows, dateFilter, sortConfig]);
 
-  const colunasOcultas = ["id", "created_at", "Cód.Red", "UF", "Banco", "Rec.", "Estado", "_status", "Juros e Multa"];
+  const colunasOcultas = ["id", "created_at", "Cód.Red", "UF", "Banco", "Rec.", "Estado", "_status", "Juros e Multa", "Qtd Linhas Agrupadas", "Detalhes Agrupamento", "inadimplencia", "Inadimplencia", "Inadimplência"];
   const columns = useMemo(() => {
     if (!rows.length) return [];
     const firstRowKeys = Object.keys(rows[0]);
@@ -1252,7 +1300,24 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
     if (sacadoSelecionado) cols = cols.filter(c => c !== "Sacado");
     if (clienteSelecionado && !sacadoSelecionado && cols.includes("Sacado")) cols = ["Sacado", ...cols.filter(c => c !== "Sacado")];
     else if (sacadoSelecionado && !clienteSelecionado && cols.includes("Cliente")) cols = ["Cliente", ...cols.filter(c => c !== "Cliente")];
-    return cols;
+
+    const txEfetCol = cols.find(c => {
+      const key = normalizarChave(c);
+      return key === "tx.efet" || key === "tx efet" || key === "txefet";
+    });
+    const dctoCol = cols.find(c => c.toLowerCase() === "dcto" || c.toLowerCase() === "documento");
+    const borderoCol = cols.find(c => normalizarChave(c).includes("border"));
+    const baseCols = cols.filter(c => c !== txEfetCol && c !== dctoCol && c !== borderoCol);
+    const valorPgtoIndex = baseCols.findIndex(c => c.toLowerCase() === "vl pgto");
+    const metricCols = [txEfetCol, "__encargo__", "__tx_encargos__"].filter(Boolean);
+
+    if (valorPgtoIndex >= 0) {
+      baseCols.splice(valorPgtoIndex + 1, 0, ...metricCols);
+    } else {
+      baseCols.push(...metricCols);
+    }
+
+    return [...baseCols, ...[dctoCol, borderoCol].filter(Boolean)];
   }, [rows, clienteSelecionado, sacadoSelecionado]);
 
   const activeSort = useMemo(() => {
@@ -1282,22 +1347,82 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
     const vlPgtoKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'vl pgto');
     const pgtoKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'pgto' || (k.toLowerCase().includes('pgto') && !k.toLowerCase().includes('vl')));
     const valKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'entrada' || (k.toLowerCase().includes('valor') && !k.toLowerCase().includes('pgto')));
-    return rows.map(r => {
+    const emisKey = Object.keys(firstRow).find(k => k.toLowerCase().includes('emis'));
+    const vctoKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'vcto' || (k.toLowerCase().includes('vcto') && !k.toLowerCase().includes('vl')));
+    const desagioKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'desagio' || k.toLowerCase() === 'deságio');
+    const borderoKey = Object.keys(firstRow).find(k => normalizarChave(k).includes("border"));
+
+    const getPrazoComEncargos = (row) => {
+      const dataBase = parseIsoDateLocal(emisKey ? row[emisKey] : null);
+      const vencimento = parseIsoDateLocal(vctoKey ? row[vctoKey] : null);
+      if (!dataBase || !vencimento) return null;
+
+      const vencimentoAjustado = adjustToNextBusinessDay(vencimento);
+      const dataFinalBase = addBusinessDays(vencimentoAjustado, 2);
+      const prazoBase = diffCalendarDays(dataBase, dataFinalBase);
+      if (prazoBase <= 0) return null;
+
+      const dataQuitacao = parseIsoDateLocal(pgtoKey ? row[pgtoKey] : null);
+      const diasAtraso = dataQuitacao ? Math.max(0, diffCalendarDays(vencimento, dataQuitacao)) : 0;
+      return prazoBase + diasAtraso;
+    };
+
+    const rowsComEncargo = rows.map(r => {
+      const val = valKey ? (Number(r[valKey]) || 0) : 0;
+
       if (isSmartDataSource) {
         const encargoSmart = jurosMultaKey ? (Number(r[jurosMultaKey]) || 0) : 0;
-        return { ...r, __encargo__: encargoSmart > 0 ? encargoSmart : 0 };
+        const encargo = encargoSmart > 0 ? encargoSmart : 0;
+        return { ...r, __encargo__: encargo, __tx_encargos__: 0 };
       }
 
       const vlPgto = vlPgtoKey ? (Number(r[vlPgtoKey]) || 0) : 0;
-      const val = valKey ? (Number(r[valKey]) || 0) : 0;
       const temPgto = pgtoKey && r[pgtoKey] && String(r[pgtoKey]).trim() !== "";
       // Se vlPgto > 140% do valor de face, considera que não houve encargo (provavelmente dado inconsistente)
       const encargoPossivel = temPgto && vlPgto > 0 && val > 0 && vlPgto !== val;
       const encargoDentroLimite = encargoPossivel && vlPgto <= val * 1.4;
       const encargoCalculado = encargoDentroLimite ? (vlPgto - val) : 0;
       const encargo = encargoCalculado > 0 ? encargoCalculado : 0;
-      return { ...r, __encargo__: encargo };
+      return { ...r, __encargo__: encargo, __tx_encargos__: 0 };
     });
+
+    const gruposPorBordero = new Map();
+    rowsComEncargo.forEach((row, index) => {
+      const bordero = borderoKey && row[borderoKey] ? String(row[borderoKey]).trim() : `avulso_${index}`;
+      if (!gruposPorBordero.has(bordero)) gruposPorBordero.set(bordero, []);
+      gruposPorBordero.get(bordero).push(row);
+    });
+
+    gruposPorBordero.forEach((group) => {
+      let totalDescontado = 0;
+      let totalDesagioEncargos = 0;
+      let weightedPrazo = 0;
+
+      group.forEach((row) => {
+        const valorFace = valKey ? (Number(row[valKey]) || 0) : 0;
+        const desagio = desagioKey ? (Number(row[desagioKey]) || 0) : 0;
+        const encargo = Number(row.__encargo__) || 0;
+        const valorDescontado = valorFace - desagio;
+        const prazo = getPrazoComEncargos(row);
+
+        if (valorDescontado > 0 && prazo) {
+          totalDescontado += valorDescontado;
+          totalDesagioEncargos += desagio + encargo;
+          weightedPrazo += valorDescontado * prazo;
+        }
+      });
+
+      const prazoMedio = totalDescontado > 0 ? weightedPrazo / totalDescontado : null;
+      const txEncargos = totalDescontado > 0 && prazoMedio > 0
+        ? (Math.pow(1 + totalDesagioEncargos / totalDescontado, 30 / prazoMedio) - 1) * 100
+        : 0;
+
+      group.forEach((row) => {
+        row.__tx_encargos__ = Number.isFinite(txEncargos) ? txEncargos : 0;
+      });
+    });
+
+    return rowsComEncargo;
   }, [rows, dataSourceTable]);
 
   const sortedRows = useMemo(() => {
@@ -1306,10 +1431,19 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
       sortableItems.sort((a, b) => {
         let aValue = a[activeSort.key] || ""; let bValue = b[activeSort.key] || "";
         const keyLower = activeSort.key.toLowerCase();
+        const isBordero = normalizarChave(activeSort.key).includes("border");
         
         const isCurrency = keyLower === "entrada" || keyLower === "vl pgto" || keyLower.includes("valor") || keyLower === "desagio" || keyLower === "deságio" || keyLower === "__encargo__";
         const isRate = keyLower.includes("tx") || keyLower.includes("taxa");
         const isDateColumn = !isCurrency && !isRate && (keyLower.includes("emis") || keyLower.includes("vcto") || keyLower.includes("pgto") || keyLower.includes("data"));
+
+        if (isBordero) {
+          const numA = parseNumeroOrdenacao(aValue);
+          const numB = parseNumeroOrdenacao(bValue);
+          if (numA !== null && numB !== null) {
+            return activeSort.direction === 'asc' ? numA - numB : numB - numA;
+          }
+        }
 
         if (isDateColumn) {
           const dateA = new Date(aValue).getTime() || 0; const dateB = new Date(bValue).getTime() || 0;
@@ -1438,19 +1572,13 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
               <thead>
                 <tr>
                   {columns.map((c) => {
-                    let labelColuna = c === "Entrada" ? "Valor de Face" : c === "Cliente" ? "Cedente" : c.toLowerCase() === "vcto" ? "Dt.Vcto" : c.toLowerCase() === "pgto" ? "Dt.Pgto" : c.toLowerCase() === "vl pgto" ? "Valor Pgto" : c;
+                    let labelColuna = c === "Entrada" ? "Valor de Face" : c === "Cliente" ? "Cedente" : c.toLowerCase() === "vcto" ? "Dt.Vcto" : c.toLowerCase() === "pgto" ? "Dt.Pgto" : c.toLowerCase() === "vl pgto" ? "Valor Pgto" : c === "__encargo__" ? "Encargos" : c === "__tx_encargos__" ? "Tx.Encargos" : c;
                     const isSorted = activeSort?.key === c;
-                    const isDesagioCol = c.toLowerCase() === 'desagio' || c.toLowerCase() === 'deságio';
                     return (
                       <React.Fragment key={c}>
                         <th onClick={() => requestSort(c)} style={{ borderBottom: "2px solid #e5e7eb", padding: "12px 16px", background: isSorted ? "#eff6ff" : "#f9fafb", color: isSorted ? "#1d4ed8" : "#374151", fontWeight: "600", textAlign: "left", position: "sticky", top: 0, zIndex: 10, cursor: "pointer", userSelect: "none" }}>
                           {labelColuna}{isSorted ? (activeSort.direction === 'asc' ? ' ↑' : ' ↓') : ''}
                         </th>
-                        {isDesagioCol && (
-                          <th key="__encargos_header__" onClick={() => requestSort("__encargo__")} style={{ borderBottom: "2px solid #e5e7eb", padding: "12px 16px", background: activeSort?.key === "__encargo__" ? "#fffbeb" : "#fffbeb", color: activeSort?.key === "__encargo__" ? "#78350f" : "#92400e", fontWeight: "600", textAlign: "left", position: "sticky", top: 0, zIndex: 10, cursor: "pointer", userSelect: "none" }}>
-                            Encargos{activeSort?.key === "__encargo__" ? (activeSort.direction === 'asc' ? ' ↑' : ' ↓') : ''}
-                          </th>
-                        )}
                       </React.Fragment>
                     );
                   })}
@@ -1464,7 +1592,7 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
                     let valor = r[c];
                     const valorOriginal = valor;
                         const cLower = c.toLowerCase();
-                        const isCurrency = cLower === "entrada" || cLower === "vl pgto" || cLower.includes("valor") || cLower === "desagio" || cLower === "deságio";
+                        const isCurrency = cLower === "entrada" || cLower === "vl pgto" || cLower.includes("valor") || cLower === "desagio" || cLower === "deságio" || c === "__encargo__";
                         const isRate = cLower.includes("tx") || cLower.includes("taxa");
                         const isDateColumn = !isCurrency && !isRate && (cLower.includes("emis") || cLower.includes("vcto") || cLower.includes("pgto") || cLower.includes("data"));
                         const isBorderoCol = cLower.normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes("border");
@@ -1473,7 +1601,6 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
                         const baseValor = String(valor || "").split(/[-/]/)[0].trim();
                         const baseFiltered = dctoFilter ? String(dctoFilter.value).split(/[-/]/)[0].trim() : null;
                         const isThisDctoFiltered = dctoFilter?.key === c && baseValor === baseFiltered;
-                        const isDesagioCol = cLower === 'desagio' || cLower === 'deságio';
 
                         if (isDateColumn) valor = formatarData(valor);
                         else if (isCurrency) valor = fmtM(valor);
@@ -1482,28 +1609,22 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
                           valor = !isNaN(valNum) && valor ? `${valNum.toFixed(2).replace('.', ',')}%` : escapeText(valor);
                         }
                         if (c === "Cliente" || c === "Sacado") valor = formatarNomeEntidade(valorOriginal);
-
-                        // Calcular encargo deste título
-                        const encargoCellVal = isDesagioCol ? (r.__encargo__ || 0) : null;
+                        if (c === "__encargo__" && !(Number(valorOriginal) > 0)) valor = "—";
+                        if (c === "__tx_encargos__" && !(Number(valorOriginal) > 0)) valor = "—";
 
                       return (
                         <React.Fragment key={c}>
-                          <td style={{ padding: "12px 16px", color: "#374151" }}>
+                          <td style={{ padding: "12px 16px", color: c === "__encargo__" && Number(valorOriginal) > 0 ? "#92400e" : "#374151", fontWeight: c === "__encargo__" && Number(valorOriginal) > 0 ? "600" : "400", background: c === "__encargo__" && Number(valorOriginal) > 0 ? "rgba(245, 158, 11, 0.04)" : "transparent" }}>
                             {isBorderoCol ? (
-                              <span onClick={(e) => { e.stopPropagation(); if (isThisBorderoFiltered) setBorderoFilter(null); else { setBorderoFilter({ key: c, value: valor }); setDctoFilter(null); setDateFilter({ type: 'emis', start: '', end: '' }); if (setInsightFilter) setInsightFilter(null); } }} style={{ background: isThisBorderoFiltered ? "#4f46e5" : "rgba(79, 70, 229, 0.08)", color: isThisBorderoFiltered ? "#fff" : "#4f46e5", padding: "4px 8px", borderRadius: "6px", fontWeight: "600", cursor: "pointer" }}>{escapeText(valor)}</span>
+                              <span onClick={(e) => { e.stopPropagation(); if (onBorderoDrill) onBorderoDrill({ key: c, value: valorOriginal, isActive: isThisBorderoFiltered }); else if (isThisBorderoFiltered) setBorderoFilter(null); else { setBorderoFilter({ key: c, value: valorOriginal }); setDctoFilter(null); setDateFilter({ type: 'emis', start: '', end: '' }); if (setInsightFilter) setInsightFilter(null); } }} style={{ background: isThisBorderoFiltered ? "#4f46e5" : "rgba(79, 70, 229, 0.08)", color: isThisBorderoFiltered ? "#fff" : "#4f46e5", padding: "4px 8px", borderRadius: "6px", fontWeight: "600", cursor: "pointer" }}>{escapeText(valor)}</span>
                             ) : isDctoCol ? (
-                              <span onClick={(e) => { e.stopPropagation(); if (isThisDctoFiltered) setDctoFilter(null); else { setDctoFilter({ key: c, value: valor }); setBorderoFilter(null); setDateFilter({ type: 'emis', start: '', end: '' }); if (setInsightFilter) setInsightFilter(null); } }} style={{ background: isThisDctoFiltered ? "#0ea5e9" : "rgba(14, 165, 233, 0.08)", color: isThisDctoFiltered ? "#fff" : "#0ea5e9", padding: "4px 8px", borderRadius: "6px", fontWeight: "600", cursor: "pointer" }}>{escapeText(valor)}</span>
+                              <span onClick={(e) => { e.stopPropagation(); if (onDctoDrill) onDctoDrill({ key: c, value: valorOriginal, isActive: isThisDctoFiltered }); else if (isThisDctoFiltered) setDctoFilter(null); else { setDctoFilter({ key: c, value: valorOriginal }); setBorderoFilter(null); setDateFilter({ type: 'emis', start: '', end: '' }); if (setInsightFilter) setInsightFilter(null); } }} style={{ background: isThisDctoFiltered ? "#0ea5e9" : "rgba(14, 165, 233, 0.08)", color: isThisDctoFiltered ? "#fff" : "#0ea5e9", padding: "4px 8px", borderRadius: "6px", fontWeight: "600", cursor: "pointer" }}>{escapeText(valor)}</span>
                             ) : c === "Cliente" ? (
                               <span onClick={(e) => { e.stopPropagation(); setClienteSelecionado(valorOriginal); }} className="clickable-entity">{escapeText(valor)}</span>
                             ) : c === "Sacado" ? (
                               <span onClick={(e) => { e.stopPropagation(); setSacadoSelecionado(valorOriginal); }} className="clickable-entity">{escapeText(valor)}</span>
                             ) : ( escapeText(valor) )}
                           </td>
-                          {isDesagioCol && (
-                            <td key="__encargos_cell__" style={{ padding: "12px 16px", color: encargoCellVal > 0 ? "#92400e" : "#9ca3af", fontWeight: encargoCellVal > 0 ? "600" : "400", background: encargoCellVal > 0 ? "rgba(245, 158, 11, 0.04)" : "transparent" }}>
-                              {encargoCellVal > 0 ? fmtM(encargoCellVal) : "—"}
-                            </td>
-                          )}
                         </React.Fragment>
                       );
                       })}
@@ -1627,7 +1748,7 @@ function CustomDropdown({ value, options, onChange, placeholder, formatOption = 
 export default function MicroDashboard({ session, onSidebarToggle, hideValues, setHideValues }) {
   const [loading, setLoading] = useState(false);
   const [rows, setRows] = useState([]);
-  const [dataSourceTable, setDataSourceTable] = useState("secInfo");
+  const [dataSourceTable, setDataSourceTable] = useState("secInfoSmart");
   
   const [viewMode, setViewMode] = useState('all'); 
   const [insightFilter, setInsightFilter] = useState(null);
@@ -1692,6 +1813,8 @@ export default function MicroDashboard({ session, onSidebarToggle, hideValues, s
   const savedDateFilter = useRef(null);
   const savedQuickDate = useRef(null);
   const prevHasEntity = useRef(false);
+  const drillFilterContext = useRef(null);
+  const suppressEntityFilterEffect = useRef(false);
 
   useEffect(() => {
     latestDateFilter.current = dateFilter;
@@ -1707,6 +1830,7 @@ export default function MicroDashboard({ session, onSidebarToggle, hideValues, s
     setRows([]);
     setRelacionamentos([]);
     setRowsConcentracaoSacado([]);
+    drillFilterContext.current = null;
     setClienteSelecionado("");
     setSacadoSelecionado("");
     setGrupoSelecionado("");
@@ -1716,6 +1840,12 @@ export default function MicroDashboard({ session, onSidebarToggle, hideValues, s
   }, [dataSourceTable]);
 
   useEffect(() => {
+    if (!borderoFilter && !dctoFilter) {
+      drillFilterContext.current = null;
+    }
+  }, [borderoFilter, dctoFilter]);
+
+  useEffect(() => {
     setInputDateStart(dateFilter.start);
     setInputDateEnd(dateFilter.end);
     setInputType(dateFilter.type);
@@ -1723,6 +1853,12 @@ export default function MicroDashboard({ session, onSidebarToggle, hideValues, s
 
   useEffect(() => {
     const currentlyHasEntity = !!(clienteSelecionado || sacadoSelecionado || grupoSelecionado);
+
+    if (suppressEntityFilterEffect.current) {
+      suppressEntityFilterEffect.current = false;
+      prevHasEntity.current = currentlyHasEntity;
+      return;
+    }
 
     if (currentlyHasEntity && !prevHasEntity.current) {
       savedDateFilter.current = latestDateFilter.current;
@@ -1744,6 +1880,84 @@ export default function MicroDashboard({ session, onSidebarToggle, hideValues, s
     setBorderoFilter(null); 
     setDctoFilter(null);
   }, [clienteSelecionado, sacadoSelecionado, grupoSelecionado]);
+
+  const restoreDrillContext = () => {
+    const context = drillFilterContext.current;
+    drillFilterContext.current = null;
+
+    if (!context) {
+      setBorderoFilter(null);
+      setDctoFilter(null);
+      return;
+    }
+
+    const willChangeEntityFilter =
+      context.clienteSelecionado !== clienteSelecionado ||
+      context.grupoSelecionado !== grupoSelecionado ||
+      context.sacadoSelecionado !== sacadoSelecionado;
+    if (willChangeEntityFilter) suppressEntityFilterEffect.current = true;
+    setViewMode(context.viewMode);
+    setInsightFilter(context.insightFilter);
+    setBorderoFilter(context.borderoFilter);
+    setDctoFilter(context.dctoFilter);
+    setClienteSelecionado(context.clienteSelecionado);
+    setGrupoSelecionado(context.grupoSelecionado);
+    setSacadoSelecionado(context.sacadoSelecionado);
+    setDateFilter(context.dateFilter);
+    setActiveQuickDate(context.activeQuickDate);
+  };
+
+  const saveDrillContext = () => {
+    if (drillFilterContext.current) return;
+    drillFilterContext.current = {
+      viewMode,
+      insightFilter,
+      borderoFilter,
+      dctoFilter,
+      clienteSelecionado,
+      grupoSelecionado,
+      sacadoSelecionado,
+      dateFilter,
+      activeQuickDate,
+    };
+  };
+
+  const applyExclusiveDrillFilter = (type, filter) => {
+    saveDrillContext();
+    const hasEntityFilterBeforeDrill = !!(clienteSelecionado || grupoSelecionado || sacadoSelecionado);
+    if (hasEntityFilterBeforeDrill) suppressEntityFilterEffect.current = true;
+    setClienteSelecionado("");
+    setGrupoSelecionado("");
+    setSacadoSelecionado("");
+    setViewMode("all");
+    setInsightFilter(null);
+    setDateFilter({ type: dateFilter.type || inputType || "emis", start: "", end: "" });
+    setActiveQuickDate(null);
+
+    if (type === "bordero") {
+      setBorderoFilter({ key: filter.key, value: filter.value });
+      setDctoFilter(null);
+    } else {
+      setDctoFilter({ key: filter.key, value: filter.value });
+      setBorderoFilter(null);
+    }
+  };
+
+  const handleBorderoDrill = (filter) => {
+    if (filter.isActive) {
+      restoreDrillContext();
+      return;
+    }
+    applyExclusiveDrillFilter("bordero", filter);
+  };
+
+  const handleDctoDrill = (filter) => {
+    if (filter.isActive) {
+      restoreDrillContext();
+      return;
+    }
+    applyExclusiveDrillFilter("dcto", filter);
+  };
 
   const applyQuickDate = (quickType) => {
     if (activeQuickDate === quickType) {
@@ -1894,6 +2108,7 @@ const kpiData = useMemo(() => {
       return {
         riscoAtual: 0,
         taxaMedia: 0,
+        taxaMediaEncargos: 0,
         baseCalculo: 0,
         qtdBorderos: 0,
         qtdTitulos: 0,
@@ -1929,6 +2144,7 @@ const kpiData = useMemo(() => {
 
     const seenBorderosDesagio = new Set();
     const latestBorderoById = new Map();
+    const txEncargosMap = new Map();
     let totalDesagio = 0;
     let totalEncargos = 0;
     
@@ -1977,6 +2193,44 @@ const kpiData = useMemo(() => {
         bData.hasRate = true;
       }
 
+      if (!txEncargosMap.has(bNum)) {
+        txEncargosMap.set(bNum, {
+          totalDescontado: 0,
+          totalDesagioEncargos: 0,
+          weightedPrazo: 0,
+        });
+      }
+      const txEncargosData = txEncargosMap.get(bNum);
+      const valorDescontado = val - desagioVal;
+      let encargoTitulo = 0;
+      if (isSmartDataSource) {
+        encargoTitulo = jurosMulta > 0 ? jurosMulta : 0;
+      } else {
+        const temPgto = pgtoKey && r[pgtoKey] && String(r[pgtoKey]).trim() !== "";
+        const encargoPossivel = temPgto && vlPgto > 0 && val > 0 && vlPgto !== val;
+        if (encargoPossivel && vlPgto <= val * 1.4) {
+          const encargoCalculado = vlPgto - val;
+          encargoTitulo = encargoCalculado > 0 ? encargoCalculado : 0;
+        }
+      }
+
+      const dataBaseEnc = parseIsoDateLocal(emisKey ? r[emisKey] : null);
+      const vencimentoEnc = parseIsoDateLocal(vctoKey ? r[vctoKey] : null);
+      if (valorDescontado > 0 && dataBaseEnc && vencimentoEnc) {
+        const vencimentoAjustado = adjustToNextBusinessDay(vencimentoEnc);
+        const dataFinalBase = addBusinessDays(vencimentoAjustado, 2);
+        const prazoBase = diffCalendarDays(dataBaseEnc, dataFinalBase);
+        const dataQuitacao = parseIsoDateLocal(pgtoKey ? r[pgtoKey] : null);
+        const diasAtraso = dataQuitacao ? Math.max(0, diffCalendarDays(vencimentoEnc, dataQuitacao)) : 0;
+        const prazoEncargos = prazoBase > 0 ? prazoBase + diasAtraso : null;
+
+        if (prazoEncargos) {
+          txEncargosData.totalDescontado += valorDescontado;
+          txEncargosData.totalDesagioEncargos += desagioVal + encargoTitulo;
+          txEncargosData.weightedPrazo += valorDescontado * prazoEncargos;
+        }
+      }
+
       const emisDateForLatest = emisKey && r[emisKey]
         ? new Date(String(r[emisKey]).split("T")[0] + "T00:00:00")
         : null;
@@ -2017,11 +2271,24 @@ const kpiData = useMemo(() => {
 
     let baseCalculoTaxa = 0;
     let sumTaxaWeighted = 0;
+    let sumTaxaEncargosWeighted = 0;
 
     borderoMap.forEach(b => {
       if (b.hasRate && b.totalValue > 0) {
         sumTaxaWeighted += (b.rate * b.totalValue);
         baseCalculoTaxa += b.totalValue;
+      }
+    });
+
+    txEncargosMap.forEach((b, bordero) => {
+      const taxaBase = borderoMap.get(bordero);
+      const prazoMedioEncargos = b.totalDescontado > 0 ? b.weightedPrazo / b.totalDescontado : null;
+      const taxaEncargos = b.totalDescontado > 0 && prazoMedioEncargos > 0
+        ? (Math.pow(1 + b.totalDesagioEncargos / b.totalDescontado, 30 / prazoMedioEncargos) - 1) * 100
+        : null;
+
+      if (taxaEncargos !== null && Number.isFinite(taxaEncargos) && taxaBase?.totalValue > 0) {
+        sumTaxaEncargosWeighted += taxaEncargos * taxaBase.totalValue;
       }
     });
 
@@ -2033,8 +2300,16 @@ const kpiData = useMemo(() => {
     }
 
     const ultimasTaxas = Array.from(latestBorderoById.values())
-      .filter(item => item.emisDate)
-      .sort((a, b) => b.emisDate - a.emisDate)
+      .sort((a, b) => {
+        const borderoA = parseNumeroOrdenacao(a.bordero);
+        const borderoB = parseNumeroOrdenacao(b.bordero);
+        if (borderoA !== null && borderoB !== null && borderoA !== borderoB) {
+          return borderoB - borderoA;
+        }
+        if (borderoA !== null && borderoB === null) return -1;
+        if (borderoA === null && borderoB !== null) return 1;
+        return String(b.bordero).localeCompare(String(a.bordero), "pt-BR", { numeric: true });
+      })
       .slice(0, 5)
       .map(item => ({
         bordero: item.bordero,
@@ -2042,9 +2317,15 @@ const kpiData = useMemo(() => {
         emis: item.emisDate
       }));
 
+const taxaMedia = baseCalculoTaxa > 0 ? (sumTaxaWeighted / baseCalculoTaxa) : 0;
+const taxaMediaEncargos = isSmartDataSource && baseCalculoTaxa > 0
+  ? (sumTaxaEncargosWeighted / baseCalculoTaxa)
+  : taxaMedia;
+
 return {
   riscoAtual,
-  taxaMedia: baseCalculoTaxa > 0 ? (sumTaxaWeighted / baseCalculoTaxa) : 0,
+  taxaMedia,
+  taxaMediaEncargos,
   baseCalculo: baseCalculoTaxa,
   qtdBorderos: borderoMap.size,
   qtdTitulos: countTitulos,
@@ -2061,8 +2342,8 @@ return {
   useEffect(() => {
     if (session) {
       async function buscarRelacionamentos() {
-        const { data } = await supabase.from(dataSourceTable).select("Cliente, Sacado");
-        if (data) setRelacionamentos(data.filter(r => sacadoValido(r.Sacado) && cedenteValido(r.Cliente)));
+        const { data } = await supabase.from(dataSourceTable).select("Cliente, Sacado, inadimplencia");
+        if (data) setRelacionamentos(data.filter(registroValidoParaAnalise));
       }
       buscarRelacionamentos();
     }
@@ -2080,7 +2361,7 @@ return {
     const cedentesRelacionados = Array.from(
       new Set(
         relacionamentos
-          .filter((r) => r.Sacado === sacadoSelecionado && cedenteValido(r.Cliente))
+          .filter((r) => r.Sacado === sacadoSelecionado && registroValidoParaAnalise(r))
           .map((r) => String(r.Cliente || "").trim())
           .filter(Boolean)
       )
@@ -2100,7 +2381,7 @@ return {
 
     if (data) {
       const filtrados = data.filter(
-        (r) => sacadoValido(r.Sacado) && cedenteValido(r.Cliente)
+        registroValidoParaAnalise
       );
       setRowsConcentracaoSacado(filtrados);
     } else {
@@ -2139,10 +2420,18 @@ return {
         }
       }
       if (sacadoSelecionado) query = query.eq("Sacado", sacadoSelecionado);
+      if (!clienteSelecionado && !grupoSelecionado && !sacadoSelecionado) {
+        if (borderoFilter?.key) {
+          query = query.eq(borderoFilter.key, borderoFilter.value);
+        } else if (dctoFilter?.key) {
+          const baseTarget = String(dctoFilter.value).split(/[-/]/)[0].trim();
+          query = query.ilike(dctoFilter.key, `${baseTarget}%`);
+        }
+      }
       query = query.order("id", { ascending: false }).limit(10000);
       const { data } = await query;
       if (data) {
-        let filtered = data.filter(r => sacadoValido(r.Sacado) && cedenteValido(r.Cliente));
+        let filtered = data.filter(registroValidoParaAnalise);
         if (grupoSelecionado && !clienteSelecionado) {
           const grupo = GRUPOS_ECONOMICOS.find(g => g.label === grupoSelecionado);
           if (grupo) {
@@ -2154,7 +2443,7 @@ return {
       setLoading(false);
     }, 300);
     return () => clearTimeout(delayDebounceFn);
-  }, [clienteSelecionado, sacadoSelecionado, grupoSelecionado, session?.user?.id, dataSourceTable]);
+  }, [clienteSelecionado, sacadoSelecionado, grupoSelecionado, session?.user?.id, dataSourceTable, borderoFilter, dctoFilter]);
 
   const limparFiltroEntidades = () => {
     setClienteSelecionado(""); 
@@ -2505,6 +2794,13 @@ return (
                   <div style={{ display: "flex", alignItems: "baseline", gap: "4px" }}>
                     <span style={{ fontSize: "28px", fontWeight: "700", color: "#111827", lineHeight: "1", letterSpacing: "-0.02em", wordBreak: "break-word" }}>{kpiData.taxaMedia.toFixed(2).replace('.', ',')}% a.m.</span>
                   </div>
+                  <div style={{ height: "1px", background: "#e5e7eb", margin: "22px 0 20px" }} />
+                  <div style={{ margin: 0, fontSize: "11px", fontWeight: "700", color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "normal" }}>
+                    Taxa Média Ponderada com Encargos
+                  </div>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: "4px", marginTop: "12px" }}>
+                    <span style={{ fontSize: "28px", fontWeight: "700", color: "#111827", lineHeight: "1", letterSpacing: "-0.02em", wordBreak: "break-word" }}>{kpiData.taxaMediaEncargos.toFixed(2).replace('.', ',')}% a.m.</span>
+                  </div>
                   <div style={{ fontSize: "12px", color: "#6b7280", marginTop: "12px", fontWeight: "500", whiteSpace: "normal" }}>
                     Base: <span style={{color: "#374151", fontWeight: "600"}}>{fmtM(kpiData.baseCalculo)}</span>
                   </div>
@@ -2754,7 +3050,7 @@ return (
               </div>
             ) : (
               (!loading || rowsParaTabela.length > 0) && (
-                <SimpleTable rows={rowsParaTabela} clienteSelecionado={clienteSelecionado} sacadoSelecionado={sacadoSelecionado} dateFilter={dateFilter} borderoFilter={borderoFilter} setBorderoFilter={setBorderoFilter} dctoFilter={dctoFilter} setDctoFilter={setDctoFilter} setDateFilter={handleSetDateFilter} setInsightFilter={setInsightFilter} setClienteSelecionado={setClienteSelecionado} setSacadoSelecionado={setSacadoSelecionado} hideValues={hideValues} dataSourceTable={dataSourceTable} />
+                <SimpleTable rows={rowsParaTabela} clienteSelecionado={clienteSelecionado} sacadoSelecionado={sacadoSelecionado} dateFilter={dateFilter} borderoFilter={borderoFilter} setBorderoFilter={setBorderoFilter} dctoFilter={dctoFilter} setDctoFilter={setDctoFilter} setDateFilter={handleSetDateFilter} setInsightFilter={setInsightFilter} setClienteSelecionado={setClienteSelecionado} setSacadoSelecionado={setSacadoSelecionado} hideValues={hideValues} dataSourceTable={dataSourceTable} onBorderoDrill={handleBorderoDrill} onDctoDrill={handleDctoDrill} />
               )
             )}
           </div>

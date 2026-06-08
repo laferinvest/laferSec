@@ -18,12 +18,23 @@ const cleanNumber = (val) => {
   return isNaN(num) ? null : num;
 };
 
+const padDatePart = (value) => String(value || "").padStart(2, "0");
+
+const expandYear = (value) => {
+  const year = String(value || "").trim();
+  if (year.length === 2) return Number(year) >= 70 ? `19${year}` : `20${year}`;
+  return year;
+};
+
 const cleanDate = (val) => {
   if (!val) return null;
   if (val instanceof Date) return val.toISOString().split("T")[0];
   if (typeof val === "string" && val.includes("/")) {
-    const parts = val.split("/");
-    if (parts.length === 3) return `${parts[2]}-${parts[1]}-${parts[0]}`;
+    const parts = val.split("/").map((part) => part.trim());
+    if (parts.length === 3) {
+      const [day, month, year] = parts;
+      return `${expandYear(year)}-${padDatePart(month)}-${padDatePart(day)}`;
+    }
   }
   return val;
 };
@@ -59,7 +70,44 @@ const getTodayIso = () => {
   return `${yyyy}-${mm}-${dd}`;
 };
 
-const CEDENTES_IGNORADOS = ["12 -", "23 -", "2 -"];
+const normalizarTexto = (val) =>
+  String(val || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+
+const isInadimplente = (row) =>
+  normalizarTexto(row?.inadimplencia ?? row?.Inadimplencia ?? row?.["Inadimplência"]) === "sim";
+
+const normalizarChaveTexto = (val) =>
+  normalizarTexto(val).replace(/[^a-z0-9]/g, "");
+
+const isInadimplenciaColumn = (key) =>
+  normalizarChaveTexto(key).startsWith("inadimplencia");
+
+const isValorInadimplenciaPositivo = (value) => {
+  const normalized = normalizarTexto(value);
+  if (!normalized) return false;
+  if (["nao", "n", "false", "0", "00/00/0000", "0000-00-00"].includes(normalized)) return false;
+  return true;
+};
+
+const getInadimplenciaFromSource = (row) => {
+  const statusText = Object.entries(row || {})
+    .filter(([key]) => {
+      const normalizedKey = normalizarChaveTexto(key);
+      return normalizedKey === "situacao" || normalizedKey === "status";
+    })
+    .map(([, value]) => normalizarTexto(value))
+    .join(" ");
+
+  if (!statusText) return undefined;
+
+  if (statusText.includes("inadimplente")) return "sim";
+
+  return null;
+};
 
 function ultimoDiaUtilDoMes(ano, mes) {
   const d = new Date(ano, mes + 1, 0); // último dia do mês
@@ -102,9 +150,7 @@ function calcularCreditoEmAbertoCedentesExcluidosPorData(rows, dataCorte) {
   for (const r of rows) {
     const cliente = String(r.Cliente || "").trim();
 
-    const ehExcluido = CEDENTES_IGNORADOS.some((prefixo) =>
-      cliente.startsWith(prefixo)
-    );
+    const ehExcluido = isInadimplente(r);
     if (!ehExcluido) continue;
 
     const emisVal = r[emisKey];
@@ -243,10 +289,11 @@ function imprimirCreditoEmAbertoCedentesExcluidos(serie) {
 }
 
 function cedenteValido(cedente) {
-  if (!cedente) return false;
-  return !CEDENTES_IGNORADOS.some((ignorado) =>
-    String(cedente).trim().startsWith(ignorado)
-  );
+  return Boolean(cedente);
+}
+
+function registroValidoParaAnalise(row) {
+  return cedenteValido(row?.Cliente) && !isInadimplente(row);
 }
 
 function calcularRiscoAtualIgualMicro(rows) {
@@ -272,7 +319,7 @@ function calcularRiscoAtualIgualMicro(rows) {
   let riscoAtual = 0;
 
   for (const r of rows) {
-    if (!cedenteValido(r.Cliente)) continue;
+    if (!registroValidoParaAnalise(r)) continue;
 
     let status = "invalido";
     const vctoVal = vctoKey ? r[vctoKey] : null;
@@ -333,12 +380,13 @@ const SMART_HEADER_ALIASES = {
   "Vl Pgto": ["Liquidado", "LIQUIDADO(R$)", "Vl Pgto"],
   Dcto: ["Documento", "Dcto"],
   "Borderô": ["OP", "Bordero", "Borderô"],
-  Entrada: ["Total", "TOTAL(R$)", "Entrada"],
+  Entrada: ["Valor(R$)", "VALOR(R$)", "Valor", "Total", "TOTAL(R$)", "Entrada"],
   Juros: ["JUROS(R$)", "Juros(R$)", "Juros"],
   Multa: ["MULTA(R$)", "Multa(R$)", "Multa"],
   Sacado: ["Sacado"],
-  Status: ["Situação", "Status"],
-  Desagio: ["Desagio", "Deságio"],
+  Status: ["Situação", "SITUAÇÃO", "Status"],
+  Desagio: ["Desagio", "Deságio", "DESÁGIO"],
+  "Tx.Efet": ["Tx.Efet", "TX.EFET", "Tx Efet"],
 };
 
 const normalizeSmartHeader = (value) =>
@@ -399,7 +447,15 @@ const findSmartHeaderRow = (rows) =>
 const buildSmartSourceRow = (headers, row) =>
   headers.reduce((acc, header, index) => {
     const key = String(header || "").trim();
-    if (key) acc[key] = row[index];
+    if (key) {
+      let finalKey = key;
+      let suffix = 1;
+      while (Object.prototype.hasOwnProperty.call(acc, finalKey)) {
+        finalKey = `${key}_${suffix}`;
+        suffix += 1;
+      }
+      acc[finalKey] = row[index];
+    }
     return acc;
   }, {});
 
@@ -416,12 +472,69 @@ const getSmartValue = (row, aliases) => {
   return null;
 };
 
+const SECINFO_SOURCE_ALIASES = {
+  Cliente: ["CEDENTE", "Cedente", "Cliente"],
+  "Dt.Emis": ["DATA EMISSÃO", "Data emissao", "Data emissão", "Dt.Emis"],
+  Vcto: ["VENCIMENTO", "Vencimento", "Vcto"],
+  Pgto: ["DATA DE QUITAÇÃO", "Data de quitação", "Pgto"],
+  "Vl Pgto": ["LIQUIDADO(R$)", "Liquidado", "Vl Pgto"],
+  Dcto: ["DOCUMENTO", "Documento", "Dcto"],
+  "Cód.Red": ["Cód.Red", "Cod.Red", "CÓD.RED"],
+  "Borderô": ["OP", "Borderô", "Bordero"],
+  Entrada: ["TOTAL(R$)", "TOTAL", "Total", "Entrada"],
+  Sacado: ["SACADO", "Sacado"],
+  Status: ["SITUAÇÃO", "Situação", "Status"],
+  Desagio: ["DESÁGIO", "Deságio", "Desagio"],
+  "Tx.Efet": ["Tx.Efet", "TX.EFET", "Tx Efet"],
+};
+
+const shouldMapSecInfoSourceRow = (row) => {
+  const keys = Object.keys(row || {}).map(normalizeSmartHeader);
+  return keys.includes(normalizeSmartHeader("DOCUMENTO")) &&
+    keys.includes(normalizeSmartHeader("CEDENTE")) &&
+    keys.includes(normalizeSmartHeader("SACADO"));
+};
+
+const mapSecInfoSourceRow = (row) => {
+  const mapped = {
+    Cliente: getSmartValue(row, SECINFO_SOURCE_ALIASES.Cliente),
+    "Dt.Emis": cleanDate(getSmartValue(row, SECINFO_SOURCE_ALIASES["Dt.Emis"])),
+    Vcto: cleanDate(getSmartValue(row, SECINFO_SOURCE_ALIASES.Vcto)),
+    Pgto: cleanDate(getSmartValue(row, SECINFO_SOURCE_ALIASES.Pgto)),
+    "Vl Pgto": cleanNumber(getSmartValue(row, SECINFO_SOURCE_ALIASES["Vl Pgto"])),
+    Dcto: getSmartValue(row, SECINFO_SOURCE_ALIASES.Dcto),
+    "Cód.Red": cleanNumber(getSmartValue(row, SECINFO_SOURCE_ALIASES["Cód.Red"])),
+    "Borderô": cleanNumber(getSmartValue(row, SECINFO_SOURCE_ALIASES["Borderô"])),
+    Entrada: cleanNumber(getSmartValue(row, SECINFO_SOURCE_ALIASES.Entrada)),
+    Sacado: getSmartValue(row, SECINFO_SOURCE_ALIASES.Sacado),
+    Status: getSmartValue(row, SECINFO_SOURCE_ALIASES.Status),
+    Desagio: cleanNumber(getSmartValue(row, SECINFO_SOURCE_ALIASES.Desagio)),
+    "Tx.Efet": cleanNumber(getSmartValue(row, SECINFO_SOURCE_ALIASES["Tx.Efet"])),
+  };
+
+  const inadimplencia = getInadimplenciaFromSource(row);
+  if (inadimplencia !== undefined) mapped.inadimplencia = inadimplencia;
+  return mapped;
+};
+
+const sourceRowsFromRawArray = (rawArray) => {
+  const headerIndex = findSmartHeaderRow(rawArray);
+  if (headerIndex < 0) return null;
+
+  const headers = rawArray[headerIndex];
+  return rawArray
+    .slice(headerIndex + 1)
+    .map((row) => buildSmartSourceRow(headers, row))
+    .filter((row) => Object.values(row).some((value) => value !== null && value !== undefined && value !== ""));
+};
+
 const mapSmartRow = (row, index) => {
   const bordero = cleanNumber(getSmartValue(row, SMART_HEADER_ALIASES["Borderô"]));
   const juros = cleanNumber(getSmartValue(row, SMART_HEADER_ALIASES.Juros)) || 0;
   const multa = cleanNumber(getSmartValue(row, SMART_HEADER_ALIASES.Multa)) || 0;
+  const inadimplencia = getInadimplenciaFromSource(row);
 
-  return {
+  const mapped = {
     Cliente: getSmartValue(row, SMART_HEADER_ALIASES.Cliente),
     "Dt.Emis": cleanDate(getSmartValue(row, SMART_HEADER_ALIASES["Dt.Emis"])),
     Vcto: cleanDate(getSmartValue(row, SMART_HEADER_ALIASES.Vcto)),
@@ -436,8 +549,11 @@ const mapSmartRow = (row, index) => {
     Status: getSmartValue(row, SMART_HEADER_ALIASES.Status),
     Estado: "A confirmar",
     Desagio: cleanNumber(getSmartValue(row, SMART_HEADER_ALIASES.Desagio)),
-    "Tx.Efet": null,
+    "Tx.Efet": cleanNumber(getSmartValue(row, SMART_HEADER_ALIASES["Tx.Efet"])),
   };
+
+  if (inadimplencia !== undefined) mapped.inadimplencia = inadimplencia;
+  return mapped;
 };
 
 const isUsefulSmartRow = (row) =>
@@ -534,6 +650,8 @@ const applySmartEffectiveRates = (rows) => {
 const smartKey = (row) =>
   `${limpaChave(row.Dcto)}__${limpaChave(row["Borderô"])}__${limpaChave(row.Vcto)}`;
 
+const secInfoKey = smartKey;
+
 const withoutSmartCodRed = (row) => {
   const copy = { ...row };
   delete copy["Cód.Red"];
@@ -585,6 +703,382 @@ const logSmartUniqueViolation = (error, rows, action) => {
   return `Violação unique em ${info.constraint}: (${info.columns})=(${info.values})`;
 };
 
+const hasInadimplenciaValue = (row) =>
+  Object.prototype.hasOwnProperty.call(row || {}, "inadimplencia");
+
+const dctoBorderoKey = (row) =>
+  `${limpaChave(row?.Dcto)}__${limpaChave(row?.["Borderô"])}`;
+
+const dctoNormalizedBorderoKey = (row) =>
+  `${normalizeDctoKey(row?.Dcto)}__${limpaChave(row?.["Borderô"])}`;
+
+const dctoVctoKey = (row) =>
+  `${limpaChave(row?.Dcto)}__${limpaChave(row?.Vcto)}`;
+
+const normalizeDctoKey = (value) => {
+  const normalized = normalizarChaveTexto(value);
+  if (/^\d+$/.test(normalized)) return normalized.replace(/^0+/, "") || "0";
+  return normalized;
+};
+
+const dateKeyVariants = (value) => {
+  const variants = new Set();
+  if (!value) return variants;
+
+  const raw = String(value).trim().split("T")[0];
+  if (!raw) return variants;
+
+  variants.add(limpaChave(raw));
+
+  const isoMatch = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (isoMatch) {
+    const [, year, month, day] = isoMatch;
+    variants.add(`${year}-${padDatePart(month)}-${padDatePart(day)}`);
+  }
+
+  const shortIsoMatch = raw.match(/^(\d{2})-(\d{1,2})-(\d{1,2})$/);
+  if (shortIsoMatch) {
+    const [, yearPart, month, day] = shortIsoMatch;
+    variants.add(`${expandYear(yearPart)}-${padDatePart(month)}-${padDatePart(day)}`);
+  }
+
+  const slashMatch = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if (slashMatch) {
+    const [, first, second, yearPart] = slashMatch;
+    const year = expandYear(yearPart);
+    variants.add(`${year}-${padDatePart(second)}-${padDatePart(first)}`);
+    variants.add(`${year}-${padDatePart(first)}-${padDatePart(second)}`);
+  }
+
+  return variants;
+};
+
+const hasDateIntersection = (left, right) => {
+  for (const value of left) {
+    if (right.has(value)) return true;
+  }
+  return false;
+};
+
+const updateSecInfoInadimplenciaFromSmartRows = async (rows, setSmartProgress) => {
+  const isWbaRow = (row) => cleanNumber(row?.Desagio) === 0;
+
+  const sourceItems = rows
+    .filter((row) =>
+      isWbaRow(row) &&
+      limpaChave(row.Dcto) &&
+      limpaChave(row["Dt.Emis"]) &&
+      limpaChave(row.Vcto)
+    )
+    .map((row) => ({
+      row,
+      isWba: true,
+      dcto: limpaChave(row.Dcto),
+      dctoNormalized: normalizeDctoKey(row.Dcto),
+      emisVariants: dateKeyVariants(row["Dt.Emis"]),
+      vctoVariants: dateKeyVariants(row.Vcto),
+      nextValue: row.inadimplencia ?? null,
+    }));
+
+  if (sourceItems.length === 0) {
+    return {
+      updatedCount: 0,
+      classifiedCount: 0,
+      fetchedCount: 0,
+      matchedCount: 0,
+      fallbackMatchedCount: 0,
+      changedCount: 0,
+    };
+  }
+
+  const borderos = Array.from(
+    new Set(
+      sourceItems
+        .map((item) => item.row["Borderô"])
+        .filter((value) => value !== null && value !== undefined && value !== "")
+    )
+  );
+
+  const vctos = Array.from(
+    new Set(
+      sourceItems
+        .flatMap((item) => Array.from(item.vctoVariants))
+        .filter((value) => /^\d{4}-\d{2}-\d{2}$/.test(value))
+    )
+  );
+
+  setSmartProgress(`Atualizando dados WBA na secInfo para ${sourceItems.length} título(s)...`);
+
+  const secInfoRowsById = new Map();
+
+  const chunkArray = (arr, size = 250) => {
+    const chunks = [];
+
+    for (let i = 0; i < arr.length; i += size) {
+      chunks.push(arr.slice(i, i + size));
+    }
+
+    return chunks;
+  };
+
+  const fetchSecInfoCandidates = async (field, values, label) => {
+    const cleanValues = Array.from(
+      new Set(
+        values
+          .map((v) => (typeof v === "string" ? v.trim() : v))
+          .filter((v) => v !== null && v !== undefined && v !== "")
+      )
+    );
+
+    if (!cleanValues.length) return;
+
+    for (const chunk of chunkArray(cleanValues, 250)) {
+      const { data, error } = await supabase
+        .from("secInfo")
+        .select("*")
+        .in(field, chunk);
+
+      if (error) {
+        console.error(`Erro Supabase ao buscar secInfo por ${label}`, {
+          field,
+          label,
+          qtdValores: chunk.length,
+          exemplos: chunk.slice(0, 20),
+          error,
+        });
+
+        throw new Error(
+          `Erro ao buscar títulos antigos na secInfo por ${label}: ${error.message}`
+        );
+      }
+
+      (data || []).forEach((row) => {
+        secInfoRowsById.set(row.id, row);
+      });
+    }
+  };
+
+  await fetchSecInfoCandidates('"Borderô"', borderos, "Borderô");
+  await fetchSecInfoCandidates("Vcto", vctos, "Vcto");
+
+  const secInfoRows = Array.from(secInfoRowsById.values());
+
+  const getIsoDateVariants = (value) =>
+    Array.from(dateKeyVariants(value)).filter((variant) => /^\d{4}-\d{2}-\d{2}$/.test(variant));
+
+  const makeMatchKeys = (rowOrItem, useNormalizedDcto = true, includeBordero = false) => {
+    const row = rowOrItem?.row || rowOrItem;
+    const dctoValue = useNormalizedDcto ? normalizeDctoKey(row?.Dcto) : limpaChave(row?.Dcto);
+    const emisValues = getIsoDateVariants(row?.["Dt.Emis"]);
+    const vctoValues = getIsoDateVariants(row?.Vcto);
+    const borderoValue = limpaChave(row?.["Borderô"]);
+
+    if (!dctoValue || emisValues.length === 0 || vctoValues.length === 0) return [];
+    if (includeBordero && !borderoValue) return [];
+
+    const keys = [];
+    emisValues.forEach((emis) => {
+      vctoValues.forEach((vcto) => {
+        keys.push(
+          includeBordero
+            ? `${dctoValue}__${emis}__${vcto}__${borderoValue}`
+            : `${dctoValue}__${emis}__${vcto}`
+        );
+      });
+    });
+
+    return keys;
+  };
+
+  const addToIndex = (index, key, item) => {
+    if (!index.has(key)) index.set(key, []);
+    index.get(key).push(item);
+  };
+
+  const sourceIndex = {
+    raw: new Map(),
+    normalized: new Map(),
+    rawBordero: new Map(),
+    normalizedBordero: new Map(),
+  };
+
+  sourceItems.forEach((item) => {
+    makeMatchKeys(item, false, false).forEach((key) => addToIndex(sourceIndex.raw, key, item));
+    makeMatchKeys(item, true, false).forEach((key) => addToIndex(sourceIndex.normalized, key, item));
+    makeMatchKeys(item, false, true).forEach((key) => addToIndex(sourceIndex.rawBordero, key, item));
+    makeMatchKeys(item, true, true).forEach((key) => addToIndex(sourceIndex.normalizedBordero, key, item));
+  });
+
+  const getSourceEncargos = (sourceRow) => {
+    const vlPgto = cleanNumber(sourceRow?.["Vl Pgto"]);
+    const valorFace = cleanNumber(sourceRow?.Entrada);
+
+    if (vlPgto === null || valorFace === null) return null;
+
+    return Number((vlPgto - valorFace).toFixed(2));
+  };
+
+  const getSourceSignature = (item) => {
+    const row = item.row;
+
+    return JSON.stringify({
+      inadimplencia: normalizarTexto(item.nextValue),
+      status: normalizarTexto(row.Status),
+      pgto: limpaChave(cleanDate(row.Pgto)),
+      vlPgto: cleanNumber(row["Vl Pgto"]),
+      encargos: getSourceEncargos(row),
+      txEncargos: cleanNumber(row["Tx.Efet"]),
+    });
+  };
+
+  const getSafeMatch = (candidates) => {
+    if (!candidates || candidates.length === 0) return null;
+    if (candidates.length === 1) return candidates[0];
+
+    const distinctSignatures = new Set(candidates.map(getSourceSignature));
+    if (distinctSignatures.size === 1) return candidates[0];
+
+    return null;
+  };
+
+  const findMatchedSource = (targetRow) => {
+    const searchSteps = [
+      { index: sourceIndex.rawBordero, normalized: false, bordero: true, matchType: "Dcto + Dt.Emis + Vcto + Borderô" },
+      { index: sourceIndex.normalizedBordero, normalized: true, bordero: true, matchType: "Dcto normalizado + Dt.Emis + Vcto + Borderô" },
+      { index: sourceIndex.raw, normalized: false, bordero: false, matchType: "Dcto + Dt.Emis + Vcto" },
+      { index: sourceIndex.normalized, normalized: true, bordero: false, matchType: "Dcto normalizado + Dt.Emis + Vcto" },
+    ];
+
+    for (const step of searchSteps) {
+      const candidates = [];
+      makeMatchKeys(targetRow, step.normalized, step.bordero).forEach((key) => {
+        candidates.push(...(step.index.get(key) || []));
+      });
+
+      const matchedSource = getSafeMatch(candidates);
+      if (matchedSource) return { matchedSource, matchType: step.matchType };
+    }
+
+    return null;
+  };
+
+  const hasColumn = (targetRow, columnName) =>
+    Object.prototype.hasOwnProperty.call(targetRow || {}, columnName);
+
+  const setExistingColumns = (payload, targetRow, columnNames, value) => {
+    columnNames.forEach((columnName) => {
+      if (hasColumn(targetRow, columnName)) payload[columnName] = value;
+    });
+  };
+
+  const buildWbaUpdatePayload = (sourceRow, targetRow, nextInadimplencia) => {
+    const payload = { id: targetRow.id };
+
+    const pgto = cleanDate(sourceRow.Pgto) || null;
+    const vlPgto = cleanNumber(sourceRow["Vl Pgto"]);
+    const encargos = getSourceEncargos(sourceRow);
+    const txEncargos = cleanNumber(sourceRow["Tx.Efet"]) ?? 0;
+
+    setExistingColumns(payload, targetRow, ["inadimplencia"], nextInadimplencia ?? null);
+    setExistingColumns(payload, targetRow, ["Status"], sourceRow.Status ?? null);
+    setExistingColumns(payload, targetRow, ["Dt.Pgto", "Dt Pgto", "Data Pgto", "Data de Pgto", "Data de Pagamento", "Pgto"], pgto);
+    setExistingColumns(payload, targetRow, ["Vl.Pgto", "Vl Pgto", "Vl Pgto.", "Valor Pgto", "Valor Pago"], vlPgto);
+    setExistingColumns(payload, targetRow, ["Encargos", "Encargo", "Juros e Multa", "Rec."], encargos);
+    setExistingColumns(
+      payload,
+      targetRow,
+      ["Tx.Encargos", "Tx Encargos", "Tx.Encargo", "Tx Encargo"],
+      txEncargos
+    );
+
+    return payload;
+  };
+
+  const payloadSignature = (payload) =>
+    JSON.stringify(
+      Object.keys(payload)
+        .filter((key) => key !== "id")
+        .sort()
+        .reduce((acc, key) => {
+          acc[key] = payload[key];
+          return acc;
+        }, {})
+    );
+
+  const matchedRows = [];
+  const rowsToUpdate = [];
+
+  secInfoRows.forEach((targetRow) => {
+    const match = findMatchedSource(targetRow);
+    if (!match) return;
+
+    const { matchedSource, matchType } = match;
+    const payload = buildWbaUpdatePayload(matchedSource.row, targetRow, matchedSource.nextValue);
+
+    if (Object.keys(payload).length <= 1) return;
+
+    matchedRows.push({
+      id: targetRow.id,
+      matchType,
+      source: matchedSource.row,
+      target: targetRow,
+      payload,
+    });
+
+    rowsToUpdate.push(payload);
+  });
+
+  const fallbackMatchedCount = matchedRows.filter((row) =>
+    row.matchType.includes("normalizado") || row.matchType === "Dcto + Dt.Emis + Vcto"
+  ).length;
+
+  const uniquePayloadsById = new Map();
+  rowsToUpdate.forEach((payload) => {
+    uniquePayloadsById.set(payload.id, payload);
+  });
+
+  const uniqueRowsToUpdate = Array.from(uniquePayloadsById.values());
+
+  console.group("Atualização WBA secInfo");
+  console.log("Linhas WBA classificadas no upload:", sourceItems.length);
+  console.log("Borderôs consultados:", borderos);
+  console.log("Vctos consultados:", vctos);
+  console.log("Linhas candidatas encontradas na secInfo:", secInfoRows?.length || 0);
+  console.log("Matches totais:", matchedRows.length);
+  console.log("Linhas enviadas para update:", uniqueRowsToUpdate.length);
+  if (matchedRows.length === 0) {
+    console.table(sourceItems.slice(0, 10).map((item) => item.row));
+    console.table((secInfoRows || []).slice(0, 10));
+  }
+  console.groupEnd();
+
+  let updatedCount = 0;
+  const UPDATE_BATCH_SIZE = 500;
+
+  for (let i = 0; i < uniqueRowsToUpdate.length; i += UPDATE_BATCH_SIZE) {
+    const batch = uniqueRowsToUpdate.slice(i, i + UPDATE_BATCH_SIZE);
+    const { error } = await supabase
+      .from("secInfo")
+      .upsert(batch, { onConflict: "id" });
+
+    if (error) {
+      throw new Error(`Erro ao atualizar dados WBA na secInfo: ${error.message}`);
+    }
+
+    updatedCount += batch.length;
+    setSmartProgress(`Atualizando dados WBA na secInfo... ${updatedCount} / ${uniqueRowsToUpdate.length}`);
+  }
+
+  return {
+    updatedCount,
+    classifiedCount: sourceItems.length,
+    fetchedCount: secInfoRows?.length || 0,
+    matchedCount: matchedRows.length,
+    fallbackMatchedCount,
+    changedCount: uniqueRowsToUpdate.length,
+  };
+};
+
 export default function UploadData() {
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -628,11 +1122,19 @@ export default function UploadData() {
     }
 
     const headers = rows[headerIndex];
-    return rows
+    const mappedRows = rows
       .slice(headerIndex + 1)
       .map((row) => buildSmartSourceRow(headers, row))
-      .map(mapSmartRow)
-      .filter(isUsefulSmartRow);
+      .map(mapSmartRow);
+
+    return {
+      smartRows: mappedRows.filter(isUsefulSmartRow),
+      secInfoInadimplenciaRows: mappedRows.filter((row) =>
+        hasInadimplenciaValue(row) &&
+        limpaChave(row.Dcto) &&
+        limpaChave(row.Vcto)
+      ),
+    };
   };
 
   const processSmartFiles = async () => {
@@ -647,10 +1149,23 @@ export default function UploadData() {
 
     try {
       const rowsByFile = await Promise.all(smartFiles.map(readSmartRows));
+      const secInfoInadimplenciaRows = rowsByFile.flatMap((fileRows) => fileRows.secInfoInadimplenciaRows);
       const rowsByKey = new Map();
 
-      rowsByFile.flat().forEach((row) => {
-        rowsByKey.set(smartKey(row), row);
+      rowsByFile.flatMap((fileRows) => fileRows.smartRows).forEach((row) => {
+        const key = smartKey(row);
+        const existingRow = rowsByKey.get(key);
+        const mergedRow = { ...existingRow, ...row };
+
+        if (hasInadimplenciaValue(row)) {
+          mergedRow.inadimplencia = row.inadimplencia;
+        } else if (hasInadimplenciaValue(existingRow)) {
+          mergedRow.inadimplencia = existingRow.inadimplencia;
+        } else {
+          delete mergedRow.inadimplencia;
+        }
+
+        rowsByKey.set(key, mergedRow);
       });
 
       const smartRows = applySmartEffectiveRates(
@@ -660,24 +1175,47 @@ export default function UploadData() {
         }))
       );
 
-      if (smartRows.length === 0) {
+      if (smartRows.length === 0 && secInfoInadimplenciaRows.length === 0) {
         throw new Error("Nenhuma linha válida encontrada nos arquivos Smart.");
       }
 
-      const borderos = Array.from(new Set(smartRows.map((row) => row["Borderô"])));
+      let insertedCount = 0;
+      let updatedCount = 0;
+
+      if (smartRows.length > 0) {
+      const borderos = Array.from(
+        new Set(
+          smartRows
+            .map((row) => row["Borderô"])
+            .filter((value) => value !== null && value !== undefined && value !== "")
+        )
+      );
       setSmartProgress(`Checando ${smartRows.length} registros em ${SMART_TABLE}...`);
 
-      const { data: existingRows, error: existingError } = await supabase
-        .from(SMART_TABLE)
-        .select('id,Dcto,"Borderô",Vcto')
-        .in('"Borderô"', borderos);
+      const chunkArray = (arr, size = SMART_BATCH_SIZE) => {
+        const chunks = [];
+        for (let i = 0; i < arr.length; i += size) {
+          chunks.push(arr.slice(i, i + size));
+        }
+        return chunks;
+      };
 
-      if (existingError) {
-        throw new Error(`Erro ao checar registros Smart: ${existingError.message}`);
+      const existingRows = [];
+      for (const borderoChunk of chunkArray(borderos, SMART_BATCH_SIZE)) {
+        const { data, error: existingError } = await supabase
+          .from(SMART_TABLE)
+          .select('id,Dcto,"Borderô",Vcto')
+          .in('"Borderô"', borderoChunk);
+
+        if (existingError) {
+          throw new Error(`Erro ao checar registros Smart: ${existingError.message}`);
+        }
+
+        existingRows.push(...(data || []));
       }
 
       const existingMap = {};
-      (existingRows || []).forEach((row) => {
+      existingRows.forEach((row) => {
         existingMap[smartKey(row)] = row;
       });
 
@@ -693,8 +1231,6 @@ export default function UploadData() {
         }
       });
 
-      let insertedCount = 0;
-      let updatedCount = 0;
       let rowsToInsertWithCodRed = [];
 
       if (rowsToInsert.length > 0) {
@@ -727,25 +1263,31 @@ export default function UploadData() {
         setSmartProgress(`Inserindo novos... ${insertedCount} / ${rowsToInsertWithCodRed.length}`);
       }
 
-      for (let i = 0; i < rowsToUpdate.length; i += 1) {
-        const item = rowsToUpdate[i];
+      for (let i = 0; i < rowsToUpdate.length; i += SMART_BATCH_SIZE) {
+        const batch = rowsToUpdate
+          .slice(i, i + SMART_BATCH_SIZE)
+          .map(({ id, row }) => ({
+            id,
+            ...withoutSmartCodRed(row),
+          }));
+
         const { error } = await supabase
           .from(SMART_TABLE)
-          .update(withoutSmartCodRed(item.row))
-          .eq("id", item.id);
+          .upsert(batch, { onConflict: "id" });
 
         if (error) {
-          const uniqueMessage = logSmartUniqueViolation(error, [item.row], "update");
-          throw new Error(uniqueMessage || `Erro ao atualizar Smart: ${error.message}`);
+          const uniqueMessage = logSmartUniqueViolation(error, batch, "update em lote");
+          throw new Error(uniqueMessage || `Erro ao atualizar Smart em lote: ${error.message}`);
         }
 
-        updatedCount += 1;
-        if (updatedCount % 25 === 0 || updatedCount === rowsToUpdate.length) {
-          setSmartProgress(`Atualizando existentes... ${updatedCount} / ${rowsToUpdate.length}`);
-        }
+        updatedCount += batch.length;
+        setSmartProgress(`Atualizando existentes em lote... ${updatedCount} / ${rowsToUpdate.length}`);
+      }
       }
 
-      setSmartStatus(`✅ secInfoSmart atualizada: ${insertedCount} novo(s), ${updatedCount} atualizado(s).`);
+      const secInfoInadimplencia = await updateSecInfoInadimplenciaFromSmartRows(secInfoInadimplenciaRows, setSmartProgress);
+
+      setSmartStatus("✅ Dados Atualizados com Sucesso");
       setSmartProgress("");
       setSmartFiles([]);
       document.getElementById("smart-upload-input").value = "";
@@ -915,7 +1457,7 @@ const exportarCreditoEmAberto = async () => {
         const situacao = effectiveVcto < today ? "Vencido" : "A vencer";
         const valorFace = Number(r[entradaKey] || 0);
         const cedente = String(r["Cliente"] || "").trim();
-        const excluido = !cedenteValido(cedente);
+        const excluido = isInadimplente(r);
 
         return {
           Cedente: cedente,
@@ -1186,9 +1728,15 @@ const exportarCreditoEmAberto = async () => {
 
       for (let file of files) {
         const data = await readFileAsArrayBuffer(file);
-        const workbook = XLSX.read(data, { type: "array", cellDates: true });
-        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-        const rawArray = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: null });
+        const htmlRows = parseSmartHtmlWorkbook(data);
+        let worksheet = null;
+        let rawArray = htmlRows;
+
+        if (!rawArray) {
+          const workbook = XLSX.read(data, { type: "array", cellDates: true });
+          worksheet = workbook.Sheets[workbook.SheetNames[0]];
+          rawArray = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: null });
+        }
 
         let isRates = false;
         for (let r = 0; r < Math.min(rawArray.length, 50); r++) {
@@ -1200,7 +1748,7 @@ const exportarCreditoEmAberto = async () => {
         }
 
         if (isRates) ratesFiles.push({ name: file.name, rawArray });
-        else mainFiles.push({ name: file.name, worksheet });
+        else mainFiles.push({ name: file.name, worksheet, rawArray });
       }
 
       console.log(`Arquivos de Taxas: ${ratesFiles.length} | Principais: ${mainFiles.length}`);
@@ -1318,12 +1866,18 @@ const auditoria = {
 };
 
       for (let mf of mainFiles) {
-        const rawData = XLSX.utils.sheet_to_json(mf.worksheet, { defval: null });
-        rawData.forEach((row) => {
+        const rawData = sourceRowsFromRawArray(mf.rawArray) ||
+          (mf.worksheet ? XLSX.utils.sheet_to_json(mf.worksheet, { defval: null }) : []);
+
+        rawData.forEach((sourceRow) => {
+          const row = shouldMapSecInfoSourceRow(sourceRow)
+            ? mapSecInfoSourceRow(sourceRow)
+            : sourceRow;
           const newRow = {};
           for (let key in row) {
             const cleanKey = String(key).trim();
             if (cleanKey.startsWith("__EMPTY") || cleanKey === "id" || cleanKey === "created_at") continue;
+            if (isInadimplenciaColumn(cleanKey)) continue;
             let val = row[key];
             if (["Dt.Emis", "Vcto", "Pgto"].includes(cleanKey)) val = cleanDate(val);
             else if (["Vl Pgto", "Entrada", "Rec."].includes(cleanKey)) val = cleanNumber(val);
@@ -1336,6 +1890,9 @@ const auditoria = {
             newRow[cleanKey] = val;
           }
 
+          const inadimplencia = getInadimplenciaFromSource(sourceRow);
+          if (inadimplencia !== undefined) newRow.inadimplencia = inadimplencia;
+
           if (newRow["Borderô"]) {
             const bNum = parseInt(newRow["Borderô"], 10);
             if (globalRatesMap[bNum]) {
@@ -1344,13 +1901,12 @@ const auditoria = {
             }
           }
 
-const codRedLimpo = limpaChave(newRow["Cód.Red"]);
 const clienteLimpo = String(newRow["Cliente"] || "").trim();
 
 auditoria.extraidasBrutas.push({ ...newRow });
 
-if (codRedLimpo === "") {
-  auditoria.semCodRed.push({ ...newRow, motivoExclusao: "Sem Cód.Red" });
+if (!limpaChave(newRow["Dcto"]) || !limpaChave(newRow["Borderô"]) || !limpaChave(newRow["Vcto"])) {
+  auditoria.semCodRed.push({ ...newRow, motivoExclusao: "Sem chave Dcto + Borderô + Vcto" });
   return;
 }
 
@@ -1441,11 +1997,11 @@ for (let key in groupedByDcto) {
 }
 
 const finalRows = [];
-const seenCodRed = new Set();
+const seenSecInfoKeys = new Set();
 
 rowsAfterSum.forEach((r) => {
-  const codRedVal = limpaChave(r["Cód.Red"]);
-  if (!codRedVal) return;
+  const rowKey = secInfoKey(r);
+  if (!limpaChave(r["Dcto"]) || !limpaChave(r["Borderô"]) || !limpaChave(r["Vcto"])) return;
 
   const sacadoStr = String(r["Sacado"] || "").trim().replace(/\s/g, "");
   const sacadoPlaceholder =
@@ -1459,15 +2015,15 @@ rowsAfterSum.forEach((r) => {
     return;
   }
 
-  if (seenCodRed.has(codRedVal)) {
+  if (seenSecInfoKeys.has(rowKey)) {
     auditoria.excluidasCodRedDuplicado.push({
       ...r,
-      motivoExclusao: "Cód.Red duplicado no filtro final",
+      motivoExclusao: "Chave Dcto + Borderô + Vcto duplicada no filtro final",
     });
     return;
   }
 
-  seenCodRed.add(codRedVal);
+  seenSecInfoKeys.add(rowKey);
   finalRows.push(r);
 });
 
@@ -1477,50 +2033,82 @@ auditoria.finalRows = finalRows.map((item) => ({ ...item }));
       setProgress(`5/5: Enviando ${finalRows.length} registros para o Supabase (Preservando taxas)...`);
 
       const BATCH_SIZE = 500;
-      let upsertedCount = 0;
+      const borderos = Array.from(new Set(finalRows.map((row) => row["Borderô"]).filter((value) => value !== null && value !== undefined && value !== "")));
+      const { data: existingData, error: fetchErr } = await supabase
+        .from("secInfo")
+        .select('id,Dcto,"Borderô",Vcto,"Cód.Red",Desagio,"Tx.Efet"')
+        .in('"Borderô"', borderos);
 
-      for (let i = 0; i < finalRows.length; i += BATCH_SIZE) {
-        const batch = finalRows.slice(i, i + BATCH_SIZE);
-        const codReds = batch.map((r) => r["Cód.Red"]);
+      if (fetchErr) throw new Error(`Erro ao checar banco: ${fetchErr.message}`);
 
-        const { data: existingData, error: fetchErr } = await supabase
-          .from("secInfo")
-          .select("*")
-          .in('"Cód.Red"', codReds);
+      const existingMap = {};
+      (existingData || []).forEach((r) => {
+        existingMap[secInfoKey(r)] = r;
+      });
 
-        if (fetchErr) throw new Error(`Erro ao checar banco: ${fetchErr.message}`);
+      const rowsToInsert = [];
+      const rowsToUpdate = [];
 
-        const existingMap = {};
-        if (existingData) {
-          existingData.forEach((r) => {
-            existingMap[r["Cód.Red"]] = r;
-          });
-        }
-
-        const finalBatch = batch.map((row) => {
-          const existingRow = existingMap[row["Cód.Red"]];
-          if (existingRow) {
-            if (row["Desagio"] === null || row["Desagio"] === undefined) {
-              row["Desagio"] = existingRow.Desagio;
-            }
-            if (row["Tx.Efet"] === null || row["Tx.Efet"] === undefined) {
-              row["Tx.Efet"] = existingRow["Tx.Efet"];
-            }
+      finalRows.forEach((row) => {
+        const existingRow = existingMap[secInfoKey(row)];
+        if (existingRow?.id) {
+          const updateRow = { ...row };
+          updateRow["Cód.Red"] = existingRow["Cód.Red"];
+          if (updateRow.Desagio === null || updateRow.Desagio === undefined) {
+            updateRow.Desagio = existingRow.Desagio;
           }
-          return row;
-        });
+          if (updateRow["Tx.Efet"] === null || updateRow["Tx.Efet"] === undefined) {
+            updateRow["Tx.Efet"] = existingRow["Tx.Efet"];
+          }
+          rowsToUpdate.push({ id: existingRow.id, row: updateRow });
+        } else {
+          rowsToInsert.push(row);
+        }
+      });
 
-        const { error } = await supabase
+      let nextCodRed = 0;
+      if (rowsToInsert.some((row) => !limpaChave(row["Cód.Red"]))) {
+        const { data: lastCodRedRows, error: lastCodRedError } = await supabase
           .from("secInfo")
-          .upsert(finalBatch, { onConflict: '"Cód.Red"' });
+          .select('"Cód.Red"')
+          .order('"Cód.Red"', { ascending: false })
+          .limit(1);
 
-        if (error) throw new Error(`Erro no envio: ${error.message}`);
-
-        upsertedCount += batch.length;
-        setProgress(`Enviando... ${upsertedCount} / ${finalRows.length}`);
+        if (lastCodRedError) throw new Error(`Erro ao buscar próximo Cód.Red: ${lastCodRedError.message}`);
+        nextCodRed = cleanNumber(lastCodRedRows?.[0]?.["Cód.Red"]) || 0;
       }
 
-      setStatus("✅ Banco de dados atualizado com sucesso!");
+      const rowsToInsertWithCodRed = rowsToInsert.map((row) => {
+        if (limpaChave(row["Cód.Red"])) return row;
+        nextCodRed += 1;
+        return { ...row, "Cód.Red": nextCodRed };
+      });
+
+      let insertedCount = 0;
+      for (let i = 0; i < rowsToInsertWithCodRed.length; i += BATCH_SIZE) {
+        const batch = rowsToInsertWithCodRed.slice(i, i + BATCH_SIZE);
+        const { error } = await supabase.from("secInfo").insert(batch);
+        if (error) throw new Error(`Erro ao inserir: ${error.message}`);
+        insertedCount += batch.length;
+        setProgress(`Inserindo novos... ${insertedCount} / ${rowsToInsertWithCodRed.length}`);
+      }
+
+      let updatedCount = 0;
+      for (let i = 0; i < rowsToUpdate.length; i += 1) {
+        const item = rowsToUpdate[i];
+        const { error } = await supabase
+          .from("secInfo")
+          .update(item.row)
+          .eq("id", item.id);
+
+        if (error) throw new Error(`Erro ao atualizar: ${error.message}`);
+        updatedCount += 1;
+        if (updatedCount % 25 === 0 || updatedCount === rowsToUpdate.length) {
+          setProgress(`Atualizando existentes... ${updatedCount} / ${rowsToUpdate.length}`);
+        }
+      }
+
+      setStatus(`✅ Banco de dados atualizado: ${rowsToInsertWithCodRed.length} novo(s), ${rowsToUpdate.length} atualizado(s).`);
       setProgress("");
       setFiles([]);
       document.getElementById("upload-input").value = "";
@@ -1536,6 +2124,7 @@ auditoria.finalRows = finalRows.map((item) => ({ ...item }));
 
   return (
     <div style={{ display: "grid", gap: "24px", maxWidth: "820px", margin: "0 auto" }}>
+      {false && (
       <div style={cardStyle}>
         <h2 style={{ marginTop: 0, color: "#111827", fontSize: "20px" }}>Atualização de Dados</h2>
         <p style={{ color: "#6b7280", fontSize: "14px", marginBottom: "20px" }}>
@@ -1619,17 +2208,14 @@ auditoria.finalRows = finalRows.map((item) => ({ ...item }));
           </div>
         )}
       </div>
+      )}
 
       <div style={cardStyle}>
-        <h2 style={{ marginTop: 0, color: "#111827", fontSize: "20px" }}>Atualização Smart</h2>
+        <h2 style={{ marginTop: 0, color: "#111827", fontSize: "20px" }}>Atualização de Dados</h2>
         <p style={{ color: "#6b7280", fontSize: "14px", marginBottom: "20px" }}>
-          Selecione um ou mais Excels de títulos para processar o novo layout e enviar para a tabela secInfoSmart.
+          Selecione um ou mais Excels de títulos para atualizar o banco de dados.
         </p>
 
-        <div style={{ background: "#f0fdfa", padding: "16px", borderRadius: "8px", border: "1px solid #99f6e4", marginBottom: "24px", fontSize: "13px", color: "#134e4a", lineHeight: "1.5" }}>
-          O arquivo será convertido para as colunas Cliente, Dt.Emis, Vcto, Pgto, Vl Pgto, Dcto,
-          Cód.Red, Borderô, Entrada, Juros e Multa, Sacado, Status, Estado, Desagio e Tx.Efet.
-        </div>
 
         <div style={{ marginBottom: "20px" }}>
           <input
@@ -1652,7 +2238,7 @@ auditoria.finalRows = finalRows.map((item) => ({ ...item }));
           <div style={{ fontSize: "13px", color: "#0f766e", marginTop: "8px", fontWeight: "600" }}>
             {smartFiles.length > 0
               ? `${smartFiles.length} arquivo(s) selecionado(s): ${smartFiles.map((file) => file.name).join(", ")}`
-              : "Nenhum arquivo Smart selecionado."}
+              : "Nenhum arquivo selecionado."}
           </div>
         </div>
 
@@ -1673,7 +2259,7 @@ auditoria.finalRows = finalRows.map((item) => ({ ...item }));
             transition: "background 0.2s",
           }}
         >
-          {smartLoading ? "Processando Smart..." : "Processar e Enviar Smart"}
+          {smartLoading ? "Processando..." : "Processar e Enviar"}
         </button>
 
         {smartProgress && (

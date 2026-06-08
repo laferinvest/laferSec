@@ -23,24 +23,120 @@ function escapeText(v) {
 }
 
 function formatarNomeEntidade(nome) {
-  return String(nome || "").trim().replace(/^\d+\s*-\s*/, "");
+  return String(nome || "").trim().replace(/^\d+\s*-\s*/, "").replace(/\s*-\s*sacado\s*$/i, "");
 }
 
-// --- LISTAS E VALIDAÇÕES ---
-const CEDENTES_IGNORADOS = [
-  "12 -",
-  "23 -", 
-];
+function normalizarValor(valor) {
+  return String(valor || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+}
+
+function isInadimplente(row) {
+  return normalizarValor(row?.inadimplencia ?? row?.Inadimplencia ?? row?.["Inadimplência"]) === "sim";
+}
 
 function cedenteValido(cedente) {
-  if (!cedente) return false;
-  return !CEDENTES_IGNORADOS.some(ignorado => String(cedente).trim().startsWith(ignorado));
+  return Boolean(cedente);
 }
 
 function sacadoValido(sacado) {
   if (!sacado) return false;
   const s = String(sacado).trim();
   return !(s === "0" || s.startsWith("0 -") || s.startsWith("0-"));
+}
+
+function registroValidoParaAnalise(row) {
+  return sacadoValido(row?.Sacado) && cedenteValido(row?.Cliente) && !isInadimplente(row);
+}
+
+
+function normalizarChaveCampo(campo) {
+  return String(campo || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]/g, "");
+}
+
+function cleanNumberMacro(valor) {
+  if (valor === null || valor === undefined || valor === "") return null;
+  if (typeof valor === "number") return Number.isFinite(valor) ? valor : null;
+  let s = String(valor).trim().replace(/\s/g, "");
+  if (!s) return null;
+  if (s.split(",").length === 2 && s.split(".").length >= 2) {
+    s = s.replace(/\./g, "").replace(",", ".");
+  } else {
+    s = s.replace(",", ".");
+  }
+  const n = Number(s);
+  return Number.isFinite(n) ? n : null;
+}
+
+function getValorPorAliases(row, aliases) {
+  if (!row) return undefined;
+
+  const normalizado = Object.entries(row).reduce((acc, [key, value]) => {
+    acc[normalizarChaveCampo(key)] = value;
+    return acc;
+  }, {});
+
+  for (const alias of aliases) {
+    const value = normalizado[normalizarChaveCampo(alias)];
+    if (value !== undefined && value !== null && String(value).trim() !== "") return value;
+  }
+
+  return undefined;
+}
+
+function normalizarRegistroMacro(row, sourceTable, index) {
+  const cliente = getValorPorAliases(row, ["Cliente", "Cedente", "CEDENTE"]);
+  const sacado = getValorPorAliases(row, ["Sacado", "SACADO"]);
+  const entrada = cleanNumberMacro(getValorPorAliases(row, ["Entrada", "Valor", "Valor(R$)", "VALOR(R$)", "Total", "TOTAL", "TOTAL(R$)"]));
+  const vlPgto = cleanNumberMacro(getValorPorAliases(row, ["Vl Pgto", "Vl.Pgto", "Vl Pgto.", "Liquidado", "LIQUIDADO(R$)", "Valor Pgto", "Valor Pago"]));
+  const desagio = cleanNumberMacro(getValorPorAliases(row, ["Desagio", "Deságio", "DESÁGIO"]));
+  const txEfet = cleanNumberMacro(getValorPorAliases(row, ["Tx.Efet", "TX.EFET", "Tx Efet", "Taxa Efetiva"]));
+  const bordero = getValorPorAliases(row, ["Borderô", "Bordero", "OP"]);
+
+  return {
+    ...row,
+    Cliente: cliente ?? row?.Cliente ?? "",
+    Sacado: sacado ?? row?.Sacado ?? "",
+    "Dt.Emis": getValorPorAliases(row, ["Dt.Emis", "Data emissao", "Data emissão", "DATA EMISSÃO"]) ?? row?.["Dt.Emis"] ?? null,
+    Vcto: getValorPorAliases(row, ["Vcto", "Vencimento", "VENCIMENTO"]) ?? row?.Vcto ?? null,
+    Pgto: getValorPorAliases(row, ["Pgto", "Dt.Pgto", "Dt Pgto", "Data Pgto", "Data de Pgto", "Data de Pagamento", "Data de quitação", "DATA DE QUITAÇÃO"]) ?? row?.Pgto ?? null,
+    "Vl Pgto": vlPgto,
+    Dcto: getValorPorAliases(row, ["Dcto", "Documento", "DOCUMENTO"]) ?? row?.Dcto ?? "",
+    "Borderô": bordero ?? row?.["Borderô"] ?? null,
+    Entrada: entrada,
+    Desagio: desagio,
+    "Tx.Efet": txEfet,
+    Status: getValorPorAliases(row, ["Status", "Situação", "SITUAÇÃO", "Estado"]) ?? row?.Status ?? row?.Estado ?? "",
+    inadimplencia: row?.inadimplencia ?? row?.Inadimplencia ?? row?.["Inadimplência"] ?? null,
+    _sourceTable: sourceTable,
+    _rowKey: `${sourceTable}-${row?.id ?? index}`,
+  };
+}
+
+async function fetchAllMacroRows(tableName, pageSize = 1000) {
+  const allRows = [];
+
+  for (let from = 0; ; from += pageSize) {
+    const to = from + pageSize - 1;
+    const { data, error } = await supabase
+      .from(tableName)
+      .select("*")
+      .order("id", { ascending: false })
+      .range(from, to);
+
+    if (error) {
+      throw new Error(`Erro ao buscar ${tableName}: ${error.message}`);
+    }
+
+    allRows.push(...(data || []));
+
+    if (!data || data.length < pageSize) break;
+  }
+
+  return allRows;
 }
 
 // --- COMPONENTE DA TABELA DETALHADA DO MACRO (OTIMIZADA) ---
@@ -53,12 +149,12 @@ function MacroDetailedTable({ rows, focus, setFocus, setSelectedSlice, hideValue
 
   useEffect(() => { setCurrentPage(1); }, [rows, focus, sortConfig]);
 
-  const colunasOcultas = ["id", "created_at", "Cód.Red", "UF", "Banco", "Rec.", "Estado", "_status"];
+  const colunasOcultas = ["id", "created_at", "Cód.Red", "UF", "Banco", "Rec.", "Estado", "_status", "_sourceTable", "_rowKey", "Qtd Linhas Agrupadas", "Detalhes Agrupamento", "inadimplencia", "Inadimplencia", "Inadimplência"];
 
   const columns = useMemo(() => {
     if (!rows.length) return [];
-    const firstRowKeys = Object.keys(rows[0]);
-    let cols = firstRowKeys.filter(c => !colunasOcultas.includes(c));
+    const allRowKeys = Array.from(new Set(rows.flatMap((row) => Object.keys(row || {}))));
+    let cols = allRowKeys.filter(c => !colunasOcultas.includes(c));
 
     if (focus === 'cedente') cols = cols.filter(c => c !== "Cliente");
     if (focus === 'sacado') cols = cols.filter(c => c !== "Sacado");
@@ -145,7 +241,7 @@ function MacroDetailedTable({ rows, focus, setFocus, setSelectedSlice, hideValue
             {currentItems.map((r, idx) => {
               return (
                 // OTIMIZAÇÃO: Utilizando classe CSS em vez de inline onMouseOver
-                <tr key={r.id || idx} className={`macro-table-row-${r._status || 'default'}`} style={{ borderBottom: "1px solid #e5e7eb", transition: "background 0.2s" }}>
+                <tr key={r._rowKey || r.id || idx} className={`macro-table-row-${r._status || 'default'}`} style={{ borderBottom: "1px solid #e5e7eb", transition: "background 0.2s" }}>
                   {columns.map((c) => {
                     let valor = r[c];
                     const valorOriginal = valor;
@@ -209,6 +305,7 @@ function MacroDetailedTable({ rows, focus, setFocus, setSelectedSlice, hideValue
 // --- DASHBOARD MACRO PRINCIPAL ---
 export default function MacroDashboard({ session, hideValues, setHideValues }) {
   const [rows, setRows] = useState([]);
+  const [dataSourceTable, setDataSourceTable] = useState("secInfoSmart");
   const [loading, setLoading] = useState(true);
   const [latestPatrimonio, setLatestPatrimonio] = useState(0);
   const [focus, setFocus] = useState('cedente'); 
@@ -229,15 +326,25 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
       setLoading(true);
 
       try {
-        const [{ data: secInfoData, error: secInfoError }, { data: snapshotData, error: snapshotError }] = await Promise.all([
-          supabase.from("secInfo").select("*").order("id", { ascending: false }).limit(10000),
+        const [sourceData, { data: snapshotData, error: snapshotError }] = await Promise.all([
+          fetchAllMacroRows(dataSourceTable),
           supabase.from("secSnapshots").select('Data, Recebiveis, "Dinheiro Banco"').order("Data", { ascending: false }).limit(1)
         ]);
 
-        if (secInfoError) throw secInfoError;
         if (snapshotError) throw snapshotError;
 
-        const dadosLimpos = (secInfoData || []).filter(r => sacadoValido(r.Sacado) && cedenteValido(r.Cliente));
+        const sourceRows = (sourceData || []).map((row, index) =>
+          normalizarRegistroMacro(row, dataSourceTable, index)
+        );
+
+        const dadosLimpos = sourceRows.filter(registroValidoParaAnalise);
+
+        console.log("Macro fonte carregada", {
+          fonte: dataSourceTable,
+          total: sourceRows.length,
+          validos: dadosLimpos.length,
+        });
+
         setRows(dadosLimpos);
 
         const ultimoSnapshot = snapshotData?.[0];
@@ -253,7 +360,13 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
       }
     }
     fetchData();
-  }, []);
+  }, [dataSourceTable]);
+
+  useEffect(() => {
+    setSelectedSlice(null);
+    setNegotiationPage(1);
+    setCapitalPage(1);
+  }, [dataSourceTable]);
 
   // 1. Processa os registos em aberto e o volume negociado por período
   const { openRows, stats, negotiationStats } = useMemo(() => {
@@ -296,6 +409,7 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
     const vlPgtoKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'vl pgto');
     const borderoKey = Object.keys(firstRow).find(k => k.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").includes("border"));
     const desagioKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'desagio' || k.toLowerCase() === 'deságio');
+    const isSmartDataSource = dataSourceTable === "secInfoSmart";
 
     const periodConfigs = {
       mes_atual: { start: monthStart, end: today },
@@ -318,14 +432,16 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
       const val = valKey ? (Number(r[valKey]) || 0) : 0;
       const vlPgto = vlPgtoKey ? (Number(r[vlPgtoKey]) || 0) : 0;
       const desagioVal = desagioKey ? (Number(r[desagioKey]) || 0) : 0;
-      const borderoNum = (borderoKey && r[borderoKey]) ? String(r[borderoKey]).trim() : `avulso_${idx}`;
+      const origemTabela = r._sourceTable || "secInfo";
+      const borderoRaw = (borderoKey && r[borderoKey]) ? String(r[borderoKey]).trim() : `avulso_${idx}`;
+      const borderoNum = `${origemTabela}__${borderoRaw}`;
 
       const temPgto = pgtoKey && r[pgtoKey] && String(r[pgtoKey]).trim() !== "";
       const encargoPossivel = temPgto && vlPgto > 0 && val > 0 && vlPgto !== val;
       const encargo = encargoPossivel && vlPgto <= val * 1.4 ? Math.max(0, vlPgto - val) : 0;
 
       const entity = focus === 'cedente' ? r.Cliente : r.Sacado;
-      const eName = entity ? String(entity).trim() : null;
+      const eName = entity ? formatarNomeEntidade(entity) : null;
 
       if (statusVal === "REC" || statusVal.includes("REC")) {
         status = 'recompra';
@@ -374,13 +490,20 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
               negotiationGrouped[periodKey][eName].val += val;
               negotiationGrouped[periodKey][eName].desEnc += encargo;
 
-              if (!seenPeriodBorderosDesagio[periodKey].has(borderoNum)) {
-                seenPeriodBorderosDesagio[periodKey].set(borderoNum, new Set());
-              }
-              const entitiesSeen = seenPeriodBorderosDesagio[periodKey].get(borderoNum);
-              if (!entitiesSeen.has(eName)) {
-                entitiesSeen.add(eName);
+              if (isSmartDataSource) {
+                // No Smart, o deságio é por título/linha, então soma integralmente.
                 negotiationGrouped[periodKey][eName].desEnc += desagioVal;
+              } else {
+                // No WBA/secInfo, o deságio vem no nível do borderô e pode aparecer repetido nas linhas.
+                // Por isso, mantém a regra antiga: conta uma única vez por Borderô dentro da entidade.
+                if (!seenPeriodBorderosDesagio[periodKey].has(borderoNum)) {
+                  seenPeriodBorderosDesagio[periodKey].set(borderoNum, new Set());
+                }
+                const entitiesSeen = seenPeriodBorderosDesagio[periodKey].get(borderoNum);
+                if (!entitiesSeen.has(eName)) {
+                  entitiesSeen.add(eName);
+                  negotiationGrouped[periodKey][eName].desEnc += desagioVal;
+                }
               }
             }
           });
@@ -508,14 +631,14 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
         ytd: buildNegotiationChart(negotiationGrouped.ytd)
       }
     };
-  }, [rows, focus, volumeDateBase, latestPatrimonio]);
+  }, [rows, focus, volumeDateBase, latestPatrimonio, dataSourceTable]);
 
   // 2. Extrai os detalhes da entidade selecionada
   const detailedRows = useMemo(() => {
     if (!selectedSlice || selectedSlice.startsWith('Restante')) return null;
     return openRows.filter(r => {
       const entity = focus === 'cedente' ? r.Cliente : r.Sacado;
-      return String(entity).trim() === selectedSlice;
+      return formatarNomeEntidade(entity) === selectedSlice;
     });
   }, [openRows, selectedSlice, focus]);
 
@@ -567,6 +690,7 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
     const emisKey = Object.keys(firstRow).find(k => k.toLowerCase().includes('emis'));
     const vctoKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'vcto' || (k.toLowerCase().includes('vcto') && !k.toLowerCase().includes('vl')));
     const desagioKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'desagio' || k.toLowerCase() === 'deságio');
+    const isSmartDataSource = dataSourceTable === "secInfoSmart";
 
     const seenBorderosDesagio = new Set();
     let totalDesagio = 0;
@@ -575,7 +699,9 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
     let maxDate = null;
 
     kpiRows.forEach((r, idx) => {
-      const bNum = (borderoKey && r[borderoKey]) ? String(r[borderoKey]).trim() : `avulso_${idx}`;
+      const origemTabela = r._sourceTable || "secInfo";
+      const borderoRaw = (borderoKey && r[borderoKey]) ? String(r[borderoKey]).trim() : `avulso_${idx}`;
+      const bNum = `${origemTabela}__${borderoRaw}`;
       const val = valKey ? (Number(r[valKey]) || 0) : 0;
       const vlPgto = vlPgtoKey ? (Number(r[vlPgtoKey]) || 0) : 0;
 
@@ -584,7 +710,11 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
       const rate = hasRateVal ? (Number(String(rawRate).replace('%', '').replace(',', '.')) || 0) : 0;
 
       const desagioVal = desagioKey ? (Number(r[desagioKey]) || 0) : 0;
-      if (!seenBorderosDesagio.has(bNum)) {
+      if (isSmartDataSource) {
+        // No Smart, o deságio é por título/linha.
+        totalDesagio += desagioVal;
+      } else if (!seenBorderosDesagio.has(bNum)) {
+        // No WBA/secInfo, o deságio é por Borderô e pode estar repetido nas linhas.
         seenBorderosDesagio.add(bNum);
         totalDesagio += desagioVal;
       }
@@ -655,7 +785,7 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
       encargosTotal: totalEncargos,
       diasOperacao
     };
-  }, [detailedRows, openRows, riscoAtual]);
+  }, [detailedRows, openRows, riscoAtual, dataSourceTable]);
 
 
   const tableData = useMemo(() => {
@@ -886,6 +1016,35 @@ const negotiationDesEncTop5Percent = currentNegotiationStats.sorted.length
           <p style={{ margin: 0, color: "#6b7280", fontSize: "15px" }}>Concentração de Capital em títulos <strong>Em Aberto</strong> (A Vencer e Em Atraso).</p>
         </div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "10px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", justifyContent: "flex-end", flexWrap: "wrap" }}>
+            <span style={{ fontSize: "13px", fontWeight: "700", color: "#6b7280" }}>Fonte</span>
+            {[
+              { table: "secInfo", label: "WBA" },
+              { table: "secInfoSmart", label: "Smart" },
+            ].map((source) => {
+              const active = dataSourceTable === source.table;
+              return (
+                <button
+                  key={source.table}
+                  type="button"
+                  onClick={() => setDataSourceTable(source.table)}
+                  style={{
+                    padding: "8px 14px",
+                    borderRadius: "8px",
+                    border: `1px solid ${active ? "#0f766e" : "#d1d5db"}`,
+                    background: active ? "#ccfbf1" : "#fff",
+                    color: active ? "#0f766e" : "#374151",
+                    fontWeight: 800,
+                    fontSize: "13px",
+                    cursor: "pointer",
+                    transition: "all 0.2s",
+                  }}
+                >
+                  {source.label}
+                </button>
+              );
+            })}
+          </div>
           <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
             <button
               onClick={() => setHideValues(v => !v)}
