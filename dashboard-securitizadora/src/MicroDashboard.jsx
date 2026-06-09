@@ -60,18 +60,252 @@ function escapeText(v) {
   return String(v);
 }
 
+const entityDisplayCache = new Map();
+const entityCompareCache = new Map();
+const entityGroupKeyCache = new Map();
+const genericNormalizeCache = new Map();
+const ENTITY_CACHE_MAX_SIZE = 20000;
+
+function setCached(cache, key, value) {
+  if (cache.size > ENTITY_CACHE_MAX_SIZE) cache.clear();
+  cache.set(key, value);
+  return value;
+}
+
 function formatarNomeEntidade(nome) {
-  return String(nome || "").trim().replace(/^\d+\s*-\s*/, "").replace(/\s*-\s*sacado\s*$/i, "");
+  const raw = String(nome || "");
+  const cached = entityDisplayCache.get(raw);
+  if (cached !== undefined) return cached;
+  return setCached(
+    entityDisplayCache,
+    raw,
+    raw.trim().replace(/^\d+\s*-\s*/, "").replace(/\s*-\s*sacado\s*$/i, "")
+  );
 }
 
 function normalizarChave(campo) {
-  return String(campo || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
+  const raw = String(campo || "");
+  const cached = genericNormalizeCache.get(raw);
+  if (cached !== undefined) return cached;
+  return setCached(
+    genericNormalizeCache,
+    raw,
+    raw.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim()
+  );
+}
+
+const ENTITY_PREFIX_MIN_CHARS = 16;
+const ENTITY_GROUP_KEY_CHARS = 36;
+
+const ENTITY_LEGAL_SUFFIXES = new Set([
+  "ltda", "lt", "me", "eireli", "epp", "sa", "s/a", "ss", "s/s", "mei",
+  "com", "comercio", "industria", "servicos", "servico", "importacao", "exportacao"
+]);
+
+function normalizarTokenEntidade(token) {
+  const t = String(token || "").trim();
+  if (!t || ENTITY_LEGAL_SUFFIXES.has(t)) return "";
+
+  // Evita separar a mesma empresa por variações bobas de singular/plural:
+  // Ex.: "Água" x "Aguas", "Equipamento" x "Equipamentos".
+  // A normalização de acento já ocorreu antes; aqui removemos só plural simples.
+  if (t.length > 3 && t.endsWith("s")) return t.slice(0, -1);
+  return t;
+}
+
+function normalizarEntidadeParaComparacao(nome) {
+  const raw = String(nome || "");
+  const cached = entityCompareCache.get(raw);
+  if (cached !== undefined) return cached;
+  const normalized = normalizarChave(formatarNomeEntidade(raw))
+    .replace(/[^a-z0-9]+/g, " ")
+    .split(" ")
+    .map(normalizarTokenEntidade)
+    .filter(Boolean)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return setCached(entityCompareCache, raw, normalized);
+}
+
+function chaveEntidadePrefixo(nome) {
+  const raw = String(nome || "");
+  const cached = entityGroupKeyCache.get(raw);
+  if (cached !== undefined) return cached;
+  const normalizado = normalizarEntidadeParaComparacao(raw);
+  if (!normalizado) return setCached(entityGroupKeyCache, raw, "");
+  const key = normalizado.length < ENTITY_PREFIX_MIN_CHARS
+    ? normalizado
+    : normalizado.slice(0, ENTITY_GROUP_KEY_CHARS);
+  return setCached(entityGroupKeyCache, raw, key);
+}
+
+function getEntityKeyFromRow(row, field) {
+  if (!row) return "";
+  if (field === "Cliente") return row._clienteEntityKey || chaveEntidadePrefixo(row.Cliente);
+  if (field === "Sacado") return row._sacadoEntityKey || chaveEntidadePrefixo(row.Sacado);
+  return chaveEntidadePrefixo(row[field]);
+}
+
+function entidadesParecidasPorInicio(a, b) {
+  const na = normalizarEntidadeParaComparacao(a);
+  const nb = normalizarEntidadeParaComparacao(b);
+  if (!na || !nb) return false;
+  if (na === nb) return true;
+
+  const menor = na.length <= nb.length ? na : nb;
+  const maior = na.length > nb.length ? na : nb;
+
+  if (menor.length < ENTITY_PREFIX_MIN_CHARS) return false;
+  return maior.startsWith(menor) || chaveEntidadePrefixo(na) === chaveEntidadePrefixo(nb);
+}
+
+function escolherNomeEntidadeMaisCompleto(nomes) {
+  let melhor = "";
+  let melhorLen = -1;
+
+  (nomes || []).forEach((nomeRaw) => {
+    const nome = String(nomeRaw || "").trim();
+    const len = normalizarEntidadeParaComparacao(nome).length;
+    if (nome && len > melhorLen) {
+      melhor = nome;
+      melhorLen = len;
+    }
+  });
+
+  return melhor;
+}
+
+function criarMapaEntidadesAgrupadas(nomes) {
+  const mapa = new Map();
+
+  (nomes || []).forEach((nomeRaw) => {
+    const nome = String(nomeRaw || "").trim();
+    if (!nome) return;
+
+    const key = chaveEntidadePrefixo(nome);
+    if (!key) return;
+
+    const atual = mapa.get(key);
+    if (!atual) {
+      mapa.set(key, { label: nome, aliases: [nome] });
+      return;
+    }
+
+    atual.aliases.push(nome);
+    atual.label = escolherNomeEntidadeMaisCompleto([atual.label, nome]);
+  });
+
+  return mapa;
+}
+
+function criarOpcoesEntidadesAgrupadas(nomes) {
+  return Array.from(criarMapaEntidadesAgrupadas(nomes).values())
+    .map((grupo) => grupo.label)
+    .sort((a, b) => formatarNomeEntidade(a).localeCompare(formatarNomeEntidade(b), "pt-BR"));
+}
+
+function chaveAgrupadaEntidade(nome, mapaEntidades = null) {
+  const key = chaveEntidadePrefixo(nome);
+  if (!key) return "";
+  if (mapaEntidades instanceof Map) return mapaEntidades.get(key)?.label || String(nome || "").trim();
+  return String(nome || "").trim();
+}
+
+function addAliasToEntityGroup(map, key, rawName) {
+  const nome = String(rawName || "").trim();
+  if (!key || !nome) return;
+  let group = map.get(key);
+  if (!group) {
+    group = { key, label: nome, aliases: new Set(), relatedKeys: new Set() };
+    map.set(key, group);
+  }
+  group.aliases.add(nome);
+  if (normalizarEntidadeParaComparacao(nome).length > normalizarEntidadeParaComparacao(group.label).length) {
+    group.label = nome;
+  }
+}
+
+function finalizarEntityGroups(map) {
+  map.forEach((group) => {
+    group.aliases = Array.from(group.aliases);
+    group.relatedKeys = Array.from(group.relatedKeys);
+  });
+  return map;
+}
+
+function criarIndiceRelacionamentos(rows) {
+  const clientes = new Map();
+  const sacados = new Map();
+
+  (rows || []).forEach((row) => {
+    const clienteKey = getEntityKeyFromRow(row, "Cliente");
+    const sacadoKey = getEntityKeyFromRow(row, "Sacado");
+    if (!clienteKey || !sacadoKey) return;
+
+    addAliasToEntityGroup(clientes, clienteKey, row.Cliente);
+    addAliasToEntityGroup(sacados, sacadoKey, row.Sacado);
+    clientes.get(clienteKey)?.relatedKeys.add(sacadoKey);
+    sacados.get(sacadoKey)?.relatedKeys.add(clienteKey);
+  });
+
+  finalizarEntityGroups(clientes);
+  finalizarEntityGroups(sacados);
+
+  const sortLabels = (arr) => arr.sort((a, b) => formatarNomeEntidade(a).localeCompare(formatarNomeEntidade(b), "pt-BR"));
+
+  return {
+    clientes,
+    sacados,
+    clienteOptions: sortLabels(Array.from(clientes.values()).map((group) => group.label)),
+    sacadoOptions: sortLabels(Array.from(sacados.values()).map((group) => group.label)),
+  };
+}
+
+function getEntityGroup(indexMap, selectedValue) {
+  if (!selectedValue) return null;
+  return indexMap?.get(chaveEntidadePrefixo(selectedValue)) || null;
+}
+
+function getEntityAliases(indexMap, selectedValue) {
+  const group = getEntityGroup(indexMap, selectedValue);
+  const aliases = group?.aliases?.length ? group.aliases : [String(selectedValue || "").trim()].filter(Boolean);
+  return Array.from(new Set(aliases));
+}
+
+function pickLabelsFromKeys(indexMap, keys) {
+  return Array.from(keys || [])
+    .map((key) => indexMap?.get(key)?.label)
+    .filter(Boolean)
+    .sort((a, b) => formatarNomeEntidade(a).localeCompare(formatarNomeEntidade(b), "pt-BR"));
+}
+
+function applyInFilterIfPossible(query, column, values) {
+  const uniqueValues = Array.from(new Set((values || []).map((v) => String(v || "").trim()).filter(Boolean)));
+  if (!uniqueValues.length) return { query, empty: true };
+  return { query: query.in(column, uniqueValues), empty: false };
+}
+
+function entidadeCorrespondeSelecionada(valorLinha, selecionado) {
+  if (!valorLinha || !selecionado) return false;
+  return chaveEntidadePrefixo(valorLinha) === chaveEntidadePrefixo(selecionado);
+}
+
+function entidadeCorrespondeChave(valorLinha, selectedKey) {
+  if (!selectedKey) return true;
+  return chaveEntidadePrefixo(valorLinha) === selectedKey;
 }
 
 function parseNumeroOrdenacao(valor) {
   if (valor === null || valor === undefined || valor === "") return null;
   const numero = Number(String(valor).trim().replace(/\./g, "").replace(",", "."));
   return Number.isFinite(numero) ? numero : null;
+}
+
+function parseTaxaPercentual(valor) {
+  if (valor === null || valor === undefined || valor === "") return 0;
+  const numero = Number(String(valor).replace("%", "").replace(",", "."));
+  return Number.isFinite(numero) ? numero : 0;
 }
 
 function parseIsoDateLocal(valor) {
@@ -140,6 +374,55 @@ const GRUPOS_ECONOMICOS = [
     prefixos: ["613 -", "614 -", "615 -", "617 -", "605 -"]
   }
 ];
+
+const BOTH_DATA_SOURCE = "ambos";
+const MICRO_DATA_SOURCE_OPTIONS = [
+  { table: "secInfo", label: "WBA" },
+  { table: "secInfoSmart", label: "Smart" },
+  { table: BOTH_DATA_SOURCE, label: "Ambos" },
+];
+
+const getDataSourceTables = (dataSourceTable, filterSourceTable = null) => {
+  const selectedTables = dataSourceTable === BOTH_DATA_SOURCE
+    ? ["secInfo", "secInfoSmart"]
+    : [dataSourceTable];
+
+  if (filterSourceTable && selectedTables.includes(filterSourceTable)) return [filterSourceTable];
+  return selectedTables;
+};
+
+const tagSourceRow = (row, sourceTable, index) => ({
+  ...row,
+  _sourceTable: sourceTable,
+  _rowKey: `${sourceTable}-${row?.id ?? index}`,
+  _clienteEntityKey: chaveEntidadePrefixo(row?.Cliente),
+  _sacadoEntityKey: chaveEntidadePrefixo(row?.Sacado),
+});
+
+const getRowSourceTable = (row, fallbackDataSourceTable = "secInfo") =>
+  row?._sourceTable || (fallbackDataSourceTable === "secInfoSmart" ? "secInfoSmart" : "secInfo");
+
+const isSmartSourceRow = (row, fallbackDataSourceTable = "secInfo") =>
+  getRowSourceTable(row, fallbackDataSourceTable) === "secInfoSmart";
+
+const getScopedBorderoKey = (row, borderoKey, index, fallbackDataSourceTable = "secInfo") => {
+  const borderoRaw = borderoKey && row?.[borderoKey] ? String(row[borderoKey]).trim() : `avulso_${index}`;
+  return `${getRowSourceTable(row, fallbackDataSourceTable)}__${borderoRaw}`;
+};
+
+const getScopedTitleKey = (row, index, fallbackDataSourceTable = "secInfo") =>
+  `${getRowSourceTable(row, fallbackDataSourceTable)}__titulo__${row?._rowKey ?? row?.id ?? index}`;
+
+const filterMatchesSource = (row, filter, fallbackDataSourceTable = "secInfo") =>
+  !filter?.sourceTable || getRowSourceTable(row, fallbackDataSourceTable) === filter.sourceTable;
+
+function findKeyAcrossRows(rows, matcher) {
+  for (const row of rows || []) {
+    const key = Object.keys(row || {}).find(matcher);
+    if (key) return key;
+  }
+  return undefined;
+}
 
 
 function getDiasUteisToleranciaComissaria(cedente) {
@@ -210,17 +493,15 @@ function EvolutionCharts({ rows, dateFilter, setDateFilter, setBorderoFilter, se
 
     if (rows.length === 0) return { chartData: [], chartDataRate: [], chartDataDesagio: [] };
 
-    const firstRow = rows[0];
-    const emisKey = Object.keys(firstRow).find(k => k.toLowerCase().includes('emis'));
-    const vctoKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'vcto' || (k.toLowerCase().includes('vcto') && !k.toLowerCase().includes('vl')));
-    const valKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'entrada' || (k.toLowerCase().includes('valor') && !k.toLowerCase().includes('pgto')));
-    const borderoKey = Object.keys(firstRow).find(k => k.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes("border"));
-    const rateKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'tx.efet' || k.toLowerCase().includes('tx.efet') || k.toLowerCase().includes('tx efet'));
-    const desagioKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'desagio' || k.toLowerCase() === 'deságio');
-    const isSmartDataSource = dataSourceTable === "secInfoSmart";
+    const emisKey = findKeyAcrossRows(rows, k => k.toLowerCase().includes('emis'));
+    const vctoKey = findKeyAcrossRows(rows, k => k.toLowerCase() === 'vcto' || (k.toLowerCase().includes('vcto') && !k.toLowerCase().includes('vl')));
+    const valKey = findKeyAcrossRows(rows, k => k.toLowerCase() === 'entrada' || (k.toLowerCase().includes('valor') && !k.toLowerCase().includes('pgto')));
+    const borderoKey = findKeyAcrossRows(rows, k => k.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes("border"));
+    const rateKey = findKeyAcrossRows(rows, k => k.toLowerCase() === 'tx.efet' || k.toLowerCase().includes('tx.efet') || k.toLowerCase().includes('tx efet'));
+    const desagioKey = findKeyAcrossRows(rows, k => k.toLowerCase() === 'desagio' || k.toLowerCase() === 'deságio');
 
     rows.forEach((r, idx) => {
-      const bNum = (borderoKey && r[borderoKey]) ? String(r[borderoKey]).trim() : `avulso_${idx}`; 
+      const bNum = getScopedBorderoKey(r, borderoKey, idx, dataSourceTable);
       const val = valKey ? (Number(r[valKey]) || 0) : 0;
       const desagioVal = desagioKey ? (Number(r[desagioKey]) || 0) : 0;
 
@@ -247,12 +528,11 @@ function EvolutionCharts({ rows, dateFilter, setDateFilter, setBorderoFilter, se
              bData.hasRate = true;
           }
 
-          if (!groupedDesagio[ym]) groupedDesagio[ym] = isSmartDataSource ? 0 : new Map();
-          if (isSmartDataSource) {
-            groupedDesagio[ym] += desagioVal;
-          } else if (!groupedDesagio[ym].has(bNum)) {
-            groupedDesagio[ym].set(bNum, desagioVal);
-          }
+          if (!groupedDesagio[ym]) groupedDesagio[ym] = new Map();
+          const desagioGroupKey = isSmartSourceRow(r, dataSourceTable)
+            ? getScopedTitleKey(r, idx, dataSourceTable)
+            : bNum;
+          if (!groupedDesagio[ym].has(desagioGroupKey)) groupedDesagio[ym].set(desagioGroupKey, desagioVal);
         }
       }
 
@@ -298,13 +578,7 @@ function EvolutionCharts({ rows, dateFilter, setDateFilter, setBorderoFilter, se
 
     const cDataDesagio = sortedMonths.map(ym => {
       let sumDesagio = 0;
-      if (groupedDesagio[ym]) {
-        if (isSmartDataSource) {
-          sumDesagio = groupedDesagio[ym];
-        } else {
-          groupedDesagio[ym].forEach(val => sumDesagio += val);
-        }
-      }
+      if (groupedDesagio[ym]) groupedDesagio[ym].forEach(val => sumDesagio += val);
       return { ym, label: formatarMesAno(ym), value: sumDesagio };
     });
 
@@ -650,7 +924,7 @@ return (
 }
 
 // --- COMPONENTE DE INSIGHTS ---
-function DashboardInsights({ processedRows, insightFilter, setInsightFilter, setBorderoFilter, setDctoFilter, hideValues }) {
+function DashboardInsights({ processedRows, insightFilter, setInsightFilter, setBorderoFilter, setDctoFilter, hideValues, dataSourceTable = "secInfo" }) {
   const fmtM = (v) => hideValues ? "R$ -" : formatarMoeda(v);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [hoveredSlice, setHoveredSlice] = useState(null);
@@ -670,12 +944,11 @@ function DashboardInsights({ processedRows, insightFilter, setInsightFilter, set
     const seenBorderosTotal = new Set();
     const today = new Date(); today.setHours(0, 0, 0, 0);
 
-    const firstRow = processedRows[0];
-    const entradaKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'entrada' || k.toLowerCase().includes('valor'));
-    const borderoKey = Object.keys(firstRow).find(k => k.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes("border"));
-    const desagioKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'desagio' || k.toLowerCase() === 'deságio');
-    const vctoKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'vcto' || (k.toLowerCase().includes('vcto') && !k.toLowerCase().includes('vl')));
-    const pgtoKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'pgto' || (k.toLowerCase().includes('pgto') && !k.toLowerCase().includes('vl')));
+    const entradaKey = findKeyAcrossRows(processedRows, k => k.toLowerCase() === 'entrada' || k.toLowerCase().includes('valor'));
+    const borderoKey = findKeyAcrossRows(processedRows, k => k.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes("border"));
+    const desagioKey = findKeyAcrossRows(processedRows, k => k.toLowerCase() === 'desagio' || k.toLowerCase() === 'deságio');
+    const vctoKey = findKeyAcrossRows(processedRows, k => k.toLowerCase() === 'vcto' || (k.toLowerCase().includes('vcto') && !k.toLowerCase().includes('vl')));
+    const pgtoKey = findKeyAcrossRows(processedRows, k => k.toLowerCase() === 'pgto' || (k.toLowerCase().includes('pgto') && !k.toLowerCase().includes('vl')));
 
     processedRows.forEach((r, idx) => {
       if (r._status !== 'invalido') {
@@ -683,15 +956,18 @@ function DashboardInsights({ processedRows, insightFilter, setInsightFilter, set
         const val = entradaKey ? (Number(r[entradaKey]) || 0) : 0;
         values[r._status] += val; values.total += val;
 
-        const bNum = (borderoKey && r[borderoKey]) ? String(r[borderoKey]).trim() : `avulso_${idx}`; 
+        const bNum = getScopedBorderoKey(r, borderoKey, idx, dataSourceTable);
         const desagioVal = desagioKey ? (Number(r[desagioKey]) || 0) : 0;
+        const desagioGroupKey = isSmartSourceRow(r, dataSourceTable)
+          ? getScopedTitleKey(r, idx, dataSourceTable)
+          : bNum;
 
-        if (!seenBorderosStatus[r._status].has(bNum)) {
-          seenBorderosStatus[r._status].add(bNum);
+        if (!seenBorderosStatus[r._status].has(desagioGroupKey)) {
+          seenBorderosStatus[r._status].add(desagioGroupKey);
           desagioValues[r._status] += desagioVal;
         }
-        if (!seenBorderosTotal.has(bNum)) {
-          seenBorderosTotal.add(bNum);
+        if (!seenBorderosTotal.has(desagioGroupKey)) {
+          seenBorderosTotal.add(desagioGroupKey);
           desagioValues.total += desagioVal;
         }
 
@@ -754,7 +1030,7 @@ function DashboardInsights({ processedRows, insightFilter, setInsightFilter, set
       : "0,0";
 
     return { counts, values, avgDelays, desagioValues, prazoMedioAVencer };
-  }, [processedRows]);
+  }, [processedRows, dataSourceTable]);
 
   if (stats.counts.total === 0) return null;
 
@@ -767,9 +1043,9 @@ function DashboardInsights({ processedRows, insightFilter, setInsightFilter, set
   const slicesData = [
     { key: 'liquidado', percent: stats.counts.liquidado / stats.counts.total, color: '#22c55e', label: "Liquidado em dia", count: stats.counts.liquidado, value: stats.values.liquidado },
     { key: 'liquidadoAtraso', percent: stats.counts.liquidadoAtraso / stats.counts.total, color: '#f59e0b', label: "Liquidado c/ atraso", count: stats.counts.liquidadoAtraso, value: stats.values.liquidadoAtraso },
-    { key: 'atraso', percent: stats.counts.atraso / stats.counts.total, color: '#ef4444', label: "Em atraso", count: stats.counts.atraso, value: stats.values.atraso },
     { key: 'recompra', percent: stats.counts.recompra / stats.counts.total, color: '#8b5cf6', label: "Recompra", count: stats.counts.recompra, value: stats.values.recompra },
-    { key: 'aVencer', percent: stats.counts.aVencer / stats.counts.total, color: '#94a3b8', label: "A Vencer", count: stats.counts.aVencer, value: stats.values.aVencer }
+    { key: 'aVencer', percent: stats.counts.aVencer / stats.counts.total, color: '#94a3b8', label: "A vencer", count: stats.counts.aVencer, value: stats.values.aVencer },
+    { key: 'atraso', percent: stats.counts.atraso / stats.counts.total, color: '#ef4444', label: "Em atraso", count: stats.counts.atraso, value: stats.values.atraso }
   ].filter(s => s.percent > 0); 
 
   const handleMouseMove = (e, slice) => {
@@ -779,7 +1055,10 @@ function DashboardInsights({ processedRows, insightFilter, setInsightFilter, set
 
   let cumulativePercent = 0;
 
-  const renderCard = (key, corPura, titulo, contagem, valorReal, mediaAtraso = null, desagioVal = 0, prazoMedio = null, prazoLabel = "Prazo Médio") => {
+  const capitalQuitado = stats.values.liquidado + stats.values.liquidadoAtraso + stats.values.recompra;
+  const capitalAberto = stats.values.aVencer + stats.values.atraso;
+
+  const renderCard = (key, corPura, titulo, contagem, valorReal, mediaAtraso = null, desagioVal = 0, prazoMedio = null, prazoLabel = "Prazo Médio", capitalBase = stats.values.total, capitalBaseLabel = "do Capital Total") => {
     const isZero = contagem === 0;
     const isActive = insightFilter === key;
     const isDimmed = insightFilter && !isActive;
@@ -805,8 +1084,8 @@ function DashboardInsights({ processedRows, insightFilter, setInsightFilter, set
             <div style={{ fontSize: "16px", fontWeight: "700", color: "#111827", lineHeight: "1" }}>{fmtM(valorReal)}</div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "4px", marginTop: "4px" }}>
-            <div style={{ fontSize: "12px", color: "#6b7280", fontWeight: "600" }}>{stats.values.total > 0 ? ((valorReal / stats.values.total) * 100).toFixed(1) : 0}%</div>
-            <div style={{ fontSize: "11px", color: "#9ca3af" }}>do Capital Total</div>
+            <div style={{ fontSize: "12px", color: "#6b7280", fontWeight: "600" }}>{capitalBase > 0 ? ((valorReal / capitalBase) * 100).toFixed(1) : 0}%</div>
+            <div style={{ fontSize: "11px", color: "#9ca3af" }}>{capitalBaseLabel}</div>
           </div>
         </div>
         
@@ -880,12 +1159,17 @@ return (
                 <span style={{ fontSize: "16px", fontWeight: "700", color: "#111827" }}>{fmtM(stats.values.total)}</span>
               </div>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "16px", flex: 1 }}>
-              {renderCard('liquidado', "#22c55e", "Liquidado em dia", stats.counts.liquidado, stats.values.liquidado, null, stats.desagioValues.liquidado)}
-              {renderCard('liquidadoAtraso', "#f59e0b", "Liquidado c/ atraso", stats.counts.liquidadoAtraso, stats.values.liquidadoAtraso, stats.avgDelays.liquidadoAtraso, stats.desagioValues.liquidadoAtraso)}
-              {renderCard('atraso', "#ef4444", "Em atraso", stats.counts.atraso, stats.values.atraso, stats.avgDelays.atraso, stats.desagioValues.atraso)}
-              {renderCard('recompra', "#8b5cf6", "Recompra", stats.counts.recompra, stats.values.recompra, stats.avgDelays.recompra, stats.desagioValues.recompra)}
-              {renderCard('aVencer', "#94a3b8", "A Vencer", stats.counts.aVencer, stats.values.aVencer, null, stats.desagioValues.aVencer, stats.prazoMedioAVencer, "Dias p/ Vencer")}
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "16px", flex: 1, alignItems: "stretch" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "16px", flex: "3 1 560px" }}>
+                {renderCard('liquidado', "#22c55e", "Liquidado em dia", stats.counts.liquidado, stats.values.liquidado, null, stats.desagioValues.liquidado, null, "Prazo Médio", capitalQuitado, "do capital quitado")}
+                {renderCard('liquidadoAtraso', "#f59e0b", "Liquidado c/ atraso", stats.counts.liquidadoAtraso, stats.values.liquidadoAtraso, stats.avgDelays.liquidadoAtraso, stats.desagioValues.liquidadoAtraso, null, "Prazo Médio", capitalQuitado, "do capital quitado")}
+                {renderCard('recompra', "#8b5cf6", "Recompra", stats.counts.recompra, stats.values.recompra, stats.avgDelays.recompra, stats.desagioValues.recompra, null, "Prazo Médio", capitalQuitado, "do capital quitado")}
+              </div>
+              <div style={{ width: "3px", minWidth: "3px", alignSelf: "stretch", background: "linear-gradient(180deg, transparent 0%, #94a3b8 12%, #64748b 50%, #94a3b8 88%, transparent 100%)", borderRadius: "999px", boxShadow: "0 0 0 1px rgba(100,116,139,0.12), 0 8px 18px rgba(15,23,42,0.16)", minHeight: "160px", margin: "0 6px" }} />
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "16px", flex: "2 1 360px" }}>
+                {renderCard('aVencer', "#94a3b8", "A vencer", stats.counts.aVencer, stats.values.aVencer, null, stats.desagioValues.aVencer, stats.prazoMedioAVencer, "Dias p/ Vencer", capitalAberto, "do capital em aberto")}
+                {renderCard('atraso', "#ef4444", "Em atraso", stats.counts.atraso, stats.values.atraso, stats.avgDelays.atraso, stats.desagioValues.atraso, null, "Prazo Médio", capitalAberto, "do capital em aberto")}
+              </div>
             </div>
           </div>
           {insightFilter && <div style={{ marginTop: "16px", fontSize: "13px", color: "#2563eb", fontWeight: "500", textAlign: "right" }}>Filtro de status ativo. Clique no card novamente para limpar.</div>}
@@ -911,7 +1195,8 @@ function SacadoConcentrationCard({
   grupoSelecionado,
   sacadoSelecionado,
   setSacadoSelecionado,
-  hideValues
+  hideValues,
+  onSelectSacadoAberto
 }) {
   const [hoveredKey, setHoveredKey] = useState(null);
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -930,9 +1215,8 @@ function SacadoConcentrationCard({
   const cards = useMemo(() => {
     if (!rows.length) return [];
 
-    const firstRow = rows[0];
     const entradaKey =
-      Object.keys(firstRow).find(
+      findKeyAcrossRows(rows,
         (k) =>
           k.toLowerCase() === "entrada" ||
           (k.toLowerCase().includes("valor") && !k.toLowerCase().includes("pgto"))
@@ -944,10 +1228,12 @@ function SacadoConcentrationCard({
     if (!isModoCedente && !isModoSacado) return [];
 
     const mapaCedentes = new Map();
+    const mapaCedentesAgrupados = criarMapaEntidadesAgrupadas(rows.map((r) => r.Cliente));
+    const mapaSacadosAgrupados = criarMapaEntidadesAgrupadas(rows.map((r) => r.Sacado));
 
     rows.forEach((r) => {
-      const cedente = String(r.Cliente || "").trim();
-      const sacado = String(r.Sacado || "").trim();
+      const cedente = chaveAgrupadaEntidade(r.Cliente, mapaCedentesAgrupados);
+      const sacado = chaveAgrupadaEntidade(r.Sacado, mapaSacadosAgrupados);
       const status = r._status;
       const valor = Number(r[entradaKey]) || 0;
 
@@ -1054,6 +1340,15 @@ function SacadoConcentrationCard({
     setHoveredKey(null);
   };
 
+  const handleSelectSacado = (sacado) => {
+    const nextValue = entidadeCorrespondeSelecionada(sacado, sacadoSelecionado) ? "" : sacado;
+    if (typeof onSelectSacadoAberto === "function") {
+      onSelectSacadoAberto(nextValue);
+    } else {
+      setSacadoSelecionado(nextValue);
+    }
+  };
+
   return (
     <div style={concentrationCardStyle}>
       <div
@@ -1128,7 +1423,7 @@ function SacadoConcentrationCard({
                         <circle cx="60" cy="60" r={radius} fill="none" stroke="#e5e7eb" strokeWidth={strokeWidth} />
                         {card.enriched.map((item) => {
                           const hoverKey = `${item.cedente}__${item.sacado}`;
-                          const active = hoveredKey === hoverKey || sacadoSelecionado === item.sacado;
+                          const active = hoveredKey === hoverKey || entidadeCorrespondeSelecionada(item.sacado, sacadoSelecionado);
 
                           return (
                             <circle
@@ -1144,13 +1439,17 @@ function SacadoConcentrationCard({
                               strokeLinecap="butt"
                               style={{
                                 cursor: "pointer",
+                                pointerEvents: "stroke",
                                 transition: "all 0.2s ease",
                                 opacity: hoveredKey && hoveredKey !== hoverKey ? 0.35 : 1
                               }}
                               onMouseMove={(e) => handleDonutMouseMove(e, item)}
                               onMouseEnter={(e) => handleDonutMouseMove(e, item)}
                               onMouseLeave={clearDonutHover}
-                              onClick={() => setSacadoSelecionado((prev) => prev === item.sacado ? "" : item.sacado)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleSelectSacado(item.sacado);
+                              }}
                             />
                           );
                         })}
@@ -1172,12 +1471,15 @@ function SacadoConcentrationCard({
                     <div style={{ maxHeight: 360, overflowY: "auto" }}>
                       {card.enriched.map((item) => {
                         const hoverKey = `${item.cedente}__${item.sacado}`;
-                        const active = sacadoSelecionado === item.sacado;
+                        const active = entidadeCorrespondeSelecionada(item.sacado, sacadoSelecionado);
 
                         return (
                           <div
                             key={`${item.cedente}-${item.sacado}-row`}
-                            onClick={() => setSacadoSelecionado((prev) => prev === item.sacado ? "" : item.sacado)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleSelectSacado(item.sacado);
+                            }}
                             onMouseEnter={() => setHoveredKey(hoverKey)}
                             onMouseLeave={() => setHoveredKey(null)}
                             style={{
@@ -1291,11 +1593,11 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
 
   useEffect(() => { setCurrentPage(1); }, [rows, dateFilter, sortConfig]);
 
-  const colunasOcultas = ["id", "created_at", "Cód.Red", "UF", "Banco", "Rec.", "Estado", "_status", "Juros e Multa", "Qtd Linhas Agrupadas", "Detalhes Agrupamento", "inadimplencia", "Inadimplencia", "Inadimplência"];
+  const colunasOcultas = ["id", "created_at", "Cód.Red", "UF", "Banco", "Rec.", "Estado", "_status", "_sourceTable", "_rowKey", "_clienteEntityKey", "_sacadoEntityKey", "clienteEntityKey", "sacadoEntityKey", "ClienteEntityKey", "SacadoEntityKey", "Juros e Multa", "Qtd Linhas Agrupadas", "Detalhes Agrupamento", "inadimplencia", "Inadimplencia", "Inadimplência"];
   const columns = useMemo(() => {
     if (!rows.length) return [];
-    const firstRowKeys = Object.keys(rows[0]);
-    let cols = firstRowKeys.filter(c => !colunasOcultas.includes(c));
+    const firstRowKeys = Array.from(new Set(rows.flatMap((row) => Object.keys(row || {}))));
+    let cols = firstRowKeys.filter(c => !colunasOcultas.includes(c) && !String(c).toLowerCase().includes("entitykey"));
     if (clienteSelecionado) cols = cols.filter(c => c !== "Cliente");
     if (sacadoSelecionado) cols = cols.filter(c => c !== "Sacado");
     if (clienteSelecionado && !sacadoSelecionado && cols.includes("Sacado")) cols = ["Sacado", ...cols.filter(c => c !== "Sacado")];
@@ -1323,34 +1625,27 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
   const activeSort = useMemo(() => {
     if (sortConfig) return sortConfig;
     if (rows.length === 0) return null;
-    if (dateFilter?.type === 'emis') {
-      const emisKey = Object.keys(rows[0]).find(k => k.toLowerCase().includes('emis'));
-      if (emisKey) return { key: emisKey, direction: 'asc' };
-    }
-    if (dateFilter?.type === 'vcto') {
-      const vctoKey = Object.keys(rows[0]).find(k => k.toLowerCase().includes('vcto') && !k.toLowerCase().includes('vl'));
-      if (vctoKey) return { key: vctoKey, direction: 'asc' };
-    }
-    const defaultDateKey = Object.keys(rows[0]).find(k => k.toLowerCase().includes('vcto') && !k.toLowerCase().includes('vl')) || Object.keys(rows[0]).find(k => k.toLowerCase().includes('pgto') && !k.toLowerCase().includes('vl'));
-    if (defaultDateKey) return { key: defaultDateKey, direction: 'desc' };
+    const vctoKey = findKeyAcrossRows(rows, k => k.toLowerCase().includes('vcto') && !k.toLowerCase().includes('vl'));
+    if (vctoKey) return { key: vctoKey, direction: 'desc' };
+    const fallbackDateKey = findKeyAcrossRows(rows, k => k.toLowerCase().includes('pgto') && !k.toLowerCase().includes('vl')) || findKeyAcrossRows(rows, k => k.toLowerCase().includes('emis'));
+    if (fallbackDateKey) return { key: fallbackDateKey, direction: 'desc' };
     return null;
-  }, [sortConfig, rows, dateFilter]);
+  }, [sortConfig, rows]);
 
   const rowsWithEncargo = useMemo(() => {
     if (!rows.length) return rows;
-    const firstRow = rows[0];
-    const isSmartDataSource = dataSourceTable === "secInfoSmart";
-    const jurosMultaKey = Object.keys(firstRow).find(k => {
+    const jurosMultaKey = findKeyAcrossRows(rows, k => {
       const key = normalizarChave(k);
       return key.includes("juros") && key.includes("multa");
     });
-    const vlPgtoKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'vl pgto');
-    const pgtoKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'pgto' || (k.toLowerCase().includes('pgto') && !k.toLowerCase().includes('vl')));
-    const valKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'entrada' || (k.toLowerCase().includes('valor') && !k.toLowerCase().includes('pgto')));
-    const emisKey = Object.keys(firstRow).find(k => k.toLowerCase().includes('emis'));
-    const vctoKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'vcto' || (k.toLowerCase().includes('vcto') && !k.toLowerCase().includes('vl')));
-    const desagioKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'desagio' || k.toLowerCase() === 'deságio');
-    const borderoKey = Object.keys(firstRow).find(k => normalizarChave(k).includes("border"));
+    const vlPgtoKey = findKeyAcrossRows(rows, k => k.toLowerCase() === 'vl pgto');
+    const pgtoKey = findKeyAcrossRows(rows, k => k.toLowerCase() === 'pgto' || (k.toLowerCase().includes('pgto') && !k.toLowerCase().includes('vl')));
+    const valKey = findKeyAcrossRows(rows, k => k.toLowerCase() === 'entrada' || (k.toLowerCase().includes('valor') && !k.toLowerCase().includes('pgto')));
+    const emisKey = findKeyAcrossRows(rows, k => k.toLowerCase().includes('emis'));
+    const vctoKey = findKeyAcrossRows(rows, k => k.toLowerCase() === 'vcto' || (k.toLowerCase().includes('vcto') && !k.toLowerCase().includes('vl')));
+    const desagioKey = findKeyAcrossRows(rows, k => k.toLowerCase() === 'desagio' || k.toLowerCase() === 'deságio');
+    const borderoKey = findKeyAcrossRows(rows, k => normalizarChave(k).includes("border"));
+    const rateKey = findKeyAcrossRows(rows, k => k.toLowerCase() === 'tx.efet' || k.toLowerCase().includes('tx.efet') || k.toLowerCase().includes('tx efet'));
 
     const getPrazoComEncargos = (row) => {
       const dataBase = parseIsoDateLocal(emisKey ? row[emisKey] : null);
@@ -1370,7 +1665,7 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
     const rowsComEncargo = rows.map(r => {
       const val = valKey ? (Number(r[valKey]) || 0) : 0;
 
-      if (isSmartDataSource) {
+      if (isSmartSourceRow(r, dataSourceTable)) {
         const encargoSmart = jurosMultaKey ? (Number(r[jurosMultaKey]) || 0) : 0;
         const encargo = encargoSmart > 0 ? encargoSmart : 0;
         return { ...r, __encargo__: encargo, __tx_encargos__: 0 };
@@ -1383,12 +1678,13 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
       const encargoDentroLimite = encargoPossivel && vlPgto <= val * 1.4;
       const encargoCalculado = encargoDentroLimite ? (vlPgto - val) : 0;
       const encargo = encargoCalculado > 0 ? encargoCalculado : 0;
-      return { ...r, __encargo__: encargo, __tx_encargos__: 0 };
+      return { ...r, __encargo__: encargo, __tx_encargos__: rateKey ? parseTaxaPercentual(r[rateKey]) : 0 };
     });
 
     const gruposPorBordero = new Map();
     rowsComEncargo.forEach((row, index) => {
-      const bordero = borderoKey && row[borderoKey] ? String(row[borderoKey]).trim() : `avulso_${index}`;
+      if (!isSmartSourceRow(row, dataSourceTable)) return;
+      const bordero = getScopedBorderoKey(row, borderoKey, index, dataSourceTable);
       if (!gruposPorBordero.has(bordero)) gruposPorBordero.set(bordero, []);
       gruposPorBordero.get(bordero).push(row);
     });
@@ -1398,17 +1694,32 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
       let totalDesagioEncargos = 0;
       let weightedPrazo = 0;
 
+      let wbaDesagioAplicado = false;
+
       group.forEach((row) => {
         const valorFace = valKey ? (Number(row[valKey]) || 0) : 0;
         const desagio = desagioKey ? (Number(row[desagioKey]) || 0) : 0;
         const encargo = Number(row.__encargo__) || 0;
-        const valorDescontado = valorFace - desagio;
         const prazo = getPrazoComEncargos(row);
 
-        if (valorDescontado > 0 && prazo) {
-          totalDescontado += valorDescontado;
-          totalDesagioEncargos += desagio + encargo;
-          weightedPrazo += valorDescontado * prazo;
+        if (!prazo || valorFace <= 0) return;
+
+        if (isSmartSourceRow(row, dataSourceTable)) {
+          const valorDescontado = valorFace - desagio;
+          if (valorDescontado > 0) {
+            totalDescontado += valorDescontado;
+            totalDesagioEncargos += desagio + encargo;
+            weightedPrazo += valorDescontado * prazo;
+          }
+        } else {
+          totalDescontado += valorFace;
+          totalDesagioEncargos += encargo;
+          weightedPrazo += valorFace * prazo;
+          if (!wbaDesagioAplicado) {
+            totalDescontado -= desagio;
+            totalDesagioEncargos += desagio;
+            wbaDesagioAplicado = true;
+          }
         }
       });
 
@@ -1475,17 +1786,15 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
     const seenBorderosDesagio = new Set();
     const borderoMapTaxa = new Map();
     const borderoMapTicket = new Map();
-    const firstRow = sortedRows[0];
-    const borderoKey = Object.keys(firstRow).find(k => k.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes("border"));
-    const valKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'entrada' || (k.toLowerCase().includes('valor') && !k.toLowerCase().includes('pgto')));
-    const emisKey = Object.keys(firstRow).find(k => k.toLowerCase().includes('emis'));
-    const vctoKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'vcto' || (k.toLowerCase().includes('vcto') && !k.toLowerCase().includes('vl')));
-    const desagioKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'desagio' || k.toLowerCase() === 'deságio');
-    const rateKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'tx.efet' || k.toLowerCase().includes('tx.efet') || k.toLowerCase().includes('tx efet'));
-    const isSmartDataSource = dataSourceTable === "secInfoSmart";
+    const borderoKey = findKeyAcrossRows(sortedRows, k => k.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes("border"));
+    const valKey = findKeyAcrossRows(sortedRows, k => k.toLowerCase() === 'entrada' || (k.toLowerCase().includes('valor') && !k.toLowerCase().includes('pgto')));
+    const emisKey = findKeyAcrossRows(sortedRows, k => k.toLowerCase().includes('emis'));
+    const vctoKey = findKeyAcrossRows(sortedRows, k => k.toLowerCase() === 'vcto' || (k.toLowerCase().includes('vcto') && !k.toLowerCase().includes('vl')));
+    const desagioKey = findKeyAcrossRows(sortedRows, k => k.toLowerCase() === 'desagio' || k.toLowerCase() === 'deságio');
+    const rateKey = findKeyAcrossRows(sortedRows, k => k.toLowerCase() === 'tx.efet' || k.toLowerCase().includes('tx.efet') || k.toLowerCase().includes('tx efet'));
 
     sortedRows.forEach((row, idx) => {
-      const bNum = (borderoKey && row[borderoKey]) ? String(row[borderoKey]).trim() : `avulso_${idx}`; 
+      const bNum = getScopedBorderoKey(row, borderoKey, idx, dataSourceTable);
       const val = valKey ? (Number(row[valKey]) || 0) : 0;
 
       if (!borderoMapTicket.has(bNum)) {
@@ -1507,7 +1816,7 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
       }
 
       const desagioVal = desagioKey ? (Number(row[desagioKey]) || 0) : 0;
-      if (isSmartDataSource) {
+      if (isSmartSourceRow(row, dataSourceTable)) {
         d += desagioVal;
       } else if (!seenBorderosDesagio.has(bNum)) {
         seenBorderosDesagio.add(bNum);
@@ -1586,8 +1895,10 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
               </thead>
               <tbody>
                 {currentItems.map((r, idx) => {
+                  const rowSourceTable = getRowSourceTable(r, dataSourceTable);
+                  const borderoSourceLabel = rowSourceTable === "secInfoSmart" ? "Smart" : "WBA";
                   return (
-                    <tr key={r.id ?? idx} className={`table-row-${r._status || 'default'}`} style={{ borderBottom: "1px solid #e5e7eb", transition: "background 0.2s" }}>
+                    <tr key={r._rowKey ?? r.id ?? idx} className={`table-row-${r._status || 'default'}`} style={{ borderBottom: "1px solid #e5e7eb", transition: "background 0.2s" }}>
                       {columns.map((c) => {
                     let valor = r[c];
                     const valorOriginal = valor;
@@ -1596,11 +1907,11 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
                         const isRate = cLower.includes("tx") || cLower.includes("taxa");
                         const isDateColumn = !isCurrency && !isRate && (cLower.includes("emis") || cLower.includes("vcto") || cLower.includes("pgto") || cLower.includes("data"));
                         const isBorderoCol = cLower.normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes("border");
-                        const isThisBorderoFiltered = borderoFilter?.key === c && borderoFilter?.value === valor;
+                        const isThisBorderoFiltered = borderoFilter?.key === c && borderoFilter?.value === valor && (!borderoFilter.sourceTable || borderoFilter.sourceTable === rowSourceTable);
                         const isDctoCol = cLower === "dcto" || cLower === "documento";
                         const baseValor = String(valor || "").split(/[-/]/)[0].trim();
                         const baseFiltered = dctoFilter ? String(dctoFilter.value).split(/[-/]/)[0].trim() : null;
-                        const isThisDctoFiltered = dctoFilter?.key === c && baseValor === baseFiltered;
+                        const isThisDctoFiltered = dctoFilter?.key === c && baseValor === baseFiltered && (!dctoFilter.sourceTable || dctoFilter.sourceTable === rowSourceTable);
 
                         if (isDateColumn) valor = formatarData(valor);
                         else if (isCurrency) valor = fmtM(valor);
@@ -1616,9 +1927,14 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
                         <React.Fragment key={c}>
                           <td style={{ padding: "12px 16px", color: c === "__encargo__" && Number(valorOriginal) > 0 ? "#92400e" : "#374151", fontWeight: c === "__encargo__" && Number(valorOriginal) > 0 ? "600" : "400", background: c === "__encargo__" && Number(valorOriginal) > 0 ? "rgba(245, 158, 11, 0.04)" : "transparent" }}>
                             {isBorderoCol ? (
-                              <span onClick={(e) => { e.stopPropagation(); if (onBorderoDrill) onBorderoDrill({ key: c, value: valorOriginal, isActive: isThisBorderoFiltered }); else if (isThisBorderoFiltered) setBorderoFilter(null); else { setBorderoFilter({ key: c, value: valorOriginal }); setDctoFilter(null); setDateFilter({ type: 'emis', start: '', end: '' }); if (setInsightFilter) setInsightFilter(null); } }} style={{ background: isThisBorderoFiltered ? "#4f46e5" : "rgba(79, 70, 229, 0.08)", color: isThisBorderoFiltered ? "#fff" : "#4f46e5", padding: "4px 8px", borderRadius: "6px", fontWeight: "600", cursor: "pointer" }}>{escapeText(valor)}</span>
+                              <span onClick={(e) => { e.stopPropagation(); if (onBorderoDrill) onBorderoDrill({ key: c, value: valorOriginal, sourceTable: rowSourceTable, isActive: isThisBorderoFiltered }); else if (isThisBorderoFiltered) setBorderoFilter(null); else { setBorderoFilter({ key: c, value: valorOriginal, sourceTable: rowSourceTable }); setDctoFilter(null); setDateFilter({ type: 'emis', start: '', end: '' }); if (setInsightFilter) setInsightFilter(null); } }} style={{ background: isThisBorderoFiltered ? "#4f46e5" : "rgba(79, 70, 229, 0.08)", color: isThisBorderoFiltered ? "#fff" : "#4f46e5", padding: "4px 8px", borderRadius: "6px", fontWeight: "600", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "6px", whiteSpace: "nowrap" }}>
+                                <span style={{ flex: "0 0 auto", border: `1px solid ${rowSourceTable === "secInfoSmart" ? "#99f6e4" : "#bfdbfe"}`, background: rowSourceTable === "secInfoSmart" ? "#ccfbf1" : "#dbeafe", color: rowSourceTable === "secInfoSmart" ? "#0f766e" : "#1d4ed8", borderRadius: "999px", padding: "1px 6px", fontSize: "10px", fontWeight: 800, textTransform: "uppercase", lineHeight: 1.4 }}>
+                                  {borderoSourceLabel}
+                                </span>
+                                <span>{escapeText(valor)}</span>
+                              </span>
                             ) : isDctoCol ? (
-                              <span onClick={(e) => { e.stopPropagation(); if (onDctoDrill) onDctoDrill({ key: c, value: valorOriginal, isActive: isThisDctoFiltered }); else if (isThisDctoFiltered) setDctoFilter(null); else { setDctoFilter({ key: c, value: valorOriginal }); setBorderoFilter(null); setDateFilter({ type: 'emis', start: '', end: '' }); if (setInsightFilter) setInsightFilter(null); } }} style={{ background: isThisDctoFiltered ? "#0ea5e9" : "rgba(14, 165, 233, 0.08)", color: isThisDctoFiltered ? "#fff" : "#0ea5e9", padding: "4px 8px", borderRadius: "6px", fontWeight: "600", cursor: "pointer" }}>{escapeText(valor)}</span>
+                              <span onClick={(e) => { e.stopPropagation(); if (onDctoDrill) onDctoDrill({ key: c, value: valorOriginal, sourceTable: rowSourceTable, isActive: isThisDctoFiltered }); else if (isThisDctoFiltered) setDctoFilter(null); else { setDctoFilter({ key: c, value: valorOriginal, sourceTable: rowSourceTable }); setBorderoFilter(null); setDateFilter({ type: 'emis', start: '', end: '' }); if (setInsightFilter) setInsightFilter(null); } }} style={{ background: isThisDctoFiltered ? "#0ea5e9" : "rgba(14, 165, 233, 0.08)", color: isThisDctoFiltered ? "#fff" : "#0ea5e9", padding: "4px 8px", borderRadius: "6px", fontWeight: "600", cursor: "pointer" }}>{escapeText(valor)}</span>
                             ) : c === "Cliente" ? (
                               <span onClick={(e) => { e.stopPropagation(); setClienteSelecionado(valorOriginal); }} className="clickable-entity">{escapeText(valor)}</span>
                             ) : c === "Sacado" ? (
@@ -1706,10 +2022,16 @@ function CustomDropdown({ value, options, onChange, placeholder, formatOption = 
     document.addEventListener("mousedown", handleClickOutside); return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const filteredOptions = options.filter(opt =>
-    opt.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    formatOption(opt).toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const normalizedSearchTerm = useMemo(() => normalizarChave(searchTerm), [searchTerm]);
+  const filteredOptions = useMemo(() => {
+    if (!isOpen) return [];
+    if (!normalizedSearchTerm) return options;
+    return options.filter((opt) => {
+      const raw = String(opt || "");
+      const formatted = String(formatOption(opt) || "");
+      return normalizarChave(raw).includes(normalizedSearchTerm) || normalizarChave(formatted).includes(normalizedSearchTerm);
+    });
+  }, [options, normalizedSearchTerm, isOpen, formatOption]);
   const handleKeyDown = (e) => { if (e.key === 'Enter') { e.preventDefault(); if (isOpen && filteredOptions.length > 0) { onChange(filteredOptions[0]); setSearchTerm(""); setIsOpen(false); } } };
   const displayValue = isOpen ? searchTerm : formatOption(value);
 
@@ -1748,7 +2070,7 @@ function CustomDropdown({ value, options, onChange, placeholder, formatOption = 
 export default function MicroDashboard({ session, onSidebarToggle, hideValues, setHideValues }) {
   const [loading, setLoading] = useState(false);
   const [rows, setRows] = useState([]);
-  const [dataSourceTable, setDataSourceTable] = useState("secInfoSmart");
+  const [dataSourceTable, setDataSourceTable] = useState(BOTH_DATA_SOURCE);
   
   const [viewMode, setViewMode] = useState('all'); 
   const [insightFilter, setInsightFilter] = useState(null);
@@ -1816,6 +2138,18 @@ export default function MicroDashboard({ session, onSidebarToggle, hideValues, s
   const drillFilterContext = useRef(null);
   const suppressEntityFilterEffect = useRef(false);
 
+  const relacionamentoIndex = useMemo(() => criarIndiceRelacionamentos(relacionamentos), [relacionamentos]);
+  const clienteSelecionadoKey = useMemo(() => chaveEntidadePrefixo(clienteSelecionado), [clienteSelecionado]);
+  const sacadoSelecionadoKey = useMemo(() => chaveEntidadePrefixo(sacadoSelecionado), [sacadoSelecionado]);
+  const clienteSelecionadoAliases = useMemo(
+    () => getEntityAliases(relacionamentoIndex.clientes, clienteSelecionado),
+    [relacionamentoIndex, clienteSelecionado]
+  );
+  const sacadoSelecionadoAliases = useMemo(
+    () => getEntityAliases(relacionamentoIndex.sacados, sacadoSelecionado),
+    [relacionamentoIndex, sacadoSelecionado]
+  );
+
   useEffect(() => {
     latestDateFilter.current = dateFilter;
     latestQuickDate.current = activeQuickDate;
@@ -1827,16 +2161,10 @@ export default function MicroDashboard({ session, onSidebarToggle, hideValues, s
   };
 
   useEffect(() => {
+    // Ao trocar WBA/Smart/Ambos, mantém todos os filtros aplicados.
+    // Apenas limpa as linhas carregadas para forçar a nova busca na fonte selecionada.
     setRows([]);
-    setRelacionamentos([]);
     setRowsConcentracaoSacado([]);
-    drillFilterContext.current = null;
-    setClienteSelecionado("");
-    setSacadoSelecionado("");
-    setGrupoSelecionado("");
-    setInsightFilter(null);
-    setBorderoFilter(null);
-    setDctoFilter(null);
   }, [dataSourceTable]);
 
   useEffect(() => {
@@ -1935,10 +2263,10 @@ export default function MicroDashboard({ session, onSidebarToggle, hideValues, s
     setActiveQuickDate(null);
 
     if (type === "bordero") {
-      setBorderoFilter({ key: filter.key, value: filter.value });
+      setBorderoFilter({ key: filter.key, value: filter.value, sourceTable: filter.sourceTable });
       setDctoFilter(null);
     } else {
-      setDctoFilter({ key: filter.key, value: filter.value });
+      setDctoFilter({ key: filter.key, value: filter.value, sourceTable: filter.sourceTable });
       setBorderoFilter(null);
     }
   };
@@ -1993,10 +2321,9 @@ export default function MicroDashboard({ session, onSidebarToggle, hideValues, s
   const processedRows = useMemo(() => {
     if (rows.length === 0) return [];
     
-    const firstRow = rows[0];
-    const vctoKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'vcto' || (k.toLowerCase().includes('vcto') && !k.toLowerCase().includes('vl')));
-    const pgtoKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'pgto' || (k.toLowerCase().includes('pgto') && !k.toLowerCase().includes('vl')));
-    const statusKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'status' || k.toLowerCase() === 'estado');
+    const vctoKey = findKeyAcrossRows(rows, k => k.toLowerCase() === 'vcto' || (k.toLowerCase().includes('vcto') && !k.toLowerCase().includes('vl')));
+    const pgtoKey = findKeyAcrossRows(rows, k => k.toLowerCase() === 'pgto' || (k.toLowerCase().includes('pgto') && !k.toLowerCase().includes('vl')));
+    const statusKey = findKeyAcrossRows(rows, k => k.toLowerCase() === 'status' || k.toLowerCase() === 'estado');
     const today = new Date(); today.setHours(0, 0, 0, 0);
 
     return rows.map(r => {
@@ -2043,10 +2370,9 @@ export default function MicroDashboard({ session, onSidebarToggle, hideValues, s
     let base = rowsFilteredByMode;
     if (dateFilter.start || dateFilter.end) {
        if (base.length === 0) return base;
-       const firstRow = base[0];
        const key = dateFilter.type === 'emis' 
-         ? Object.keys(firstRow).find(k => k.toLowerCase().includes('emis'))
-         : Object.keys(firstRow).find(k => k.toLowerCase() === 'vcto' || (k.toLowerCase().includes('vcto') && !k.toLowerCase().includes('vl')));
+         ? findKeyAcrossRows(base, k => k.toLowerCase().includes('emis'))
+         : findKeyAcrossRows(base, k => k.toLowerCase() === 'vcto' || (k.toLowerCase().includes('vcto') && !k.toLowerCase().includes('vl')));
        
        base = base.filter(r => {
           if (!key || !r[key]) return false;
@@ -2069,32 +2395,31 @@ export default function MicroDashboard({ session, onSidebarToggle, hideValues, s
   const rowsParaTabela = useMemo(() => {
     let filtered = rowsFilteredByDate;
     if (insightFilter) filtered = filtered.filter(r => r._status === insightFilter);
-    if (borderoFilter) filtered = filtered.filter(r => r[borderoFilter.key] === borderoFilter.value);
+    if (borderoFilter) filtered = filtered.filter(r => r[borderoFilter.key] === borderoFilter.value && filterMatchesSource(r, borderoFilter, dataSourceTable));
     if (dctoFilter) {
       const baseTarget = String(dctoFilter.value).split(/[-/]/)[0].trim();
-      filtered = filtered.filter(r => String(r[dctoFilter.key] || "").split(/[-/]/)[0].trim() === baseTarget);
+      filtered = filtered.filter(r => String(r[dctoFilter.key] || "").split(/[-/]/)[0].trim() === baseTarget && filterMatchesSource(r, dctoFilter, dataSourceTable));
     }
     return filtered;
-  }, [rowsFilteredByDate, insightFilter, borderoFilter, dctoFilter]);
+  }, [rowsFilteredByDate, insightFilter, borderoFilter, dctoFilter, dataSourceTable]);
 
   const rowsParaRiscoAtual = useMemo(() => {
   let filtered = rowsFilteredByMode;
 
   if (insightFilter) filtered = filtered.filter(r => r._status === insightFilter);
-  if (borderoFilter) filtered = filtered.filter(r => r[borderoFilter.key] === borderoFilter.value);
+  if (borderoFilter) filtered = filtered.filter(r => r[borderoFilter.key] === borderoFilter.value && filterMatchesSource(r, borderoFilter, dataSourceTable));
   if (dctoFilter) {
     const baseTarget = String(dctoFilter.value).split(/[-/]/)[0].trim();
-    filtered = filtered.filter(r => String(r[dctoFilter.key] || "").split(/[-/]/)[0].trim() === baseTarget);
+    filtered = filtered.filter(r => String(r[dctoFilter.key] || "").split(/[-/]/)[0].trim() === baseTarget && filterMatchesSource(r, dctoFilter, dataSourceTable));
   }
 
   return filtered.filter(r => ['aVencer', 'atraso'].includes(r._status));
-}, [rowsFilteredByMode, insightFilter, borderoFilter, dctoFilter]);
+}, [rowsFilteredByMode, insightFilter, borderoFilter, dctoFilter, dataSourceTable]);
 
 const riscoAtual = useMemo(() => {
   if (!rowsParaRiscoAtual || rowsParaRiscoAtual.length === 0) return 0;
 
-  const firstRow = rowsParaRiscoAtual[0];
-  const valKey = Object.keys(firstRow).find(
+  const valKey = findKeyAcrossRows(rowsParaRiscoAtual,
     k => k.toLowerCase() === 'entrada' || (k.toLowerCase().includes('valor') && !k.toLowerCase().includes('pgto'))
   );
 
@@ -2127,17 +2452,15 @@ const kpiData = useMemo(() => {
     let sumPrazoWeighted = 0;
     let countTitulos = 0;
 
-    const firstRow = rowsParaTabela[0];
-    const borderoKey = Object.keys(firstRow).find(k => k.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes("border"));
-    const valKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'entrada' || (k.toLowerCase().includes('valor') && !k.toLowerCase().includes('pgto')));
-    const vlPgtoKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'vl pgto');
-    const pgtoKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'pgto' || (k.toLowerCase().includes('pgto') && !k.toLowerCase().includes('vl')));
-    const rateKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'tx.efet' || k.toLowerCase().includes('tx.efet') || k.toLowerCase().includes('tx efet'));
-    const emisKey = Object.keys(firstRow).find(k => k.toLowerCase().includes('emis'));
-    const vctoKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'vcto' || (k.toLowerCase().includes('vcto') && !k.toLowerCase().includes('vl')));
-    const desagioKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'desagio' || k.toLowerCase() === 'deságio');
-    const isSmartDataSource = dataSourceTable === "secInfoSmart";
-    const jurosMultaKey = Object.keys(firstRow).find(k => {
+    const borderoKey = findKeyAcrossRows(rowsParaTabela, k => k.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes("border"));
+    const valKey = findKeyAcrossRows(rowsParaTabela, k => k.toLowerCase() === 'entrada' || (k.toLowerCase().includes('valor') && !k.toLowerCase().includes('pgto')));
+    const vlPgtoKey = findKeyAcrossRows(rowsParaTabela, k => k.toLowerCase() === 'vl pgto');
+    const pgtoKey = findKeyAcrossRows(rowsParaTabela, k => k.toLowerCase() === 'pgto' || (k.toLowerCase().includes('pgto') && !k.toLowerCase().includes('vl')));
+    const rateKey = findKeyAcrossRows(rowsParaTabela, k => k.toLowerCase() === 'tx.efet' || k.toLowerCase().includes('tx.efet') || k.toLowerCase().includes('tx efet'));
+    const emisKey = findKeyAcrossRows(rowsParaTabela, k => k.toLowerCase().includes('emis'));
+    const vctoKey = findKeyAcrossRows(rowsParaTabela, k => k.toLowerCase() === 'vcto' || (k.toLowerCase().includes('vcto') && !k.toLowerCase().includes('vl')));
+    const desagioKey = findKeyAcrossRows(rowsParaTabela, k => k.toLowerCase() === 'desagio' || k.toLowerCase() === 'deságio');
+    const jurosMultaKey = findKeyAcrossRows(rowsParaTabela, k => {
       const key = normalizarChave(k);
       return key.includes("juros") && key.includes("multa");
     });
@@ -2153,7 +2476,9 @@ const kpiData = useMemo(() => {
     let maxDate = null;
 
     rowsParaTabela.forEach((r, idx) => {
-      const bNum = (borderoKey && r[borderoKey]) ? String(r[borderoKey]).trim() : `avulso_${idx}`; 
+      const bNum = getScopedBorderoKey(r, borderoKey, idx, dataSourceTable);
+      const borderoDisplay = (borderoKey && r[borderoKey]) ? String(r[borderoKey]).trim() : `avulso_${idx}`;
+      const rowIsSmart = isSmartSourceRow(r, dataSourceTable);
       const val = valKey ? (Number(r[valKey]) || 0) : 0;
 
       const vlPgto = vlPgtoKey ? (Number(r[vlPgtoKey]) || 0) : 0;
@@ -2164,7 +2489,7 @@ const kpiData = useMemo(() => {
       const rate = hasRateVal ? (Number(String(rawRate).replace('%', '').replace(',', '.')) || 0) : 0;
 
       const desagioVal = desagioKey ? (Number(r[desagioKey]) || 0) : 0;
-      if (isSmartDataSource) {
+      if (rowIsSmart) {
          totalDesagio += desagioVal;
       } else if (!seenBorderosDesagio.has(bNum)) {
          seenBorderosDesagio.add(bNum);
@@ -2172,7 +2497,7 @@ const kpiData = useMemo(() => {
       }
 
       // Encargo por título (não deduplicado por borderô)
-      if (isSmartDataSource) {
+      if (rowIsSmart) {
         if (jurosMulta > 0) totalEncargos += jurosMulta;
       } else {
         const temPgto = pgtoKey && r[pgtoKey] && String(r[pgtoKey]).trim() !== "";
@@ -2184,7 +2509,7 @@ const kpiData = useMemo(() => {
       }
 
       if (!borderoMap.has(bNum)) {
-        borderoMap.set(bNum, { totalValue: 0, rate: 0, hasRate: false });
+        borderoMap.set(bNum, { totalValue: 0, rate: 0, hasRate: false, sourceTable: getRowSourceTable(r, dataSourceTable) });
       }
       const bData = borderoMap.get(bNum);
       bData.totalValue += val;
@@ -2193,41 +2518,34 @@ const kpiData = useMemo(() => {
         bData.hasRate = true;
       }
 
-      if (!txEncargosMap.has(bNum)) {
-        txEncargosMap.set(bNum, {
-          totalDescontado: 0,
-          totalDesagioEncargos: 0,
-          weightedPrazo: 0,
-        });
-      }
-      const txEncargosData = txEncargosMap.get(bNum);
-      const valorDescontado = val - desagioVal;
-      let encargoTitulo = 0;
-      if (isSmartDataSource) {
-        encargoTitulo = jurosMulta > 0 ? jurosMulta : 0;
-      } else {
-        const temPgto = pgtoKey && r[pgtoKey] && String(r[pgtoKey]).trim() !== "";
-        const encargoPossivel = temPgto && vlPgto > 0 && val > 0 && vlPgto !== val;
-        if (encargoPossivel && vlPgto <= val * 1.4) {
-          const encargoCalculado = vlPgto - val;
-          encargoTitulo = encargoCalculado > 0 ? encargoCalculado : 0;
+      if (rowIsSmart) {
+        if (!txEncargosMap.has(bNum)) {
+          txEncargosMap.set(bNum, {
+            totalDescontado: 0,
+            totalDesagioEncargos: 0,
+            weightedPrazo: 0,
+          });
         }
-      }
+        const txEncargosData = txEncargosMap.get(bNum);
+        const encargoTitulo = jurosMulta > 0 ? jurosMulta : 0;
+        const dataBaseEnc = parseIsoDateLocal(emisKey ? r[emisKey] : null);
+        const vencimentoEnc = parseIsoDateLocal(vctoKey ? r[vctoKey] : null);
+        const valorDescontado = val - desagioVal;
+        const desagioEncargosTitulo = desagioVal + encargoTitulo;
 
-      const dataBaseEnc = parseIsoDateLocal(emisKey ? r[emisKey] : null);
-      const vencimentoEnc = parseIsoDateLocal(vctoKey ? r[vctoKey] : null);
-      if (valorDescontado > 0 && dataBaseEnc && vencimentoEnc) {
-        const vencimentoAjustado = adjustToNextBusinessDay(vencimentoEnc);
-        const dataFinalBase = addBusinessDays(vencimentoAjustado, 2);
-        const prazoBase = diffCalendarDays(dataBaseEnc, dataFinalBase);
-        const dataQuitacao = parseIsoDateLocal(pgtoKey ? r[pgtoKey] : null);
-        const diasAtraso = dataQuitacao ? Math.max(0, diffCalendarDays(vencimentoEnc, dataQuitacao)) : 0;
-        const prazoEncargos = prazoBase > 0 ? prazoBase + diasAtraso : null;
+        if (valorDescontado > 0 && dataBaseEnc && vencimentoEnc) {
+          const vencimentoAjustado = adjustToNextBusinessDay(vencimentoEnc);
+          const dataFinalBase = addBusinessDays(vencimentoAjustado, 2);
+          const prazoBase = diffCalendarDays(dataBaseEnc, dataFinalBase);
+          const dataQuitacao = parseIsoDateLocal(pgtoKey ? r[pgtoKey] : null);
+          const diasAtraso = dataQuitacao ? Math.max(0, diffCalendarDays(vencimentoEnc, dataQuitacao)) : 0;
+          const prazoEncargos = prazoBase > 0 ? prazoBase + diasAtraso : null;
 
-        if (prazoEncargos) {
-          txEncargosData.totalDescontado += valorDescontado;
-          txEncargosData.totalDesagioEncargos += desagioVal + encargoTitulo;
-          txEncargosData.weightedPrazo += valorDescontado * prazoEncargos;
+          if (prazoEncargos) {
+            txEncargosData.totalDescontado += valorDescontado;
+            txEncargosData.totalDesagioEncargos += desagioEncargosTitulo;
+            txEncargosData.weightedPrazo += valorDescontado * prazoEncargos;
+          }
         }
       }
 
@@ -2237,7 +2555,8 @@ const kpiData = useMemo(() => {
       const prevLatest = latestBorderoById.get(bNum);
       if (!prevLatest || ((emisDateForLatest && prevLatest.emisDate && emisDateForLatest > prevLatest.emisDate) || (emisDateForLatest && !prevLatest.emisDate))) {
         latestBorderoById.set(bNum, {
-          bordero: bNum,
+          bordero: borderoDisplay,
+          sourceTable: getRowSourceTable(r, dataSourceTable),
           taxa: hasRateVal ? rate : null,
           emisDate: emisDateForLatest
         });
@@ -2272,6 +2591,7 @@ const kpiData = useMemo(() => {
     let baseCalculoTaxa = 0;
     let sumTaxaWeighted = 0;
     let sumTaxaEncargosWeighted = 0;
+    const borderosComTaxaEncargosCalculada = new Set();
 
     borderoMap.forEach(b => {
       if (b.hasRate && b.totalValue > 0) {
@@ -2289,6 +2609,13 @@ const kpiData = useMemo(() => {
 
       if (taxaEncargos !== null && Number.isFinite(taxaEncargos) && taxaBase?.totalValue > 0) {
         sumTaxaEncargosWeighted += taxaEncargos * taxaBase.totalValue;
+        borderosComTaxaEncargosCalculada.add(bordero);
+      }
+    });
+
+    borderoMap.forEach((b, bordero) => {
+      if (b.hasRate && b.totalValue > 0 && !borderosComTaxaEncargosCalculada.has(bordero)) {
+        sumTaxaEncargosWeighted += b.rate * b.totalValue;
       }
     });
 
@@ -2299,8 +2626,7 @@ const kpiData = useMemo(() => {
       diasOperacao = Math.max(1, diff);
     }
 
-    const ultimasTaxas = Array.from(latestBorderoById.values())
-      .sort((a, b) => {
+    const ordenarTaxasPorBordero = (items) => [...items].sort((a, b) => {
         const borderoA = parseNumeroOrdenacao(a.bordero);
         const borderoB = parseNumeroOrdenacao(b.bordero);
         if (borderoA !== null && borderoB !== null && borderoA !== borderoB) {
@@ -2309,16 +2635,32 @@ const kpiData = useMemo(() => {
         if (borderoA !== null && borderoB === null) return -1;
         if (borderoA === null && borderoB !== null) return 1;
         return String(b.bordero).localeCompare(String(a.bordero), "pt-BR", { numeric: true });
-      })
-      .slice(0, 5)
-      .map(item => ({
+      });
+
+    const taxasPorFonte = Array.from(latestBorderoById.values()).reduce((acc, item) => {
+      const sourceTable = item.sourceTable || "secInfo";
+      if (!acc[sourceTable]) acc[sourceTable] = [];
+      acc[sourceTable].push(item);
+      return acc;
+    }, {});
+
+    const ultimasTaxasBase = dataSourceTable === BOTH_DATA_SOURCE
+      ? [
+          ...ordenarTaxasPorBordero(taxasPorFonte.secInfoSmart || []),
+          ...ordenarTaxasPorBordero(taxasPorFonte.secInfo || []),
+        ].slice(0, 5)
+      : ordenarTaxasPorBordero(Array.from(latestBorderoById.values())).slice(0, 5);
+
+    const ultimasTaxas = ultimasTaxasBase.map(item => ({
         bordero: item.bordero,
+        sourceTable: item.sourceTable || "secInfo",
         taxa: item.taxa,
         emis: item.emisDate
       }));
 
 const taxaMedia = baseCalculoTaxa > 0 ? (sumTaxaWeighted / baseCalculoTaxa) : 0;
-const taxaMediaEncargos = isSmartDataSource && baseCalculoTaxa > 0
+const shouldUseTaxaEncargos = dataSourceTable === "secInfoSmart" || dataSourceTable === BOTH_DATA_SOURCE;
+const taxaMediaEncargos = shouldUseTaxaEncargos && baseCalculoTaxa > 0 && sumTaxaEncargosWeighted > 0
   ? (sumTaxaEncargosWeighted / baseCalculoTaxa)
   : taxaMedia;
 
@@ -2340,14 +2682,23 @@ return {
   }, [rowsParaTabela, dataSourceTable]);
 
   useEffect(() => {
-    if (session) {
+    if (session?.user?.id) {
       async function buscarRelacionamentos() {
-        const { data } = await supabase.from(dataSourceTable).select("Cliente, Sacado, inadimplencia");
-        if (data) setRelacionamentos(data.filter(registroValidoParaAnalise));
+        try {
+          const results = await Promise.all(getDataSourceTables(dataSourceTable).map(async (sourceTable) => {
+            const { data, error } = await supabase.from(sourceTable).select("Cliente, Sacado, inadimplencia");
+            if (error) throw error;
+            return (data || []).map((row, index) => tagSourceRow(row, sourceTable, index));
+          }));
+          setRelacionamentos(results.flat().filter(registroValidoParaAnalise));
+        } catch (error) {
+          console.error("Erro ao buscar relacionamentos:", error);
+          setRelacionamentos([]);
+        }
       }
       buscarRelacionamentos();
     }
-  }, [session, dataSourceTable]);
+  }, [session?.user?.id, dataSourceTable]);
 
   useEffect(() => {
   if (!session?.user?.id) return;
@@ -2358,80 +2709,105 @@ return {
       return;
     }
 
-    const cedentesRelacionados = Array.from(
+    const sacadoGroup = relacionamentoIndex.sacados.get(sacadoSelecionadoKey);
+    const cedentesRelacionadosAliases = Array.from(
       new Set(
-        relacionamentos
-          .filter((r) => r.Sacado === sacadoSelecionado && registroValidoParaAnalise(r))
-          .map((r) => String(r.Cliente || "").trim())
+        (sacadoGroup?.relatedKeys || [])
+          .flatMap((clienteKey) => relacionamentoIndex.clientes.get(clienteKey)?.aliases || [])
+          .map((nome) => String(nome || "").trim())
           .filter(Boolean)
       )
     );
 
-    if (!cedentesRelacionados.length) {
+    if (!cedentesRelacionadosAliases.length) {
       setRowsConcentracaoSacado([]);
       return;
     }
 
-    const { data } = await supabase
-      .from(dataSourceTable)
-      .select("*")
-      .in("Cliente", cedentesRelacionados)
-      .order("id", { ascending: false })
-      .limit(20000);
+    try {
+      const results = await Promise.all(getDataSourceTables(dataSourceTable).map(async (sourceTable) => {
+        let query = supabase.from(sourceTable).select("*");
+        const applied = applyInFilterIfPossible(query, "Cliente", cedentesRelacionadosAliases);
+        if (applied.empty) return [];
+        query = applied.query.order("id", { ascending: false }).limit(20000);
 
-    if (data) {
-      const filtrados = data.filter(
-        registroValidoParaAnalise
-      );
+        const { data, error } = await query;
+        if (error) throw error;
+        return (data || []).map((row, index) => tagSourceRow(row, sourceTable, index));
+      }));
+
+      const clienteKeysPermitidos = new Set(sacadoGroup?.relatedKeys || []);
+      const filtrados = results
+        .flat()
+        .filter((r) => registroValidoParaAnalise(r) && clienteKeysPermitidos.has(getEntityKeyFromRow(r, "Cliente")));
       setRowsConcentracaoSacado(filtrados);
-    } else {
+    } catch (error) {
+      console.error("Erro ao buscar concentração por sacado:", error);
       setRowsConcentracaoSacado([]);
     }
-  }, 300);
+  }, 80);
 
   return () => clearTimeout(delayDebounceFn);
-}, [session?.user?.id, sacadoSelecionado, clienteSelecionado, grupoSelecionado, relacionamentos, dataSourceTable]);
+}, [session?.user?.id, sacadoSelecionado, sacadoSelecionadoKey, clienteSelecionado, grupoSelecionado, relacionamentoIndex, dataSourceTable]);
 
   const clientesDisponiveis = useMemo(() => {
-    let base = relacionamentos;
-    if (sacadoSelecionado) base = base.filter(r => r.Sacado === sacadoSelecionado);
-    return Array.from(new Set(base.map(r => r.Cliente).filter(Boolean))).sort();
-  }, [relacionamentos, sacadoSelecionado]);
+    if (!sacadoSelecionadoKey) return relacionamentoIndex.clienteOptions;
+    const sacadoGroup = relacionamentoIndex.sacados.get(sacadoSelecionadoKey);
+    return pickLabelsFromKeys(relacionamentoIndex.clientes, sacadoGroup?.relatedKeys || []);
+  }, [relacionamentoIndex, sacadoSelecionadoKey]);
 
   const sacadosDisponiveis = useMemo(() => {
-    let base = relacionamentos;
-    if (clienteSelecionado) base = base.filter(r => r.Cliente === clienteSelecionado);
-    return Array.from(new Set(base.map(r => r.Sacado).filter(Boolean))).sort();
-  }, [relacionamentos, clienteSelecionado]);
+    if (!clienteSelecionadoKey) return relacionamentoIndex.sacadoOptions;
+    const clienteGroup = relacionamentoIndex.clientes.get(clienteSelecionadoKey);
+    return pickLabelsFromKeys(relacionamentoIndex.sacados, clienteGroup?.relatedKeys || []);
+  }, [relacionamentoIndex, clienteSelecionadoKey]);
 
   useEffect(() => {
     if (!session?.user?.id) return;
     const delayDebounceFn = setTimeout(async () => {
       setLoading(true);
-      let query = supabase.from(dataSourceTable).select("*");
-      if (clienteSelecionado) {
-        query = query.eq("Cliente", clienteSelecionado);
-      } else if (grupoSelecionado) {
-        const grupo = GRUPOS_ECONOMICOS.find(g => g.label === grupoSelecionado);
-        if (grupo) {
-          // Filtra clientes cujo nome começa com algum dos prefixos do grupo
-          // Supabase não tem startsWith múltiplo, então buscamos sem filtro e filtramos no client
-          // Para eficiência, usamos ilike com or via rpc ou simplesmente filtramos no client
+      try {
+        const activeSourceFilter = !clienteSelecionado && !grupoSelecionado && !sacadoSelecionado
+          ? (borderoFilter?.sourceTable || dctoFilter?.sourceTable || null)
+          : null;
+
+        const results = await Promise.all(getDataSourceTables(dataSourceTable, activeSourceFilter).map(async (sourceTable) => {
+          let query = supabase.from(sourceTable).select("*");
+
+          if (clienteSelecionado) {
+            const applied = applyInFilterIfPossible(query, "Cliente", clienteSelecionadoAliases);
+            if (applied.empty) return [];
+            query = applied.query;
+          }
+
+          if (sacadoSelecionado) {
+            const applied = applyInFilterIfPossible(query, "Sacado", sacadoSelecionadoAliases);
+            if (applied.empty) return [];
+            query = applied.query;
+          }
+
+          if (!clienteSelecionado && !grupoSelecionado && !sacadoSelecionado) {
+            if (borderoFilter?.key) {
+              query = query.eq(borderoFilter.key, borderoFilter.value);
+            } else if (dctoFilter?.key) {
+              const baseTarget = String(dctoFilter.value).split(/[-/]/)[0].trim();
+              query = query.ilike(dctoFilter.key, `${baseTarget}%`);
+            }
+          }
+
+          query = query.order("id", { ascending: false }).limit(10000);
+          const { data, error } = await query;
+          if (error) throw error;
+          return (data || []).map((row, index) => tagSourceRow(row, sourceTable, index));
+        }));
+
+        let filtered = results.flat().filter(registroValidoParaAnalise);
+        if (clienteSelecionadoKey) {
+          filtered = filtered.filter((r) => getEntityKeyFromRow(r, "Cliente") === clienteSelecionadoKey);
         }
-      }
-      if (sacadoSelecionado) query = query.eq("Sacado", sacadoSelecionado);
-      if (!clienteSelecionado && !grupoSelecionado && !sacadoSelecionado) {
-        if (borderoFilter?.key) {
-          query = query.eq(borderoFilter.key, borderoFilter.value);
-        } else if (dctoFilter?.key) {
-          const baseTarget = String(dctoFilter.value).split(/[-/]/)[0].trim();
-          query = query.ilike(dctoFilter.key, `${baseTarget}%`);
+        if (sacadoSelecionadoKey) {
+          filtered = filtered.filter((r) => getEntityKeyFromRow(r, "Sacado") === sacadoSelecionadoKey);
         }
-      }
-      query = query.order("id", { ascending: false }).limit(10000);
-      const { data } = await query;
-      if (data) {
-        let filtered = data.filter(registroValidoParaAnalise);
         if (grupoSelecionado && !clienteSelecionado) {
           const grupo = GRUPOS_ECONOMICOS.find(g => g.label === grupoSelecionado);
           if (grupo) {
@@ -2439,11 +2815,15 @@ return {
           }
         }
         setRows(filtered);
+      } catch (error) {
+        console.error("Erro ao buscar dados do MicroDashboard:", error);
+        setRows([]);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
-    }, 300);
+    }, 80);
     return () => clearTimeout(delayDebounceFn);
-  }, [clienteSelecionado, sacadoSelecionado, grupoSelecionado, session?.user?.id, dataSourceTable, borderoFilter, dctoFilter]);
+  }, [clienteSelecionado, clienteSelecionadoKey, clienteSelecionadoAliases, sacadoSelecionado, sacadoSelecionadoKey, sacadoSelecionadoAliases, grupoSelecionado, session?.user?.id, dataSourceTable, borderoFilter, dctoFilter]);
 
   const limparFiltroEntidades = () => {
     setClienteSelecionado(""); 
@@ -2453,6 +2833,21 @@ return {
 
   const limparFiltroData = () => {
     handleSetDateFilter({ type: inputType, start: '', end: '' }); 
+  };
+
+  const handleSelectSacadoConcentracao = (sacado) => {
+    const nextSacado = sacado || "";
+
+    setSacadoSelecionado(nextSacado);
+    setInsightFilter(null);
+    setBorderoFilter(null);
+    setDctoFilter(null);
+
+    if (nextSacado) {
+      setViewMode("open");
+    } else {
+      setViewMode("all");
+    }
   };
 
   const hasEntityFilter = !!(clienteSelecionado || sacadoSelecionado || grupoSelecionado);
@@ -2490,6 +2885,13 @@ return (
           .table-row-default:hover { background: #f9fafb; }
           .clickable-entity { cursor: pointer; font-weight: 600; color: #374151; transition: color 0.2s; }
           .clickable-entity:hover { color: #4f46e5; }
+          .kpi-grid { grid-template-columns: repeat(3, minmax(260px, 1fr)); }
+          @media (max-width: 900px) {
+            .kpi-grid { grid-template-columns: repeat(2, minmax(240px, 1fr)); }
+          }
+          @media (max-width: 640px) {
+            .kpi-grid { grid-template-columns: 1fr; }
+          }
         `}
       </style>
 
@@ -2508,7 +2910,7 @@ return (
         style={{
           position: "fixed",
           top: "16px",
-          left: "16px",
+          left: isSidebarOpen ? "min(316px, calc(100vw - 56px))" : "16px",
           zIndex: 10000,
           background: "#fff",
           border: "1px solid #e5e7eb",
@@ -2520,16 +2922,23 @@ return (
           alignItems: "center",
           justifyContent: "center",
           color: "#374151",
-          transition: "background 0.2s"
+          transition: "left 0.3s cubic-bezier(0.4, 0, 0.2, 1), background 0.2s"
         }}
         onMouseOver={(e) => e.currentTarget.style.background = "#f3f4f6"}
         onMouseOut={(e) => e.currentTarget.style.background = "#fff"}
       >
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-          <line x1="3" y1="12" x2="21" y2="12"></line>
-          <line x1="3" y1="6" x2="21" y2="6"></line>
-          <line x1="3" y1="18" x2="21" y2="18"></line>
-        </svg>
+        {isSidebarOpen ? (
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        ) : (
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="3" y1="12" x2="21" y2="12"></line>
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <line x1="3" y1="18" x2="21" y2="18"></line>
+          </svg>
+        )}
       </button>
 
       {/* --- SIDEBAR LATERAL FIXA (FILTROS) --- */}
@@ -2541,7 +2950,7 @@ return (
         width: "300px",
         background: "#fff",
         padding: "24px",
-        paddingTop: "72px",
+        paddingTop: "24px",
         boxShadow: "4px 0 15px rgba(0,0,0,0.05)",
         borderRight: "1px solid #e5e7eb",
         display: "flex",
@@ -2554,36 +2963,6 @@ return (
       }}>
         <h2 style={{ margin: 0, color: "#111827", fontSize: "18px", borderBottom: "2px solid #f3f4f6", paddingBottom: "12px" }}>Filtros de Análise</h2>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-          <label style={{ display: "block", fontSize: "13px", fontWeight: "700", color: "#111827" }}>Fonte de Dados</label>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
-            {[
-              { table: "secInfo", label: "WBA" },
-              { table: "secInfoSmart", label: "Smart" },
-            ].map((source) => {
-              const active = dataSourceTable === source.table;
-              return (
-                <button
-                  key={source.table}
-                  type="button"
-                  onClick={() => setDataSourceTable(source.table)}
-                  style={{
-                    padding: "9px 10px",
-                    borderRadius: "8px",
-                    border: `1px solid ${active ? "#0f766e" : "#d1d5db"}`,
-                    background: active ? "#ccfbf1" : "#fff",
-                    color: active ? "#0f766e" : "#374151",
-                    fontWeight: 800,
-                    fontSize: "12px",
-                    cursor: "pointer",
-                  }}
-                >
-                  {source.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
           <div>
@@ -2653,6 +3032,35 @@ return (
           <div style={{ display: "flex", gap: "8px", flexDirection: "column", marginTop: "8px" }}>
             <button onClick={() => { handleSetDateFilter({ type: inputType, start: inputDateStart, end: inputDateEnd }); setBorderoFilter(null); setDctoFilter(null); }} style={{ padding: "10px", borderRadius: "8px", border: "none", background: "#4f46e5", color: "#fff", fontWeight: "600", fontSize: "13px", cursor: "pointer", transition: "all 0.2s" }}>Aplicar Intervalo</button>
             <button onClick={limparFiltroData} disabled={!hasDateFilter} style={{ padding: "10px", borderRadius: "8px", border: "1px solid #d1d5db", background: (!hasDateFilter) ? "#f9fafb" : "#fff", color: (!hasDateFilter) ? "#9ca3af" : "#ef4444", fontWeight: "600", fontSize: "13px", cursor: (!hasDateFilter) ? "not-allowed" : "pointer", transition: "all 0.2s" }}>Limpar Data</button>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "auto", paddingTop: "24px", borderTop: "1px dashed #d1d5db" }}>
+          <label style={{ display: "block", fontSize: "13px", fontWeight: "700", color: "#111827" }}>Fonte de Dados</label>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+            {MICRO_DATA_SOURCE_OPTIONS.map((source) => {
+              const active = dataSourceTable === source.table;
+              return (
+                <button
+                  key={source.table}
+                  type="button"
+                  onClick={() => setDataSourceTable(source.table)}
+                  style={{
+                    padding: "9px 10px",
+                    borderRadius: "8px",
+                    border: `1px solid ${active ? "#0f766e" : "#d1d5db"}`,
+                    background: active ? "#ccfbf1" : "#fff",
+                    color: active ? "#0f766e" : "#374151",
+                    fontWeight: 800,
+                    fontSize: "12px",
+                    cursor: "pointer",
+                    gridColumn: source.table === BOTH_DATA_SOURCE ? "1 / -1" : "auto",
+                  }}
+                >
+                  {source.label}
+                </button>
+              );
+            })}
           </div>
         </div>
       </aside>
@@ -2749,11 +3157,10 @@ return (
             <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
               {/* NOVO BANNER DE KPIs: 4 COLUNAS E DESÁGIO ADICIONADO */}
               {rowsParaTabela.length > 0 && (
-                <div style={{
+                <div className="kpi-grid" style={{
                   background: "#d1d5db", 
                   borderRadius: "12px",
                   display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(max(260px, calc((100% - 3 * 1px) / 4)), 1fr))",
                   gap: "1px",
                   boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)", 
                   border: "1px solid #d1d5db",
@@ -2761,7 +3168,7 @@ return (
                 }}>
 
                 {/* INFO 0: Risco Atual */}
-                <div style={{ background: "linear-gradient(180deg, #ffffff 0%, #ffffff 100%)", borderTop: "3px solid #16a34a", padding: "20px 16px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                <div style={{ order: 1, background: "linear-gradient(180deg, #ffffff 0%, #ffffff 100%)", borderTop: "3px solid #16a34a", padding: "20px 16px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
                     <div style={{ background: "rgba(22, 163, 74, 0.10)", padding: "6px", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}>
                       <svg width="16" height="16" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
@@ -2773,7 +3180,7 @@ return (
                       Risco Atual
                     </h3>
                   </div>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: "4px" }}>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: "4px", marginTop: "12px" }}>
                     <span style={{ fontSize: "28px", fontWeight: "700", color: "#111827", lineHeight: "1", letterSpacing: "-0.02em", wordBreak: "break-word" }}>
                       {fmtM(riscoAtual)}
                     </span>
@@ -2784,19 +3191,22 @@ return (
                 </div>
 
                 {/* INFO 1: Taxa Média */}
-                <div style={{ background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #4f46e5", padding: "20px 16px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                <div style={{ order: 5, background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #4f46e5", padding: "20px 16px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
                     <div style={{ background: "rgba(79, 70, 229, 0.1)", padding: "6px", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}>
                       <svg width="16" height="16" fill="none" stroke="#4f46e5" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M23 6l-9.5 9.5-5-5L1 18"/><path d="M17 6h6v6"/></svg>
                     </div>
                     <h3 style={{ margin: 0, fontSize: "11px", fontWeight: "700", color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "normal" }}>Taxa Média Ponderada</h3>
                   </div>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: "4px" }}>
+                  <div style={{ margin: 0, fontSize: "11px", fontWeight: "700", color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "normal" }}>
+                    Final
+                  </div>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: "4px", marginTop: "12px" }}>
                     <span style={{ fontSize: "28px", fontWeight: "700", color: "#111827", lineHeight: "1", letterSpacing: "-0.02em", wordBreak: "break-word" }}>{kpiData.taxaMedia.toFixed(2).replace('.', ',')}% a.m.</span>
                   </div>
                   <div style={{ height: "1px", background: "#e5e7eb", margin: "22px 0 20px" }} />
                   <div style={{ margin: 0, fontSize: "11px", fontWeight: "700", color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "normal" }}>
-                    Taxa Média Ponderada com Encargos
+                    Final com Encargos
                   </div>
                   <div style={{ display: "flex", alignItems: "baseline", gap: "4px", marginTop: "12px" }}>
                     <span style={{ fontSize: "28px", fontWeight: "700", color: "#111827", lineHeight: "1", letterSpacing: "-0.02em", wordBreak: "break-word" }}>{kpiData.taxaMediaEncargos.toFixed(2).replace('.', ',')}% a.m.</span>
@@ -2806,8 +3216,8 @@ return (
                   </div>
                 </div>
 
-                {/* INFO 2: Ticket Médio (Borderô) */}
-                <div style={{ background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #0ea5e9", padding: "20px 16px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                {/* INFO 2: Ticket Médio */}
+                <div style={{ order: 6, background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #0ea5e9", padding: "20px 16px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
                     <div style={{ background: "rgba(14, 165, 233, 0.1)", padding: "6px", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}>
                       <svg width="16" height="16" fill="none" stroke="#0ea5e9" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
@@ -2817,10 +3227,13 @@ return (
                       </svg>
                     </div>
                     <h3 style={{ margin: 0, fontSize: "11px", fontWeight: "700", color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "normal" }}>
-                      Ticket Médio (Borderô)
+                      Ticket Médio
                     </h3>
                   </div>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: "4px" }}>
+                  <div style={{ margin: 0, fontSize: "11px", fontWeight: "700", color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "normal" }}>
+                    Borderô
+                  </div>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: "4px", marginTop: "12px" }}>
                     <span style={{ fontSize: "28px", fontWeight: "700", color: "#111827", lineHeight: "1", letterSpacing: "-0.02em", wordBreak: "break-word" }}>
                       {fmtM(kpiData.valorMedioBordero)}
                     </span>
@@ -2828,24 +3241,11 @@ return (
                   <div style={{ fontSize: "12px", color: "#6b7280", marginTop: "12px", fontWeight: "500", whiteSpace: "normal" }}>
                     Borderôs analisados: <span style={{ color: "#374151", fontWeight: "600" }}>{kpiData.qtdBorderos}</span>
                   </div>
-                </div>
-
-                {/* INFO 2.5: Ticket Médio (Título) */}
-                <div style={{ background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #06b6d4", padding: "20px 16px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
-                    <div style={{ background: "rgba(6, 182, 212, 0.1)", padding: "6px", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <svg width="16" height="16" fill="none" stroke="#06b6d4" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-                        <path d="M3 7h18"></path>
-                        <path d="M6 3v8"></path>
-                        <path d="M18 3v8"></path>
-                        <rect x="3" y="11" width="18" height="10" rx="2"></rect>
-                      </svg>
-                    </div>
-                    <h3 style={{ margin: 0, fontSize: "11px", fontWeight: "700", color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "normal" }}>
-                      Ticket Médio (Título)
-                    </h3>
+                  <div style={{ height: "1px", background: "#e5e7eb", margin: "22px 0 20px" }} />
+                  <div style={{ margin: 0, fontSize: "11px", fontWeight: "700", color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "normal" }}>
+                    Título
                   </div>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: "4px" }}>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: "4px", marginTop: "12px" }}>
                     <span style={{ fontSize: "28px", fontWeight: "700", color: "#111827", lineHeight: "1", letterSpacing: "-0.02em", wordBreak: "break-word" }}>
                       {fmtM(kpiData.valorMedioTitulo)}
                     </span>
@@ -2856,7 +3256,7 @@ return (
                 </div>
 
                 {/* INFO 3: Prazo Médio */}
-                <div style={{ background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #10b981", padding: "20px 16px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                <div style={{ order: 2, background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #10b981", padding: "20px 16px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
                     <div style={{ background: "rgba(16, 185, 129, 0.1)", padding: "6px", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}>
                       <svg width="16" height="16" fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
@@ -2872,8 +3272,8 @@ return (
                   </div>
                 </div>
 
-              {/* INFO 5: Deságio Total */}
-              <div style={{ background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #f59e0b", padding: "20px 16px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+              {/* INFO 5: Receitas Financeiras */}
+              <div style={{ order: 4, background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #f59e0b", padding: "20px 16px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
                   <div style={{ background: "rgba(245, 158, 11, 0.1)", padding: "6px", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}>
                     <svg width="16" height="16" fill="none" stroke="#f59e0b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
@@ -2882,42 +3282,27 @@ return (
                     </svg>
                   </div>
                   <h3 style={{ margin: 0, fontSize: "11px", fontWeight: "700", color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "normal" }}>
-                    Deságio Total
+                    Receitas Financeiras
                   </h3>
                 </div>
-                <div style={{ display: "flex", alignItems: "baseline", gap: "4px" }}>
+                <div style={{ margin: 0, fontSize: "11px", fontWeight: "700", color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "normal" }}>
+                  Deságio
+                </div>
+                <div style={{ display: "flex", alignItems: "baseline", gap: "4px", marginTop: "12px" }}>
                   <span style={{ fontSize: "28px", fontWeight: "700", color: "#111827", lineHeight: "1", letterSpacing: "-0.02em", wordBreak: "break-word" }}>
                     {fmtM(kpiData.desagioTotal)}
                   </span>
                 </div>
-                <div style={{ fontSize: "12px", color: "#6b7280", marginTop: "12px", fontWeight: "500", whiteSpace: "normal" }}>
-                  Apurado em <span style={{color: "#374151", fontWeight: "600"}}>
-                    {kpiData.diasOperacao > 90
-                      ? (kpiData.diasOperacao / 30).toFixed(1).replace('.', ',')
-                      : kpiData.diasOperacao}
-                  </span> {kpiData.diasOperacao > 90 ? "meses" : "dias"}
+                <div style={{ height: "1px", background: "#e5e7eb", margin: "22px 0 20px" }} />
+                <div style={{ margin: 0, fontSize: "11px", fontWeight: "700", color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "normal" }}>
+                  Juros e Multa
                 </div>
-              </div>
-
-              {/* INFO 6: Encargos Totais */}
-              <div style={{ background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #ea580c", padding: "20px 16px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
-                  <div style={{ background: "rgba(234, 88, 12, 0.1)", padding: "6px", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <svg width="16" height="16" fill="none" stroke="#ea580c" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-                      <path d="M12 1v22"></path>
-                      <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
-                    </svg>
-                  </div>
-                  <h3 style={{ margin: 0, fontSize: "11px", fontWeight: "700", color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "normal" }}>
-                    Encargos Totais
-                  </h3>
-                </div>
-                <div style={{ display: "flex", alignItems: "baseline", gap: "4px" }}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: "4px", marginTop: "12px" }}>
                   <span style={{ fontSize: "28px", fontWeight: "700", color: "#111827", lineHeight: "1", letterSpacing: "-0.02em", wordBreak: "break-word" }}>
                     {fmtM(kpiData.encargosTotal)}
                   </span>
                 </div>
-                
+
                 <div style={{ fontSize: "12px", color: "#6b7280", marginTop: "12px", fontWeight: "500", whiteSpace: "normal" }}>
                   Apurado em <span style={{color: "#374151", fontWeight: "600"}}>
                     {kpiData.diasOperacao > 90
@@ -2928,7 +3313,7 @@ return (
               </div>
 
               {/* INFO 7: Últimas Taxas */}
-              <div style={{ background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #7c3aed", padding: "20px 16px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+              <div style={{ order: 3, background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #7c3aed", padding: "20px 16px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
                   <div style={{ background: "rgba(124, 58, 237, 0.1)", padding: "6px", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}>
                     <svg width="16" height="16" fill="none" stroke="#7c3aed" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
@@ -2943,20 +3328,26 @@ return (
 
                 <div style={{ border: "1px solid #e5e7eb", borderRadius: "8px", overflow: "hidden", background: "#fff" }}>
                   <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 90px", background: "#f8fafc", borderBottom: "1px solid #e5e7eb" }}>
-                    <div style={{ padding: "8px 10px", fontSize: "11px", fontWeight: "700", color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em" }}>Borderô</div>
+                    <div style={{ padding: "8px 10px", fontSize: "11px", fontWeight: "700", color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em" }}>Fonte / Borderô</div>
                     <div style={{ padding: "8px 10px", fontSize: "11px", fontWeight: "700", color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", textAlign: "right" }}>Taxa</div>
                   </div>
                   {kpiData.ultimasTaxas.length > 0 ? (
-                    kpiData.ultimasTaxas.map((item, idx) => (
-                      <div key={`${item.bordero}-${idx}`} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 90px", borderBottom: idx === kpiData.ultimasTaxas.length - 1 ? "none" : "1px solid #f1f5f9" }}>
-                        <div style={{ padding: "9px 10px", fontSize: "13px", fontWeight: "600", color: "#111827", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={item.bordero}>
-                          {item.bordero}
+                    kpiData.ultimasTaxas.map((item, idx) => {
+                      const sourceLabel = item.sourceTable === "secInfoSmart" ? "Smart" : "WBA";
+                      return (
+                      <div key={`${item.sourceTable}-${item.bordero}-${idx}`} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 90px", borderBottom: idx === kpiData.ultimasTaxas.length - 1 ? "none" : "1px solid #f1f5f9" }}>
+                        <div style={{ padding: "9px 10px", fontSize: "13px", fontWeight: "600", color: "#111827", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", display: "flex", alignItems: "center", gap: "8px" }} title={`${sourceLabel} - ${item.bordero}`}>
+                          <span style={{ flex: "0 0 auto", border: `1px solid ${item.sourceTable === "secInfoSmart" ? "#99f6e4" : "#bfdbfe"}`, background: item.sourceTable === "secInfoSmart" ? "#ccfbf1" : "#dbeafe", color: item.sourceTable === "secInfoSmart" ? "#0f766e" : "#1d4ed8", borderRadius: "999px", padding: "2px 7px", fontSize: "10px", fontWeight: 800, textTransform: "uppercase" }}>
+                            {sourceLabel}
+                          </span>
+                          <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>{item.bordero}</span>
                         </div>
                         <div style={{ padding: "9px 10px", fontSize: "13px", fontWeight: "700", color: "#111827", textAlign: "right" }}>
                           {item.taxa !== null && item.taxa !== undefined ? `${Number(item.taxa).toFixed(2).replace('.', ',')}%` : "-"}
                         </div>
                       </div>
-                    ))
+                    );
+                    })
                   ) : (
                     <div style={{ padding: "10px", fontSize: "13px", color: "#6b7280", textAlign: "center" }}>
                       Sem taxas recentes
@@ -2968,23 +3359,20 @@ return (
               </div>
               )}
               
-              <DashboardInsights processedRows={rowsFilteredByDate} insightFilter={insightFilter} setInsightFilter={setInsightFilter} setBorderoFilter={setBorderoFilter} setDctoFilter={setDctoFilter} hideValues={hideValues} />
+              <DashboardInsights processedRows={rowsFilteredByDate} insightFilter={insightFilter} setInsightFilter={setInsightFilter} setBorderoFilter={setBorderoFilter} setDctoFilter={setDctoFilter} hideValues={hideValues} dataSourceTable={dataSourceTable} />
               
 {(clienteSelecionado || grupoSelecionado || sacadoSelecionado) && (
   <SacadoConcentrationCard
     rows={
       (sacadoSelecionado && !clienteSelecionado && !grupoSelecionado)
         ? rowsConcentracaoSacado.map((r) => {
-            const firstRow = rowsConcentracaoSacado[0];
-            if (!firstRow) return r;
-
-            const vctoKey = Object.keys(firstRow).find(
+            const vctoKey = findKeyAcrossRows(rowsConcentracaoSacado,
               (k) => k.toLowerCase() === "vcto" || (k.toLowerCase().includes("vcto") && !k.toLowerCase().includes("vl"))
             );
-            const pgtoKey = Object.keys(firstRow).find(
+            const pgtoKey = findKeyAcrossRows(rowsConcentracaoSacado,
               (k) => k.toLowerCase() === "pgto" || (k.toLowerCase().includes("pgto") && !k.toLowerCase().includes("vl"))
             );
-            const statusKey = Object.keys(firstRow).find(
+            const statusKey = findKeyAcrossRows(rowsConcentracaoSacado,
               (k) => k.toLowerCase() === "status" || k.toLowerCase() === "estado"
             );
 
@@ -3024,6 +3412,7 @@ return (
     sacadoSelecionado={sacadoSelecionado}
     setSacadoSelecionado={setSacadoSelecionado}
     hideValues={hideValues}
+    onSelectSacadoAberto={handleSelectSacadoConcentracao}
   />
 )}
               

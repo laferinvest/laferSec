@@ -2213,7 +2213,7 @@ auditoria.finalRows = finalRows.map((item) => ({ ...item }));
       <div style={cardStyle}>
         <h2 style={{ marginTop: 0, color: "#111827", fontSize: "20px" }}>Atualização de Dados</h2>
         <p style={{ color: "#6b7280", fontSize: "14px", marginBottom: "20px" }}>
-          Selecione um ou mais Excels de títulos para atualizar o banco de dados.
+          Caminho para Download do Excel de Títulos: Financeiro -&gt; Títulos -&gt; Clica em Pesquisar -&gt; Gerar Planilha
         </p>
 
 

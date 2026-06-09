@@ -22,12 +22,111 @@ function escapeText(v) {
   return String(v);
 }
 
+const entityDisplayCache = new Map();
+const entityCompareCache = new Map();
+const entityGroupKeyCache = new Map();
+const genericNormalizeCache = new Map();
+const ENTITY_CACHE_MAX_SIZE = 20000;
+const ENTITY_PREFIX_MIN_CHARS = 16;
+const ENTITY_GROUP_KEY_CHARS = 36;
+
+function setCached(cache, key, value) {
+  if (cache.size > ENTITY_CACHE_MAX_SIZE) cache.clear();
+  cache.set(key, value);
+  return value;
+}
+
 function formatarNomeEntidade(nome) {
-  return String(nome || "").trim().replace(/^\d+\s*-\s*/, "").replace(/\s*-\s*sacado\s*$/i, "");
+  const raw = String(nome || "");
+  const cached = entityDisplayCache.get(raw);
+  if (cached !== undefined) return cached;
+  return setCached(
+    entityDisplayCache,
+    raw,
+    raw.trim().replace(/^\d+\s*-\s*/, "").replace(/\s*-\s*sacado\s*$/i, "")
+  );
 }
 
 function normalizarValor(valor) {
-  return String(valor || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+  const raw = String(valor || "");
+  const cached = genericNormalizeCache.get(raw);
+  if (cached !== undefined) return cached;
+  return setCached(
+    genericNormalizeCache,
+    raw,
+    raw.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim()
+  );
+}
+
+const ENTITY_LEGAL_SUFFIXES = new Set([
+  "ltda", "lt", "me", "eireli", "epp", "sa", "s/a", "ss", "s/s", "mei",
+  "com", "comercio", "industria", "servicos", "servico", "importacao", "exportacao"
+]);
+
+function normalizarTokenEntidade(token) {
+  const t = String(token || "").trim();
+  if (!t || ENTITY_LEGAL_SUFFIXES.has(t)) return "";
+
+  // Evita separar a mesma empresa por variações bobas de singular/plural:
+  // Ex.: "Água" x "Aguas", "Equipamento" x "Equipamentos".
+  // A normalização de acento já ocorreu antes; aqui removemos só plural simples.
+  if (t.length > 3 && t.endsWith("s")) return t.slice(0, -1);
+  return t;
+}
+
+function normalizarEntidadeParaComparacao(nome) {
+  const raw = String(nome || "");
+  const cached = entityCompareCache.get(raw);
+  if (cached !== undefined) return cached;
+  const normalized = normalizarValor(formatarNomeEntidade(raw))
+    .replace(/[^a-z0-9]+/g, " ")
+    .split(" ")
+    .map(normalizarTokenEntidade)
+    .filter(Boolean)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return setCached(entityCompareCache, raw, normalized);
+}
+
+function chaveEntidadePrefixo(nome) {
+  const raw = String(nome || "");
+  const cached = entityGroupKeyCache.get(raw);
+  if (cached !== undefined) return cached;
+  const normalizado = normalizarEntidadeParaComparacao(raw);
+  if (!normalizado) return setCached(entityGroupKeyCache, raw, "");
+  const key = normalizado.length < ENTITY_PREFIX_MIN_CHARS
+    ? normalizado
+    : normalizado.slice(0, ENTITY_GROUP_KEY_CHARS);
+  return setCached(entityGroupKeyCache, raw, key);
+}
+
+function getEntityKeyFromRow(row, field) {
+  if (!row) return "";
+  if (field === "Cliente") return row._clienteEntityKey || chaveEntidadePrefixo(row.Cliente);
+  if (field === "Sacado") return row._sacadoEntityKey || chaveEntidadePrefixo(row.Sacado);
+  return chaveEntidadePrefixo(row[field]);
+}
+
+function escolherNomeEntidadeMaisCompleto(atual, novo) {
+  const atualStr = String(atual || "").trim();
+  const novoStr = String(novo || "").trim();
+  if (!atualStr) return novoStr;
+  if (!novoStr) return atualStr;
+
+  const atualLen = normalizarEntidadeParaComparacao(atualStr).length;
+  const novoLen = normalizarEntidadeParaComparacao(novoStr).length;
+  return novoLen > atualLen ? novoStr : atualStr;
+}
+
+function ensureMacroEntityBucket(map, key, rawName, defaults = {}) {
+  if (!key) return null;
+  if (!map[key]) {
+    map[key] = { ...defaults, label: String(rawName || "").trim() };
+  } else {
+    map[key].label = escolherNomeEntidadeMaisCompleto(map[key].label, rawName);
+  }
+  return map[key];
 }
 
 function isInadimplente(row) {
@@ -111,21 +210,43 @@ function normalizarRegistroMacro(row, sourceTable, index) {
     "Tx.Efet": txEfet,
     Status: getValorPorAliases(row, ["Status", "Situação", "SITUAÇÃO", "Estado"]) ?? row?.Status ?? row?.Estado ?? "",
     inadimplencia: row?.inadimplencia ?? row?.Inadimplencia ?? row?.["Inadimplência"] ?? null,
+    _clienteEntityKey: chaveEntidadePrefixo(cliente ?? row?.Cliente ?? ""),
+    _sacadoEntityKey: chaveEntidadePrefixo(sacado ?? row?.Sacado ?? ""),
     _sourceTable: sourceTable,
     _rowKey: `${sourceTable}-${row?.id ?? index}`,
   };
 }
 
-async function fetchAllMacroRows(tableName, pageSize = 1000) {
+const MACRO_SELECT_COLUMNS = 'id,Cliente,Sacado,"Dt.Emis",Vcto,Pgto,"Vl Pgto",Dcto,"Borderô",Entrada,Desagio,"Tx.Efet",Status,inadimplencia,Inadimplencia,"Inadimplência"';
+const MACRO_PAGE_SIZE = 5000;
+const MACRO_CACHE_TTL_MS = 5 * 60 * 1000;
+const macroDashboardCache = { data: null, promise: null, updatedAt: 0 };
+
+async function fetchAllMacroRows(tableName, pageSize = MACRO_PAGE_SIZE, selectClause = MACRO_SELECT_COLUMNS) {
   const allRows = [];
+  let useFallbackSelectAll = false;
 
   for (let from = 0; ; from += pageSize) {
     const to = from + pageSize - 1;
-    const { data, error } = await supabase
+    let query = supabase
       .from(tableName)
-      .select("*")
+      .select(useFallbackSelectAll ? "*" : selectClause)
       .order("id", { ascending: false })
       .range(from, to);
+
+    let { data, error } = await query;
+
+    if (error && !useFallbackSelectAll) {
+      console.warn(`Falha ao buscar colunas enxutas em ${tableName}. Usando select(*) como fallback.`, error);
+      useFallbackSelectAll = true;
+      const fallback = await supabase
+        .from(tableName)
+        .select("*")
+        .order("id", { ascending: false })
+        .range(from, to);
+      data = fallback.data;
+      error = fallback.error;
+    }
 
     if (error) {
       throw new Error(`Erro ao buscar ${tableName}: ${error.message}`);
@@ -139,6 +260,55 @@ async function fetchAllMacroRows(tableName, pageSize = 1000) {
   return allRows;
 }
 
+async function loadMacroDashboardData() {
+  const now = Date.now();
+  if (macroDashboardCache.data && now - macroDashboardCache.updatedAt < MACRO_CACHE_TTL_MS) {
+    return macroDashboardCache.data;
+  }
+
+  if (macroDashboardCache.promise) return macroDashboardCache.promise;
+
+  macroDashboardCache.promise = (async () => {
+    const [wbaData, smartData, { data: snapshotData, error: snapshotError }] = await Promise.all([
+      fetchAllMacroRows("secInfo"),
+      fetchAllMacroRows("secInfoSmart"),
+      supabase.from("secSnapshots").select('Data, Recebiveis, "Dinheiro Banco"').order("Data", { ascending: false }).limit(1)
+    ]);
+
+    if (snapshotError) throw snapshotError;
+
+    const sourceRows = [
+      ...(wbaData || []).map((row, index) => normalizarRegistroMacro(row, "secInfo", index)),
+      ...(smartData || []).map((row, index) => normalizarRegistroMacro(row, "secInfoSmart", index)),
+    ];
+
+    const dadosLimpos = sourceRows.filter(registroValidoParaAnalise);
+    const ultimoSnapshot = snapshotData?.[0];
+    const patrimonioAtual = ultimoSnapshot
+      ? (Number(ultimoSnapshot["Recebiveis"] ?? ultimoSnapshot.recebiveis ?? 0) + Number(ultimoSnapshot["Dinheiro Banco"] ?? ultimoSnapshot.dinheiro_banco ?? 0))
+      : 0;
+
+    const result = {
+      rows: dadosLimpos,
+      latestPatrimonio: patrimonioAtual,
+      counts: {
+        wba: wbaData?.length || 0,
+        smart: smartData?.length || 0,
+        total: sourceRows.length,
+        validos: dadosLimpos.length,
+      }
+    };
+
+    macroDashboardCache.data = result;
+    macroDashboardCache.updatedAt = Date.now();
+    return result;
+  })().finally(() => {
+    macroDashboardCache.promise = null;
+  });
+
+  return macroDashboardCache.promise;
+}
+
 // --- COMPONENTE DA TABELA DETALHADA DO MACRO (OTIMIZADA) ---
 function MacroDetailedTable({ rows, focus, setFocus, setSelectedSlice, hideValues }) {
   const [sortConfig, setSortConfig] = useState(null);
@@ -149,7 +319,7 @@ function MacroDetailedTable({ rows, focus, setFocus, setSelectedSlice, hideValue
 
   useEffect(() => { setCurrentPage(1); }, [rows, focus, sortConfig]);
 
-  const colunasOcultas = ["id", "created_at", "Cód.Red", "UF", "Banco", "Rec.", "Estado", "_status", "_sourceTable", "_rowKey", "Qtd Linhas Agrupadas", "Detalhes Agrupamento", "inadimplencia", "Inadimplencia", "Inadimplência"];
+  const colunasOcultas = ["id", "created_at", "Cód.Red", "UF", "Banco", "Rec.", "Estado", "_status", "_sourceTable", "_rowKey", "_clienteEntityKey", "_sacadoEntityKey", "Qtd Linhas Agrupadas", "Detalhes Agrupamento", "inadimplencia", "Inadimplencia", "Inadimplência"];
 
   const columns = useMemo(() => {
     if (!rows.length) return [];
@@ -305,7 +475,6 @@ function MacroDetailedTable({ rows, focus, setFocus, setSelectedSlice, hideValue
 // --- DASHBOARD MACRO PRINCIPAL ---
 export default function MacroDashboard({ session, hideValues, setHideValues }) {
   const [rows, setRows] = useState([]);
-  const [dataSourceTable, setDataSourceTable] = useState("secInfoSmart");
   const [loading, setLoading] = useState(true);
   const [latestPatrimonio, setLatestPatrimonio] = useState(0);
   const [focus, setFocus] = useState('cedente'); 
@@ -322,51 +491,32 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
   const [tooltip, setTooltip] = useState({ show: false, x: 0, y: 0, label: '', value: 0, percent: 0, context: 'capital_aberto' });
 
   useEffect(() => {
-    async function fetchData() {
+    let cancelled = false;
+
+    if (macroDashboardCache.data) {
+      setRows(macroDashboardCache.data.rows);
+      setLatestPatrimonio(macroDashboardCache.data.latestPatrimonio);
+      setLoading(false);
+    } else {
       setLoading(true);
-
-      try {
-        const [sourceData, { data: snapshotData, error: snapshotError }] = await Promise.all([
-          fetchAllMacroRows(dataSourceTable),
-          supabase.from("secSnapshots").select('Data, Recebiveis, "Dinheiro Banco"').order("Data", { ascending: false }).limit(1)
-        ]);
-
-        if (snapshotError) throw snapshotError;
-
-        const sourceRows = (sourceData || []).map((row, index) =>
-          normalizarRegistroMacro(row, dataSourceTable, index)
-        );
-
-        const dadosLimpos = sourceRows.filter(registroValidoParaAnalise);
-
-        console.log("Macro fonte carregada", {
-          fonte: dataSourceTable,
-          total: sourceRows.length,
-          validos: dadosLimpos.length,
-        });
-
-        setRows(dadosLimpos);
-
-        const ultimoSnapshot = snapshotData?.[0];
-        const patrimonioAtual = ultimoSnapshot
-          ? (Number(ultimoSnapshot["Recebiveis"] ?? ultimoSnapshot.recebiveis ?? 0) + Number(ultimoSnapshot["Dinheiro Banco"] ?? ultimoSnapshot.dinheiro_banco ?? 0))
-          : 0;
-
-        setLatestPatrimonio(patrimonioAtual);
-      } catch (error) {
-        console.error("Erro ao buscar dados Macro:", error);
-      } finally {
-        setLoading(false);
-      }
     }
-    fetchData();
-  }, [dataSourceTable]);
 
-  useEffect(() => {
-    setSelectedSlice(null);
-    setNegotiationPage(1);
-    setCapitalPage(1);
-  }, [dataSourceTable]);
+    loadMacroDashboardData()
+      .then((result) => {
+        if (cancelled) return;
+        setRows(result.rows);
+        setLatestPatrimonio(result.latestPatrimonio);
+        console.log("Macro fontes carregadas", result.counts);
+      })
+      .catch((error) => {
+        if (!cancelled) console.error("Erro ao buscar dados Macro:", error);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, []);
 
   // 1. Processa os registos em aberto e o volume negociado por período
   const { openRows, stats, negotiationStats } = useMemo(() => {
@@ -409,7 +559,6 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
     const vlPgtoKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'vl pgto');
     const borderoKey = Object.keys(firstRow).find(k => k.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").includes("border"));
     const desagioKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'desagio' || k.toLowerCase() === 'deságio');
-    const isSmartDataSource = dataSourceTable === "secInfoSmart";
 
     const periodConfigs = {
       mes_atual: { start: monthStart, end: today },
@@ -441,7 +590,7 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
       const encargo = encargoPossivel && vlPgto <= val * 1.4 ? Math.max(0, vlPgto - val) : 0;
 
       const entity = focus === 'cedente' ? r.Cliente : r.Sacado;
-      const eName = entity ? formatarNomeEntidade(entity) : null;
+      const entityKey = focus === 'cedente' ? getEntityKeyFromRow(r, "Cliente") : getEntityKeyFromRow(r, "Sacado");
 
       if (statusVal === "REC" || statusVal.includes("REC")) {
         status = 'recompra';
@@ -471,13 +620,13 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
         else if (effectiveVctoDate.getDay() === 0) effectiveVctoDate.setDate(effectiveVctoDate.getDate() + 1);
       }
 
-      if (eName && emisDate) {
+      if (entityKey && emisDate) {
         if (emisDate >= thirtyDaysAgo && emisDate <= today) {
-          if (!monthlyVolume[eName]) monthlyVolume[eName] = { lm: 0, plm: 0 };
-          monthlyVolume[eName].lm += val;
+          const vol = ensureMacroEntityBucket(monthlyVolume, entityKey, entity, { lm: 0, plm: 0 });
+          vol.lm += val;
         } else if (emisDate >= sixtyDaysAgo && emisDate < thirtyDaysAgo) {
-          if (!monthlyVolume[eName]) monthlyVolume[eName] = { lm: 0, plm: 0 };
-          monthlyVolume[eName].plm += val;
+          const vol = ensureMacroEntityBucket(monthlyVolume, entityKey, entity, { lm: 0, plm: 0 });
+          vol.plm += val;
         }
 
         const negotiationDate = volumeDateBase === 'vencimento' ? effectiveVctoDate : emisDate;
@@ -486,13 +635,18 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
         if (negotiationDate && canUseByVencimento) {
           Object.entries(periodConfigs).forEach(([periodKey, range]) => {
             if (negotiationDate >= range.start && negotiationDate <= range.end) {
-              if (!negotiationGrouped[periodKey][eName]) negotiationGrouped[periodKey][eName] = { val: 0, desEnc: 0 };
-              negotiationGrouped[periodKey][eName].val += val;
-              negotiationGrouped[periodKey][eName].desEnc += encargo;
+              const negotiationBucket = ensureMacroEntityBucket(
+                negotiationGrouped[periodKey],
+                entityKey,
+                entity,
+                { val: 0, desEnc: 0 }
+              );
+              negotiationBucket.val += val;
+              negotiationBucket.desEnc += encargo;
 
-              if (isSmartDataSource) {
+              if (origemTabela === "secInfoSmart") {
                 // No Smart, o deságio é por título/linha, então soma integralmente.
-                negotiationGrouped[periodKey][eName].desEnc += desagioVal;
+                negotiationBucket.desEnc += desagioVal;
               } else {
                 // No WBA/secInfo, o deságio vem no nível do borderô e pode aparecer repetido nas linhas.
                 // Por isso, mantém a regra antiga: conta uma única vez por Borderô dentro da entidade.
@@ -500,9 +654,9 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
                   seenPeriodBorderosDesagio[periodKey].set(borderoNum, new Set());
                 }
                 const entitiesSeen = seenPeriodBorderosDesagio[periodKey].get(borderoNum);
-                if (!entitiesSeen.has(eName)) {
-                  entitiesSeen.add(eName);
-                  negotiationGrouped[periodKey][eName].desEnc += desagioVal;
+                if (!entitiesSeen.has(entityKey)) {
+                  entitiesSeen.add(entityKey);
+                  negotiationBucket.desEnc += desagioVal;
                 }
               }
             }
@@ -514,10 +668,10 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
         const rComStatus = { ...r, _status: status };
         abertos.push(rComStatus);
 
-        if (eName) {
-          if (!grouped[eName]) grouped[eName] = { val: 0, count: 0 };
-          grouped[eName].val += val;
-          grouped[eName].count += 1;
+        if (entityKey) {
+          const groupBucket = ensureMacroEntityBucket(grouped, entityKey, entity, { val: 0, count: 0 });
+          groupBucket.val += val;
+          groupBucket.count += 1;
           totalVal += val;
         }
       }
@@ -526,6 +680,7 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
     const patrimonioReferencia = latestPatrimonio > 0 ? latestPatrimonio : totalVal;
 
     const sorted = Object.keys(grouped).map(k => {
+      const bucket = grouped[k];
       const vol = monthlyVolume[k] || { lm: 0, plm: 0 };
       let varPct = 0;
       let hasVar = false;
@@ -539,10 +694,11 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
       }
 
       return {
-        name: k,
-        val: grouped[k].val,
-        count: grouped[k].count,
-        percent: patrimonioReferencia > 0 ? grouped[k].val / patrimonioReferencia : 0,
+        entityKey: k,
+        name: bucket.label || k,
+        val: bucket.val,
+        count: bucket.count,
+        percent: patrimonioReferencia > 0 ? bucket.val / patrimonioReferencia : 0,
         varPct,
         hasVar
       };
@@ -570,9 +726,10 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
       const groupTotalDesEnc = entries.reduce((acc, [, curr]) => acc + (Number(curr?.desEnc) || 0), 0);
 
       const groupSorted = entries
-        .map(([name, curr], idx) => ({
+        .map(([entityKey, curr], idx) => ({
           rank: idx + 1,
-          name,
+          entityKey,
+          name: curr?.label || entityKey,
           val: Number(curr?.val) || 0,
           desEnc: Number(curr?.desEnc) || 0,
           percent: groupTotal > 0 ? (Number(curr?.val) || 0) / groupTotal : 0,
@@ -631,14 +788,15 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
         ytd: buildNegotiationChart(negotiationGrouped.ytd)
       }
     };
-  }, [rows, focus, volumeDateBase, latestPatrimonio, dataSourceTable]);
+  }, [rows, focus, volumeDateBase, latestPatrimonio]);
 
   // 2. Extrai os detalhes da entidade selecionada
   const detailedRows = useMemo(() => {
     if (!selectedSlice || selectedSlice.startsWith('Restante')) return null;
+    const selectedKey = chaveEntidadePrefixo(selectedSlice);
     return openRows.filter(r => {
-      const entity = focus === 'cedente' ? r.Cliente : r.Sacado;
-      return formatarNomeEntidade(entity) === selectedSlice;
+      const entityKey = focus === 'cedente' ? getEntityKeyFromRow(r, "Cliente") : getEntityKeyFromRow(r, "Sacado");
+      return entityKey === selectedKey;
     });
   }, [openRows, selectedSlice, focus]);
 
@@ -690,7 +848,6 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
     const emisKey = Object.keys(firstRow).find(k => k.toLowerCase().includes('emis'));
     const vctoKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'vcto' || (k.toLowerCase().includes('vcto') && !k.toLowerCase().includes('vl')));
     const desagioKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'desagio' || k.toLowerCase() === 'deságio');
-    const isSmartDataSource = dataSourceTable === "secInfoSmart";
 
     const seenBorderosDesagio = new Set();
     let totalDesagio = 0;
@@ -710,7 +867,7 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
       const rate = hasRateVal ? (Number(String(rawRate).replace('%', '').replace(',', '.')) || 0) : 0;
 
       const desagioVal = desagioKey ? (Number(r[desagioKey]) || 0) : 0;
-      if (isSmartDataSource) {
+      if (origemTabela === "secInfoSmart") {
         // No Smart, o deságio é por título/linha.
         totalDesagio += desagioVal;
       } else if (!seenBorderosDesagio.has(bNum)) {
@@ -785,13 +942,14 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
       encargosTotal: totalEncargos,
       diasOperacao
     };
-  }, [detailedRows, openRows, riscoAtual, dataSourceTable]);
+  }, [detailedRows, openRows, riscoAtual]);
 
 
   const tableData = useMemo(() => {
     if (!selectedSlice) return stats.sorted;
     if (selectedSlice.startsWith('Restante')) return stats.sorted.slice(9);
-    return stats.sorted.filter(item => item.name === selectedSlice);
+    const selectedKey = chaveEntidadePrefixo(selectedSlice);
+    return stats.sorted.filter(item => (item.entityKey || chaveEntidadePrefixo(item.name)) === selectedKey);
   }, [stats.sorted, selectedSlice]);
 
   const currentNegotiationStats = negotiationStats[volumePeriod] || { totalVal: 0, totalDesEnc: 0, sorted: [], pieData: [], pieDataDesEnc: [] };
@@ -1016,35 +1174,6 @@ const negotiationDesEncTop5Percent = currentNegotiationStats.sorted.length
           <p style={{ margin: 0, color: "#6b7280", fontSize: "15px" }}>Concentração de Capital em títulos <strong>Em Aberto</strong> (A Vencer e Em Atraso).</p>
         </div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "10px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "10px", justifyContent: "flex-end", flexWrap: "wrap" }}>
-            <span style={{ fontSize: "13px", fontWeight: "700", color: "#6b7280" }}>Fonte</span>
-            {[
-              { table: "secInfo", label: "WBA" },
-              { table: "secInfoSmart", label: "Smart" },
-            ].map((source) => {
-              const active = dataSourceTable === source.table;
-              return (
-                <button
-                  key={source.table}
-                  type="button"
-                  onClick={() => setDataSourceTable(source.table)}
-                  style={{
-                    padding: "8px 14px",
-                    borderRadius: "8px",
-                    border: `1px solid ${active ? "#0f766e" : "#d1d5db"}`,
-                    background: active ? "#ccfbf1" : "#fff",
-                    color: active ? "#0f766e" : "#374151",
-                    fontWeight: 800,
-                    fontSize: "13px",
-                    cursor: "pointer",
-                    transition: "all 0.2s",
-                  }}
-                >
-                  {source.label}
-                </button>
-              );
-            })}
-          </div>
           <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
             <button
               onClick={() => setHideValues(v => !v)}
