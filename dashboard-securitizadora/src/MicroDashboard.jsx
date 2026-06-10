@@ -3052,7 +3052,7 @@ return (
                 value={borderoSearchInput}
                 onChange={e => setBorderoSearchInput(e.target.value)}
                 onKeyDown={e => { if (e.key === "Enter") aplicarBuscaBordero(); }}
-                placeholder="Ex.: 12345"
+                placeholder="Ex.: 23"
                 style={{ width: "100%", padding: "11px", borderRadius: "6px", border: "1px solid #d1d5db", background: "#fff", fontSize: "14px", color: "#111827", outline: "none", boxSizing: "border-box" }}
               />
               <button
