@@ -380,8 +380,48 @@ const GRUPOS_ECONOMICOS = [
   {
     label: "JL & D Confecções",
     prefixos: ["613 -", "614 -", "615 -", "617 -", "605 -"]
+  },
+  {
+    label: "MG Packing",
+    prefixos: [
+      "Mg Embalagem e Separadores",
+      "Mg Embalagem e Separadores Industria e Comercio LTDA",
+      "MG Packing",
+      "MG Packing Indústria, Com, Imp e Export de Embalagens LTDA"
+    ]
   }
 ];
+
+function normalizarPrefixoGrupo(valor) {
+  return normalizarChave(formatarNomeEntidade(valor))
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function clientePertenceAoGrupoEconomico(cliente, grupo) {
+  const clienteRaw = String(cliente || "").trim();
+  if (!clienteRaw || !grupo) return false;
+
+  const clientesParaComparar = [clienteRaw, formatarNomeEntidade(clienteRaw)]
+    .map((valor) => String(valor || "").trim())
+    .filter(Boolean);
+
+  return (grupo.prefixos || []).some((prefixoRaw) => {
+    const prefixo = String(prefixoRaw || "").trim();
+    if (!prefixo) return false;
+
+    const prefixoNormalizado = normalizarPrefixoGrupo(prefixo);
+    return clientesParaComparar.some((clienteComparavel) => {
+      const clienteNormalizado = normalizarPrefixoGrupo(clienteComparavel);
+      return (
+        clienteComparavel.startsWith(prefixo) ||
+        (prefixoNormalizado && clienteNormalizado.startsWith(prefixoNormalizado)) ||
+        entidadesParecidasPorInicio(clienteComparavel, prefixo)
+      );
+    });
+  });
+}
 
 const BOTH_DATA_SOURCE = "ambos";
 const MICRO_DATA_SOURCE_OPTIONS = [
@@ -2865,7 +2905,7 @@ return {
         if (grupoSelecionado && !clienteSelecionado) {
           const grupo = GRUPOS_ECONOMICOS.find(g => g.label === grupoSelecionado);
           if (grupo) {
-            filtered = filtered.filter(r => grupo.prefixos.some(p => String(r.Cliente || "").trim().startsWith(p.trim())));
+            filtered = filtered.filter(r => clientePertenceAoGrupoEconomico(r.Cliente, grupo));
           }
         }
         setRows(filtered);
