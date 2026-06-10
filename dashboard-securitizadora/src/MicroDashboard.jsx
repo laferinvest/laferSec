@@ -3073,7 +3073,7 @@ return (
                 value={dctoSearchInput}
                 onChange={e => setDctoSearchInput(e.target.value)}
                 onKeyDown={e => { if (e.key === "Enter") aplicarBuscaDcto(); }}
-                placeholder="Ex.: 127, 127/1 ou 127-1"
+                placeholder="Ex.: 127, 127/1 ou 127-1" 
                 style={{ width: "100%", padding: "11px", borderRadius: "6px", border: "1px solid #d1d5db", background: "#fff", fontSize: "14px", color: "#111827", outline: "none", boxSizing: "border-box" }}
               />
               <button
