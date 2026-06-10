@@ -308,6 +308,14 @@ function parseTaxaPercentual(valor) {
   return Number.isFinite(numero) ? numero : 0;
 }
 
+function getDocumentoBase(valor) {
+  return String(valor ?? "").split(/[-/]/)[0].trim();
+}
+
+function normalizarBuscaSimples(valor) {
+  return String(valor ?? "").trim();
+}
+
 function parseIsoDateLocal(valor) {
   if (!valor) return null;
   const parts = String(valor).split("T")[0].split("-");
@@ -1037,7 +1045,6 @@ function DashboardInsights({ processedRows, insightFilter, setInsightFilter, set
   const toggleFilter = (key) => {
     if (stats.counts[key] === 0) return;
     setInsightFilter(prev => prev === key ? null : key);
-    setBorderoFilter(null); setDctoFilter(null);
   };
 
   const slicesData = [
@@ -1907,10 +1914,10 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
                         const isRate = cLower.includes("tx") || cLower.includes("taxa");
                         const isDateColumn = !isCurrency && !isRate && (cLower.includes("emis") || cLower.includes("vcto") || cLower.includes("pgto") || cLower.includes("data"));
                         const isBorderoCol = cLower.normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes("border");
-                        const isThisBorderoFiltered = borderoFilter?.key === c && borderoFilter?.value === valor && (!borderoFilter.sourceTable || borderoFilter.sourceTable === rowSourceTable);
+                        const isThisBorderoFiltered = borderoFilter?.key === c && String(borderoFilter?.value ?? "") === String(valor ?? "") && (!borderoFilter.sourceTable || borderoFilter.sourceTable === rowSourceTable);
                         const isDctoCol = cLower === "dcto" || cLower === "documento";
-                        const baseValor = String(valor || "").split(/[-/]/)[0].trim();
-                        const baseFiltered = dctoFilter ? String(dctoFilter.value).split(/[-/]/)[0].trim() : null;
+                        const baseValor = getDocumentoBase(valor);
+                        const baseFiltered = dctoFilter ? getDocumentoBase(dctoFilter.value) : null;
                         const isThisDctoFiltered = dctoFilter?.key === c && baseValor === baseFiltered && (!dctoFilter.sourceTable || dctoFilter.sourceTable === rowSourceTable);
 
                         if (isDateColumn) valor = formatarData(valor);
@@ -2128,6 +2135,8 @@ export default function MicroDashboard({ session, onSidebarToggle, hideValues, s
   const [inputType, setInputType] = useState("emis");
   const [inputDateStart, setInputDateStart] = useState(() => getInitDateStr().start);
   const [inputDateEnd, setInputDateEnd] = useState(() => getInitDateStr().end);
+  const [borderoSearchInput, setBorderoSearchInput] = useState("");
+  const [dctoSearchInput, setDctoSearchInput] = useState("");
 
   // MEMÓRIA PARA ESTADO DE DATAS (LÓGICA DE UX)
   const latestDateFilter = useRef(dateFilter);
@@ -2287,6 +2296,31 @@ export default function MicroDashboard({ session, onSidebarToggle, hideValues, s
     applyExclusiveDrillFilter("dcto", filter);
   };
 
+  const getBorderoSearchKey = () =>
+    findKeyAcrossRows(rows, k => k.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes("border")) || "Borderô";
+
+  const getDctoSearchKey = () =>
+    findKeyAcrossRows(rows, k => k.toLowerCase() === "dcto" || k.toLowerCase() === "documento") || "Dcto";
+
+  const aplicarBuscaBordero = () => {
+    const value = normalizarBuscaSimples(borderoSearchInput);
+    if (!value) return;
+    applyExclusiveDrillFilter("bordero", { key: getBorderoSearchKey(), value });
+  };
+
+  const aplicarBuscaDcto = () => {
+    const baseValue = getDocumentoBase(dctoSearchInput);
+    if (!baseValue) return;
+    applyExclusiveDrillFilter("dcto", { key: getDctoSearchKey(), value: baseValue });
+  };
+
+  const limparBuscaBorderoDcto = () => {
+    setBorderoSearchInput("");
+    setDctoSearchInput("");
+    setBorderoFilter(null);
+    setDctoFilter(null);
+  };
+
   const applyQuickDate = (quickType) => {
     if (activeQuickDate === quickType) {
       setActiveQuickDate(null);
@@ -2392,25 +2426,41 @@ export default function MicroDashboard({ session, onSidebarToggle, hideValues, s
     return base;
   }, [rowsFilteredByMode, insightFilter]);
 
-  const rowsParaTabela = useMemo(() => {
+  const rowsFilteredByBorderoDcto = useMemo(() => {
     let filtered = rowsFilteredByDate;
-    if (insightFilter) filtered = filtered.filter(r => r._status === insightFilter);
-    if (borderoFilter) filtered = filtered.filter(r => r[borderoFilter.key] === borderoFilter.value && filterMatchesSource(r, borderoFilter, dataSourceTable));
-    if (dctoFilter) {
-      const baseTarget = String(dctoFilter.value).split(/[-/]/)[0].trim();
-      filtered = filtered.filter(r => String(r[dctoFilter.key] || "").split(/[-/]/)[0].trim() === baseTarget && filterMatchesSource(r, dctoFilter, dataSourceTable));
+
+    if (borderoFilter) {
+      filtered = filtered.filter(r =>
+        String(r[borderoFilter.key] ?? "") === String(borderoFilter.value ?? "") &&
+        filterMatchesSource(r, borderoFilter, dataSourceTable)
+      );
     }
+
+    if (dctoFilter) {
+      const baseTarget = getDocumentoBase(dctoFilter.value);
+      filtered = filtered.filter(r =>
+        getDocumentoBase(r[dctoFilter.key]) === baseTarget &&
+        filterMatchesSource(r, dctoFilter, dataSourceTable)
+      );
+    }
+
     return filtered;
-  }, [rowsFilteredByDate, insightFilter, borderoFilter, dctoFilter, dataSourceTable]);
+  }, [rowsFilteredByDate, borderoFilter, dctoFilter, dataSourceTable]);
+
+  const rowsParaTabela = useMemo(() => {
+    let filtered = rowsFilteredByBorderoDcto;
+    if (insightFilter) filtered = filtered.filter(r => r._status === insightFilter);
+    return filtered;
+  }, [rowsFilteredByBorderoDcto, insightFilter]);
 
   const rowsParaRiscoAtual = useMemo(() => {
   let filtered = rowsFilteredByMode;
 
   if (insightFilter) filtered = filtered.filter(r => r._status === insightFilter);
-  if (borderoFilter) filtered = filtered.filter(r => r[borderoFilter.key] === borderoFilter.value && filterMatchesSource(r, borderoFilter, dataSourceTable));
+  if (borderoFilter) filtered = filtered.filter(r => String(r[borderoFilter.key] ?? "") === String(borderoFilter.value ?? "") && filterMatchesSource(r, borderoFilter, dataSourceTable));
   if (dctoFilter) {
-    const baseTarget = String(dctoFilter.value).split(/[-/]/)[0].trim();
-    filtered = filtered.filter(r => String(r[dctoFilter.key] || "").split(/[-/]/)[0].trim() === baseTarget && filterMatchesSource(r, dctoFilter, dataSourceTable));
+    const baseTarget = getDocumentoBase(dctoFilter.value);
+    filtered = filtered.filter(r => getDocumentoBase(r[dctoFilter.key]) === baseTarget && filterMatchesSource(r, dctoFilter, dataSourceTable));
   }
 
   return filtered.filter(r => ['aVencer', 'atraso'].includes(r._status));
@@ -2556,6 +2606,8 @@ const kpiData = useMemo(() => {
       if (!prevLatest || ((emisDateForLatest && prevLatest.emisDate && emisDateForLatest > prevLatest.emisDate) || (emisDateForLatest && !prevLatest.emisDate))) {
         latestBorderoById.set(bNum, {
           bordero: borderoDisplay,
+          borderoKey,
+          borderoValue: borderoKey ? r[borderoKey] : borderoDisplay,
           sourceTable: getRowSourceTable(r, dataSourceTable),
           taxa: hasRateVal ? rate : null,
           emisDate: emisDateForLatest
@@ -2648,11 +2700,13 @@ const kpiData = useMemo(() => {
       ? [
           ...ordenarTaxasPorBordero(taxasPorFonte.secInfoSmart || []),
           ...ordenarTaxasPorBordero(taxasPorFonte.secInfo || []),
-        ].slice(0, 5)
-      : ordenarTaxasPorBordero(Array.from(latestBorderoById.values())).slice(0, 5);
+        ]
+      : ordenarTaxasPorBordero(Array.from(latestBorderoById.values()));
 
     const ultimasTaxas = ultimasTaxasBase.map(item => ({
         bordero: item.bordero,
+        borderoKey: item.borderoKey,
+        borderoValue: item.borderoValue,
         sourceTable: item.sourceTable || "secInfo",
         taxa: item.taxa,
         emis: item.emisDate
@@ -2790,7 +2844,7 @@ return {
             if (borderoFilter?.key) {
               query = query.eq(borderoFilter.key, borderoFilter.value);
             } else if (dctoFilter?.key) {
-              const baseTarget = String(dctoFilter.value).split(/[-/]/)[0].trim();
+              const baseTarget = getDocumentoBase(dctoFilter.value);
               query = query.ilike(dctoFilter.key, `${baseTarget}%`);
             }
           }
@@ -2985,6 +3039,61 @@ return (
           <button onClick={limparFiltroEntidades} disabled={!hasEntityFilter} style={{ padding: "10px", borderRadius: "8px", border: "1px solid #d1d5db", background: (!hasEntityFilter) ? "#f9fafb" : "#fff", color: (!hasEntityFilter) ? "#9ca3af" : "#ef4444", fontWeight: "600", fontSize: "13px", cursor: (!hasEntityFilter) ? "not-allowed" : "pointer", transition: "all 0.2s" }}>
             Limpar Nomes
           </button>
+        </div>
+
+        <hr style={{ border: 0, borderTop: "1px dashed #d1d5db", margin: 0 }} />
+
+        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+          <div>
+            <label style={{ display: "block", marginBottom: 6, fontSize: "13px", fontWeight: "600", color: "#374151" }}>Bordero</label>
+            <div style={{ display: "flex", gap: "8px" }}>
+              <input
+                type="text"
+                value={borderoSearchInput}
+                onChange={e => setBorderoSearchInput(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter") aplicarBuscaBordero(); }}
+                placeholder="Ex.: 12345"
+                style={{ width: "100%", padding: "11px", borderRadius: "6px", border: "1px solid #d1d5db", background: "#fff", fontSize: "14px", color: "#111827", outline: "none", boxSizing: "border-box" }}
+              />
+              <button
+                onClick={aplicarBuscaBordero}
+                disabled={!normalizarBuscaSimples(borderoSearchInput)}
+                style={{ flex: "0 0 auto", padding: "0 12px", borderRadius: "8px", border: "1px solid #d1d5db", background: !normalizarBuscaSimples(borderoSearchInput) ? "#f9fafb" : "#fff", color: !normalizarBuscaSimples(borderoSearchInput) ? "#9ca3af" : "#374151", fontWeight: "600", fontSize: "13px", cursor: !normalizarBuscaSimples(borderoSearchInput) ? "not-allowed" : "pointer", transition: "all 0.2s" }}
+              >
+                Buscar
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label style={{ display: "block", marginBottom: 6, fontSize: "13px", fontWeight: "600", color: "#374151" }}>Documento</label>
+            <div style={{ display: "flex", gap: "8px" }}>
+              <input
+                type="text"
+                value={dctoSearchInput}
+                onChange={e => setDctoSearchInput(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter") aplicarBuscaDcto(); }}
+                placeholder="Ex.: 127, 127/1 ou 127-1"
+                style={{ width: "100%", padding: "11px", borderRadius: "6px", border: "1px solid #d1d5db", background: "#fff", fontSize: "14px", color: "#111827", outline: "none", boxSizing: "border-box" }}
+              />
+              <button
+                onClick={aplicarBuscaDcto}
+                disabled={!getDocumentoBase(dctoSearchInput)}
+                style={{ flex: "0 0 auto", padding: "0 12px", borderRadius: "8px", border: "1px solid #d1d5db", background: !getDocumentoBase(dctoSearchInput) ? "#f9fafb" : "#fff", color: !getDocumentoBase(dctoSearchInput) ? "#9ca3af" : "#374151", fontWeight: "600", fontSize: "13px", cursor: !getDocumentoBase(dctoSearchInput) ? "not-allowed" : "pointer", transition: "all 0.2s" }}
+              >
+                Buscar
+              </button>
+            </div>
+          </div>
+
+          {(borderoFilter || dctoFilter || borderoSearchInput || dctoSearchInput) && (
+            <button
+              onClick={limparBuscaBorderoDcto}
+              style={{ padding: "10px", borderRadius: "8px", border: "1px solid #d1d5db", background: "#fff", color: "#ef4444", fontWeight: "600", fontSize: "13px", cursor: "pointer", transition: "all 0.2s" }}
+            >
+              Limpar Busca
+            </button>
+          )}
         </div>
 
         <hr style={{ border: 0, borderTop: "1px dashed #d1d5db", margin: 0 }} />
@@ -3332,22 +3441,41 @@ return (
                     <div style={{ padding: "8px 10px", fontSize: "11px", fontWeight: "700", color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", textAlign: "right" }}>Taxa</div>
                   </div>
                   {kpiData.ultimasTaxas.length > 0 ? (
-                    kpiData.ultimasTaxas.map((item, idx) => {
-                      const sourceLabel = item.sourceTable === "secInfoSmart" ? "Smart" : "WBA";
-                      return (
-                      <div key={`${item.sourceTable}-${item.bordero}-${idx}`} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 90px", borderBottom: idx === kpiData.ultimasTaxas.length - 1 ? "none" : "1px solid #f1f5f9" }}>
-                        <div style={{ padding: "9px 10px", fontSize: "13px", fontWeight: "600", color: "#111827", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", display: "flex", alignItems: "center", gap: "8px" }} title={`${sourceLabel} - ${item.bordero}`}>
-                          <span style={{ flex: "0 0 auto", border: `1px solid ${item.sourceTable === "secInfoSmart" ? "#99f6e4" : "#bfdbfe"}`, background: item.sourceTable === "secInfoSmart" ? "#ccfbf1" : "#dbeafe", color: item.sourceTable === "secInfoSmart" ? "#0f766e" : "#1d4ed8", borderRadius: "999px", padding: "2px 7px", fontSize: "10px", fontWeight: 800, textTransform: "uppercase" }}>
-                            {sourceLabel}
-                          </span>
-                          <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>{item.bordero}</span>
+                    <div style={{ maxHeight: "190px", overflowY: kpiData.ultimasTaxas.length > 5 ? "auto" : "hidden" }}>
+                      {kpiData.ultimasTaxas.map((item, idx) => {
+                        const sourceLabel = item.sourceTable === "secInfoSmart" ? "Smart" : "WBA";
+                        const isThisBorderoFiltered = borderoFilter?.key === item.borderoKey && borderoFilter?.value === item.borderoValue && (!borderoFilter.sourceTable || borderoFilter.sourceTable === item.sourceTable);
+                        const canFilterBordero = Boolean(item.borderoKey);
+                        return (
+                        <div key={`${item.sourceTable}-${item.bordero}-${idx}`} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 90px", borderBottom: idx === kpiData.ultimasTaxas.length - 1 ? "none" : "1px solid #f1f5f9" }}>
+                          <div style={{ padding: "9px 10px", fontSize: "13px", fontWeight: "600", color: "#111827", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", display: "flex", alignItems: "center", gap: "8px" }} title={`${sourceLabel} - ${item.bordero}`}>
+                            <span style={{ flex: "0 0 auto", border: `1px solid ${item.sourceTable === "secInfoSmart" ? "#99f6e4" : "#bfdbfe"}`, background: item.sourceTable === "secInfoSmart" ? "#ccfbf1" : "#dbeafe", color: item.sourceTable === "secInfoSmart" ? "#0f766e" : "#1d4ed8", borderRadius: "999px", padding: "2px 7px", fontSize: "10px", fontWeight: 800, textTransform: "uppercase" }}>
+                              {sourceLabel}
+                            </span>
+                            <button
+                              type="button"
+                              disabled={!canFilterBordero}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (!canFilterBordero) return;
+                                handleBorderoDrill({
+                                  key: item.borderoKey,
+                                  value: item.borderoValue,
+                                  sourceTable: item.sourceTable,
+                                  isActive: isThisBorderoFiltered
+                                });
+                              }}
+                              style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", border: "none", background: isThisBorderoFiltered ? "#4f46e5" : "rgba(79, 70, 229, 0.08)", color: isThisBorderoFiltered ? "#fff" : "#4f46e5", padding: "3px 7px", borderRadius: "6px", fontSize: "13px", fontWeight: "700", cursor: canFilterBordero ? "pointer" : "default" }}>
+                                {item.bordero}
+                              </button>
+                          </div>
+                          <div style={{ padding: "9px 10px", fontSize: "13px", fontWeight: "700", color: "#111827", textAlign: "right" }}>
+                            {item.taxa !== null && item.taxa !== undefined ? `${Number(item.taxa).toFixed(2).replace('.', ',')}%` : "-"}
+                          </div>
                         </div>
-                        <div style={{ padding: "9px 10px", fontSize: "13px", fontWeight: "700", color: "#111827", textAlign: "right" }}>
-                          {item.taxa !== null && item.taxa !== undefined ? `${Number(item.taxa).toFixed(2).replace('.', ',')}%` : "-"}
-                        </div>
-                      </div>
-                    );
-                    })
+                      );
+                      })}
+                    </div>
                   ) : (
                     <div style={{ padding: "10px", fontSize: "13px", color: "#6b7280", textAlign: "center" }}>
                       Sem taxas recentes
@@ -3359,7 +3487,7 @@ return (
               </div>
               )}
               
-              <DashboardInsights processedRows={rowsFilteredByDate} insightFilter={insightFilter} setInsightFilter={setInsightFilter} setBorderoFilter={setBorderoFilter} setDctoFilter={setDctoFilter} hideValues={hideValues} dataSourceTable={dataSourceTable} />
+              <DashboardInsights processedRows={rowsFilteredByBorderoDcto} insightFilter={insightFilter} setInsightFilter={setInsightFilter} setBorderoFilter={setBorderoFilter} setDctoFilter={setDctoFilter} hideValues={hideValues} dataSourceTable={dataSourceTable} />
               
 {(clienteSelecionado || grupoSelecionado || sacadoSelecionado) && (
   <SacadoConcentrationCard
@@ -3429,7 +3557,7 @@ return (
             
             <div style={{ display: "flex", justifyContent: "flex-end", gap: "16px", flexWrap: "wrap" }}>
               {borderoFilter && <div style={{ marginBottom: "12px", fontSize: "13px", color: "#4f46e5", fontWeight: "600", textAlign: "right" }}>Filtro de Borderô ativo: {borderoFilter.value}. Clique no número na tabela para limpar.</div>}
-              {dctoFilter && <div style={{ marginBottom: "12px", fontSize: "13px", color: "#0ea5e9", fontWeight: "600", textAlign: "right" }}>Filtro de Documento ativo (Raiz: {String(dctoFilter.value).split(/[-/]/)[0].trim()}). Clique no número na tabela para limpar.</div>}
+              {dctoFilter && <div style={{ marginBottom: "12px", fontSize: "13px", color: "#0ea5e9", fontWeight: "600", textAlign: "right" }}>Filtro de Documento ativo (Raiz: {getDocumentoBase(dctoFilter.value)}). Clique no número na tabela para limpar.</div>}
             </div>
 
             {(!hasAnyFilter && !loading) ? (
