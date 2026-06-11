@@ -2417,7 +2417,7 @@ export default function MicroDashboard({ session, onSidebarToggle, hideValues, s
         else if (effectiveVcto.getDay() === 0) effectiveVcto.setDate(effectiveVcto.getDate() + 1);
 
         if (isStatusRefinanciado(statusVal)) {
-          status = effectiveVcto < today ? 'atraso' : 'aVencer';
+          status = 'aVencer';
         } else if (pgtoVal && String(pgtoVal).trim() !== "") {
           const pgtoDate = new Date(String(pgtoVal).split("T")[0] + "T00:00:00");
 
@@ -3565,7 +3565,7 @@ return (
               else if (effectiveVcto.getDay() === 0) effectiveVcto.setDate(effectiveVcto.getDate() + 1);
 
               if (isStatusRefinanciado(statusVal)) {
-                status = effectiveVcto < today ? "atraso" : "aVencer";
+                status = "aVencer";
               } else if (pgtoVal && String(pgtoVal).trim() !== "") {
                 const pgtoDate = new Date(String(pgtoVal).split("T")[0] + "T00:00:00");
                 const clienteAtual = String(r["Cliente"] || "").trim();
