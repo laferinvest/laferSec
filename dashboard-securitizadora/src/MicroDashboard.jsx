@@ -508,6 +508,11 @@ function isInadimplente(row) {
   return normalizarChave(row?.inadimplencia ?? row?.Inadimplencia ?? row?.["Inadimplência"]) === "sim";
 }
 
+function isStatusRefinanciado(statusValue) {
+  const statusNormalizado = normalizarChave(statusValue).replace(/[^a-z0-9]+/g, " ").trim();
+  return statusNormalizado.includes("refinanc");
+}
+
 function cedenteValido(cedente) {
   return Boolean(cedente);
 }
@@ -2411,7 +2416,9 @@ export default function MicroDashboard({ session, onSidebarToggle, hideValues, s
         if (effectiveVcto.getDay() === 6) effectiveVcto.setDate(effectiveVcto.getDate() + 2);
         else if (effectiveVcto.getDay() === 0) effectiveVcto.setDate(effectiveVcto.getDate() + 1);
 
-        if (pgtoVal && String(pgtoVal).trim() !== "") {
+        if (isStatusRefinanciado(statusVal)) {
+          status = effectiveVcto < today ? 'atraso' : 'aVencer';
+        } else if (pgtoVal && String(pgtoVal).trim() !== "") {
           const pgtoDate = new Date(String(pgtoVal).split("T")[0] + "T00:00:00");
 
           const clienteAtual = String(r["Cliente"] || "").trim();
@@ -3557,7 +3564,9 @@ return (
               if (effectiveVcto.getDay() === 6) effectiveVcto.setDate(effectiveVcto.getDate() + 2);
               else if (effectiveVcto.getDay() === 0) effectiveVcto.setDate(effectiveVcto.getDate() + 1);
 
-              if (pgtoVal && String(pgtoVal).trim() !== "") {
+              if (isStatusRefinanciado(statusVal)) {
+                status = effectiveVcto < today ? "atraso" : "aVencer";
+              } else if (pgtoVal && String(pgtoVal).trim() !== "") {
                 const pgtoDate = new Date(String(pgtoVal).split("T")[0] + "T00:00:00");
                 const clienteAtual = String(r["Cliente"] || "").trim();
                 const diasTolerancia = getDiasUteisToleranciaComissaria(clienteAtual);
