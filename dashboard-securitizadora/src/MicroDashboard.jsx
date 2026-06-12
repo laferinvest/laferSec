@@ -48,11 +48,12 @@ function formatarData(dataString) {
   return dataString;
 }
 
+const _brlFormatter = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 function formatarMoeda(valor) {
   if (valor === null || valor === undefined || valor === "") return "";
   const numero = Number(valor);
   if (isNaN(numero)) return String(valor);
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(numero);
+  return _brlFormatter.format(numero);
 }
 
 function escapeText(v) {
@@ -439,13 +440,14 @@ const getDataSourceTables = (dataSourceTable, filterSourceTable = null) => {
   return selectedTables;
 };
 
-const tagSourceRow = (row, sourceTable, index) => ({
-  ...row,
-  _sourceTable: sourceTable,
-  _rowKey: `${sourceTable}-${row?.id ?? index}`,
-  _clienteEntityKey: chaveEntidadePrefixo(row?.Cliente),
-  _sacadoEntityKey: chaveEntidadePrefixo(row?.Sacado),
-});
+const tagSourceRow = (row, sourceTable, index) => {
+  const tagged = Object.assign(Object.create(null), row);
+  tagged._sourceTable = sourceTable;
+  tagged._rowKey = `${sourceTable}-${row?.id ?? index}`;
+  tagged._clienteEntityKey = chaveEntidadePrefixo(row?.Cliente);
+  tagged._sacadoEntityKey = chaveEntidadePrefixo(row?.Sacado);
+  return tagged;
+};
 
 const getRowSourceTable = (row, fallbackDataSourceTable = "secInfo") =>
   row?._sourceTable || (fallbackDataSourceTable === "secInfoSmart" ? "secInfoSmart" : "secInfo");
@@ -1635,6 +1637,8 @@ const sectionSubtitleStyle = {
   color: "#6b7280",
 };
 
+const COLUNAS_OCULTAS_SET = new Set(["id", "created_at", "Cód.Red", "UF", "Banco", "Rec.", "Estado", "_status", "_sourceTable", "_rowKey", "_clienteEntityKey", "_sacadoEntityKey", "clienteEntityKey", "sacadoEntityKey", "ClienteEntityKey", "SacadoEntityKey", "Juros e Multa", "Qtd Linhas Agrupadas", "Detalhes Agrupamento", "inadimplencia", "Inadimplencia", "Inadimplência"]);
+
 function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, borderoFilter, setBorderoFilter, dctoFilter, setDctoFilter, setDateFilter, setInsightFilter, setClienteSelecionado, setSacadoSelecionado, hideValues, dataSourceTable = "secInfo", onBorderoDrill, onDctoDrill }) {
   const fmtM = (v) => hideValues ? "R$ -" : formatarMoeda(v);
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -1645,11 +1649,10 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
 
   useEffect(() => { setCurrentPage(1); }, [rows, dateFilter, sortConfig]);
 
-  const colunasOcultas = ["id", "created_at", "Cód.Red", "UF", "Banco", "Rec.", "Estado", "_status", "_sourceTable", "_rowKey", "_clienteEntityKey", "_sacadoEntityKey", "clienteEntityKey", "sacadoEntityKey", "ClienteEntityKey", "SacadoEntityKey", "Juros e Multa", "Qtd Linhas Agrupadas", "Detalhes Agrupamento", "inadimplencia", "Inadimplencia", "Inadimplência"];
   const columns = useMemo(() => {
     if (!rows.length) return [];
     const firstRowKeys = Array.from(new Set(rows.flatMap((row) => Object.keys(row || {}))));
-    let cols = firstRowKeys.filter(c => !colunasOcultas.includes(c) && !String(c).toLowerCase().includes("entitykey"));
+    let cols = firstRowKeys.filter(c => !COLUNAS_OCULTAS_SET.has(c) && !String(c).toLowerCase().includes("entitykey"));
     if (clienteSelecionado) cols = cols.filter(c => c !== "Cliente");
     if (sacadoSelecionado) cols = cols.filter(c => c !== "Sacado");
     if (clienteSelecionado && !sacadoSelecionado && cols.includes("Sacado")) cols = ["Sacado", ...cols.filter(c => c !== "Sacado")];
@@ -2165,8 +2168,10 @@ export default function MicroDashboard({ session, onSidebarToggle, hideValues, s
 
     if (typeof window !== 'undefined') {
       handleResize();
-      window.addEventListener('resize', handleResize);
-      return () => window.removeEventListener('resize', handleResize);
+      let resizeTimer;
+      const debouncedResize = () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(handleResize, 100); };
+      window.addEventListener('resize', debouncedResize);
+      return () => { window.removeEventListener('resize', debouncedResize); clearTimeout(resizeTimer); };
     }
   }, []);
 
@@ -2525,6 +2530,53 @@ const riscoAtual = useMemo(() => {
   return rowsParaRiscoAtual.reduce((acc, row) => acc + (Number(row[valKey]) || 0), 0);
 }, [rowsParaRiscoAtual]);
 
+  const rowsConcentracaoSacadoComStatus = useMemo(() => {
+    if (!sacadoSelecionado || clienteSelecionado || grupoSelecionado) return rowsParaTabela;
+    if (!rowsConcentracaoSacado.length) return rowsParaTabela;
+
+    const vctoKey = findKeyAcrossRows(rowsConcentracaoSacado,
+      (k) => k.toLowerCase() === "vcto" || (k.toLowerCase().includes("vcto") && !k.toLowerCase().includes("vl"))
+    );
+    const pgtoKey = findKeyAcrossRows(rowsConcentracaoSacado,
+      (k) => k.toLowerCase() === "pgto" || (k.toLowerCase().includes("pgto") && !k.toLowerCase().includes("vl"))
+    );
+    const statusKey = findKeyAcrossRows(rowsConcentracaoSacado,
+      (k) => k.toLowerCase() === "status" || k.toLowerCase() === "estado"
+    );
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    return rowsConcentracaoSacado.map((r) => {
+      let status = "invalido";
+      const vctoVal = vctoKey ? r[vctoKey] : null;
+      const pgtoVal = pgtoKey ? r[pgtoKey] : null;
+      const statusVal = statusKey ? String(r[statusKey]).trim().toUpperCase() : "";
+
+      if (statusVal === "REC" || statusVal.includes("REC")) status = "recompra";
+      else if (vctoVal) {
+        const effectiveVcto = new Date(String(vctoVal).split("T")[0] + "T00:00:00");
+        if (effectiveVcto.getDay() === 6) effectiveVcto.setDate(effectiveVcto.getDate() + 2);
+        else if (effectiveVcto.getDay() === 0) effectiveVcto.setDate(effectiveVcto.getDate() + 1);
+
+        if (isStatusRefinanciado(statusVal)) {
+          status = "aVencer";
+        } else if (pgtoVal && String(pgtoVal).trim() !== "") {
+          const pgtoDate = new Date(String(pgtoVal).split("T")[0] + "T00:00:00");
+          const clienteAtual = String(r["Cliente"] || "").trim();
+          const diasTolerancia = getDiasUteisToleranciaComissaria(clienteAtual);
+          const toleranciaFinal = diasTolerancia > 0
+            ? adicionarDiasUteis(effectiveVcto, diasTolerancia)
+            : effectiveVcto;
+          status = pgtoDate <= toleranciaFinal ? "liquidado" : "liquidadoAtraso";
+        } else {
+          status = effectiveVcto < today ? "atraso" : "aVencer";
+        }
+      }
+      return { ...r, _status: status };
+    });
+  }, [rowsConcentracaoSacado, rowsParaTabela, sacadoSelecionado, clienteSelecionado, grupoSelecionado]);
+
+
 const kpiData = useMemo(() => {
     if (!rowsParaTabela || rowsParaTabela.length === 0) {
       return {
@@ -2787,7 +2839,7 @@ return {
       async function buscarRelacionamentos() {
         try {
           const results = await Promise.all(getDataSourceTables(dataSourceTable).map(async (sourceTable) => {
-            const { data, error } = await supabase.from(sourceTable).select("Cliente, Sacado, inadimplencia");
+            const { data, error } = await supabase.from(sourceTable).select("Cliente, Sacado, inadimplencia").limit(5000);
             if (error) throw error;
             return (data || []).map((row, index) => tagSourceRow(row, sourceTable, index));
           }));
@@ -3538,52 +3590,7 @@ return (
               
 {(clienteSelecionado || grupoSelecionado || sacadoSelecionado) && (
   <SacadoConcentrationCard
-    rows={
-      (sacadoSelecionado && !clienteSelecionado && !grupoSelecionado)
-        ? rowsConcentracaoSacado.map((r) => {
-            const vctoKey = findKeyAcrossRows(rowsConcentracaoSacado,
-              (k) => k.toLowerCase() === "vcto" || (k.toLowerCase().includes("vcto") && !k.toLowerCase().includes("vl"))
-            );
-            const pgtoKey = findKeyAcrossRows(rowsConcentracaoSacado,
-              (k) => k.toLowerCase() === "pgto" || (k.toLowerCase().includes("pgto") && !k.toLowerCase().includes("vl"))
-            );
-            const statusKey = findKeyAcrossRows(rowsConcentracaoSacado,
-              (k) => k.toLowerCase() === "status" || k.toLowerCase() === "estado"
-            );
-
-            let status = "invalido";
-            const vctoVal = vctoKey ? r[vctoKey] : null;
-            const pgtoVal = pgtoKey ? r[pgtoKey] : null;
-            const statusVal = statusKey ? String(r[statusKey]).trim().toUpperCase() : "";
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-
-            if (statusVal === "REC" || statusVal.includes("REC")) status = "recompra";
-            else if (vctoVal) {
-              const effectiveVcto = new Date(String(vctoVal).split("T")[0] + "T00:00:00");
-              if (effectiveVcto.getDay() === 6) effectiveVcto.setDate(effectiveVcto.getDate() + 2);
-              else if (effectiveVcto.getDay() === 0) effectiveVcto.setDate(effectiveVcto.getDate() + 1);
-
-              if (isStatusRefinanciado(statusVal)) {
-                status = "aVencer";
-              } else if (pgtoVal && String(pgtoVal).trim() !== "") {
-                const pgtoDate = new Date(String(pgtoVal).split("T")[0] + "T00:00:00");
-                const clienteAtual = String(r["Cliente"] || "").trim();
-                const diasTolerancia = getDiasUteisToleranciaComissaria(clienteAtual);
-                const toleranciaFinal = diasTolerancia > 0
-                  ? adicionarDiasUteis(effectiveVcto, diasTolerancia)
-                  : effectiveVcto;
-
-                status = pgtoDate <= toleranciaFinal ? "liquidado" : "liquidadoAtraso";
-              } else {
-                status = effectiveVcto < today ? "atraso" : "aVencer";
-              }
-            }
-
-            return { ...r, _status: status };
-          })
-        : rowsParaTabela
-    }
+    rows={rowsConcentracaoSacadoComStatus}
     clienteSelecionado={clienteSelecionado}
     grupoSelecionado={grupoSelecionado}
     sacadoSelecionado={sacadoSelecionado}
