@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "./supabaseClient";
 
 const PAGE_SIZE = 5000;
-const SELECT_COLUMNS = 'id,Cliente,Sacado,"Dt.Emis",Vcto,Pgto,"Vl Pgto",Dcto,"Borderô",Entrada,"Tx.Efet",Status';
+const SELECT_COLUMNS = 'id,Cliente,Sacado,"Dt.Emis",Vcto,Pgto,"Vl Pgto",Dcto,"Borderô",Entrada,Desagio,"Tx.Efet",Status';
 
 const tableColumns = [
   { key: "Cliente", label: "Cedente" },
@@ -10,6 +10,7 @@ const tableColumns = [
   { key: "Dt.Emis", label: "Dt.Emis", type: "date" },
   { key: "Vcto", label: "Dt.Vcto", type: "date" },
   { key: "Entrada", label: "Valor de Face", type: "money" },
+  { key: "Desagio", label: "Deságio", type: "money" },
   { key: "Dcto", label: "Dcto" },
   { key: "Borderô", label: "Borderô" },
   { key: "Tx.Efet", label: "Tx.Efet", type: "rate" },
@@ -99,6 +100,18 @@ const formatRate = (value) => {
   return `${number.toFixed(2).replace(".", ",")}%`;
 };
 
+const formatEntityName = (value) =>
+  String(value || "")
+    .trim()
+    .replace(/^\d+\s*-\s*/, "")
+    .replace(/\s*-\s*sacado\s*$/i, "");
+
+const getTodayIso = () => {
+  const date = new Date();
+  date.setHours(0, 0, 0, 0);
+  return formatIsoDate(date);
+};
+
 const getYesterdayIso = () => {
   const date = new Date();
   date.setHours(0, 0, 0, 0);
@@ -139,6 +152,7 @@ const normalizeRow = (row, sourceTable, index) => ({
   Entrada: parseNumber(getValueByAliases(row, ["Entrada", "Valor", "Valor(R$)", "VALOR(R$)", "Total", "TOTAL(R$)"])),
   Dcto: getValueByAliases(row, ["Dcto", "Documento", "DOCUMENTO"]),
   "Borderô": getValueByAliases(row, ["Borderô", "Bordero", "OP"]),
+  Desagio: parseNumber(getValueByAliases(row, ["Desagio", "Deságio", "DESÁGIO"])),
   "Tx.Efet": parseNumber(getValueByAliases(row, ["Tx.Efet", "TX.EFET", "Tx Efet", "Taxa Efetiva"])),
   Status: getValueByAliases(row, ["Status", "Situação", "SITUAÇÃO", "Estado"]),
   _sourceTable: sourceTable,
@@ -261,6 +275,7 @@ function MorningTable({ rows, hideValues, onNavigateToMicro }) {
                   if (column.type === "date") value = formatDate(value);
                   if (column.type === "money") value = formatMoney(value, hideValues);
                   if (column.type === "rate") value = formatRate(value);
+                  if (column.key === "Cliente" || column.key === "Sacado") value = formatEntityName(value);
                   const cellFilter = getMicroFilterForCell(row, column.key);
                   const isDirectFilterCell = ["Cliente", "Sacado", "Dcto", "Borderô"].includes(column.key);
 
@@ -323,7 +338,14 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const ontemIso = useMemo(getYesterdayIso, []);
+  const maxSelectableDateIso = useMemo(getYesterdayIso, []);
+  const [selectedDateIso, setSelectedDateIso] = useState(maxSelectableDateIso);
+
+  const handleSelectedDateChange = (event) => {
+    const nextDate = event.target.value;
+    if (!nextDate) return;
+    setSelectedDateIso(nextDate >= getTodayIso() ? maxSelectableDateIso : nextDate);
+  };
 
   useEffect(() => {
     let ignore = false;
@@ -360,19 +382,20 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
   const resumo = useMemo(() => {
     const validRows = rows.filter((row) => row.Cliente && row.Sacado && row.Entrada > 0);
 
-    const inadimplenciaOntem = validRows.filter((row) => row.Vcto === ontemIso && isOpen(row));
+    const inadimplenciaOntem = validRows.filter((row) => row.Vcto === selectedDateIso && isOpen(row));
     const quitadosOntem = validRows.filter((row) => (
-      (row.Vcto === ontemIso && (isQuitadoStatus(row.Status) || isRecompradoStatus(row.Status))) ||
-      (row.Pgto === ontemIso && row.Vcto > ontemIso && (isQuitadoStatus(row.Status) || isRecompradoStatus(row.Status) || hasPayment(row)))
+      (row.Vcto === selectedDateIso && (isQuitadoStatus(row.Status) || isRecompradoStatus(row.Status))) ||
+      (row.Pgto === selectedDateIso && row.Vcto > selectedDateIso && (isQuitadoStatus(row.Status) || isRecompradoStatus(row.Status) || hasPayment(row)))
     ));
     const quitadosEmAtraso = validRows.filter((row) => (
-      row.Pgto === ontemIso &&
-      row.Vcto < ontemIso &&
+      row.Pgto === selectedDateIso &&
+      row.Vcto < selectedDateIso &&
       (isQuitadoStatus(row.Status) || isRecompradoStatus(row.Status) || hasPayment(row))
     ));
-    const operacoesOntem = validRows.filter((row) => row["Dt.Emis"] === ontemIso);
+    const operacoesOntem = validRows.filter((row) => row["Dt.Emis"] === selectedDateIso);
 
     const volumeOperado = operacoesOntem.reduce((acc, row) => acc + row.Entrada, 0);
+    const desagioOperado = operacoesOntem.reduce((acc, row) => acc + row.Desagio, 0);
     const taxaMediaPonderada = volumeOperado > 0
       ? operacoesOntem.reduce((acc, row) => acc + row["Tx.Efet"] * row.Entrada, 0) / volumeOperado
       : 0;
@@ -387,9 +410,10 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
       quitadosEmAtraso: [...quitadosEmAtraso].sort(sortByCedente),
       operacoesOntem: [...operacoesOntem].sort(sortByCedente),
       volumeOperado,
+      desagioOperado,
       taxaMediaPonderada,
     };
-  }, [rows, ontemIso]);
+  }, [rows, selectedDateIso]);
 
   if (loading) {
     return (
@@ -409,18 +433,32 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
 
   return (
     <main style={{ display: "flex", flexDirection: "column", gap: "24px", paddingBottom: "24px" }}>
-      <div style={{ background: "#fff", padding: "22px 24px", borderRadius: "12px", border: "1px solid #e5e7eb", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)" }}>
-        <h1 style={{ margin: 0, color: "#111827", fontSize: "26px", fontWeight: 800, letterSpacing: "-0.02em" }}>
-          Resumo Matinal
-        </h1>
-        <p style={{ margin: "8px 0 0", color: "#6b7280", fontSize: "14px", fontWeight: 500 }}>
-          Visão operacional de ontem, {formatDate(ontemIso)}.
-        </p>
+      <div style={{ background: "#fff", padding: "22px 24px", borderRadius: "12px", border: "1px solid #e5e7eb", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)", display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "center", flexWrap: "wrap" }}>
+        <div>
+          <h1 style={{ margin: 0, color: "#111827", fontSize: "26px", fontWeight: 800, letterSpacing: "-0.02em" }}>
+            Resumo Matinal
+          </h1>
+          <p style={{ margin: "8px 0 0", color: "#6b7280", fontSize: "14px", fontWeight: 500 }}>
+            Visão operacional de {formatDate(selectedDateIso)}.
+          </p>
+        </div>
+        <label style={{ display: "flex", flexDirection: "column", gap: "6px", minWidth: "190px" }}>
+          <span style={{ fontSize: "12px", fontWeight: 800, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+            Data
+          </span>
+          <input
+            type="date"
+            value={selectedDateIso}
+            max={maxSelectableDateIso}
+            onChange={handleSelectedDateChange}
+            style={{ width: "100%", padding: "10px 12px", borderRadius: "8px", border: "1px solid #d1d5db", background: "#fff", color: "#111827", fontSize: "14px", fontWeight: 700, outline: "none", boxSizing: "border-box" }}
+          />
+        </label>
       </div>
 
       <MorningSection
-        title="Inadimplência de Ontem"
-        subtitle="Títulos com vencimento ontem que ainda estão em aberto."
+        title="Inadimplência do Dia"
+        subtitle="Títulos com vencimento na data selecionada que ainda estão em aberto."
         rows={resumo.inadimplenciaOntem}
         hideValues={hideValues}
         accent="#ef4444"
@@ -429,8 +467,8 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
       />
 
       <MorningSection
-        title="Quitados de Ontem"
-        subtitle="Títulos com vencimento ontem que já aparecem como quitados, liquidados ou recomprados."
+        title="Quitados do Dia"
+        subtitle="Títulos com vencimento na data selecionada ou antecipados nessa data."
         rows={resumo.quitadosOntem}
         hideValues={hideValues}
         accent="#22c55e"
@@ -440,7 +478,7 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
 
       <MorningSection
         title="Quitado em Atraso"
-        subtitle="Títulos quitados ontem com vencimento diferente de ontem."
+        subtitle="Títulos quitados na data selecionada com vencimento anterior."
         rows={resumo.quitadosEmAtraso}
         hideValues={hideValues}
         accent="#f59e0b"
@@ -449,8 +487,8 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
       />
 
       <MorningSection
-        title="Operações de Ontem"
-        subtitle="Novos títulos emitidos ontem."
+        title="Operações do Dia"
+        subtitle="Novos títulos emitidos na data selecionada."
         rows={resumo.operacoesOntem}
         hideValues={hideValues}
         accent="#4f46e5"
@@ -463,6 +501,12 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
             value={formatMoney(resumo.volumeOperado, hideValues)}
             sublabel={`${resumo.operacoesOntem.length} título(s) emitido(s)`}
             color="#4f46e5"
+          />
+          <SummaryMetric
+            label="Deságio Ganho"
+            value={formatMoney(resumo.desagioOperado, hideValues)}
+            sublabel="Soma do deságio das entradas"
+            color="#f59e0b"
           />
           <SummaryMetric
             label="Taxa Média Ponderada"
