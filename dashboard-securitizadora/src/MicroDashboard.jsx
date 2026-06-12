@@ -319,11 +319,40 @@ function normalizarBuscaSimples(valor) {
 
 function parseIsoDateLocal(valor) {
   if (!valor) return null;
-  const parts = String(valor).split("T")[0].split("-");
-  if (parts.length !== 3) return null;
-  const [year, month, day] = parts.map(Number);
+
+  const raw = String(valor).trim().split("T")[0];
+  let year, month, day;
+
+  if (raw.includes("-")) {
+    const parts = raw.split("-");
+    if (parts.length !== 3) return null;
+    [year, month, day] = parts.map(Number);
+  } else if (raw.includes("/")) {
+    const parts = raw.split("/").map(Number);
+    if (parts.length !== 3) return null;
+    // Formato brasileiro: DD/MM/YYYY. Se vier YYYY/MM/DD, também aceita.
+    if (parts[0] > 31) {
+      [year, month, day] = parts;
+    } else {
+      [day, month, year] = parts;
+    }
+    if (year > 0 && year < 100) year += 2000;
+  } else {
+    return null;
+  }
+
   if (!year || !month || !day) return null;
-  return new Date(year, month - 1, day);
+
+  const parsed = new Date(year, month - 1, day);
+  if (
+    parsed.getFullYear() !== year ||
+    parsed.getMonth() !== month - 1 ||
+    parsed.getDate() !== day
+  ) {
+    return null;
+  }
+
+  return parsed;
 }
 
 function isWeekendDate(date) {
@@ -351,6 +380,36 @@ function diffCalendarDays(startDate, endDate) {
   const startUtc = Date.UTC(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
   const endUtc = Date.UTC(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
   return Math.round((endUtc - startUtc) / 86400000);
+}
+
+function getTodayLocalDate() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return today;
+}
+
+function getPrazoEfetivoComD2(emissaoValor, vencimentoValor, pagamentoValor = null, usarDataAtualSemPagamento = false) {
+  const dataBase = parseIsoDateLocal(emissaoValor);
+  const vencimento = parseIsoDateLocal(vencimentoValor);
+  if (!dataBase || !vencimento) return null;
+
+  const vencimentoAjustado = adjustToNextBusinessDay(vencimento);
+  const pagamento = parseIsoDateLocal(pagamentoValor);
+  const pagamentoAjustado = pagamento ? adjustToNextBusinessDay(pagamento) : null;
+  const dataAtualAjustada = usarDataAtualSemPagamento && !pagamentoAjustado
+    ? adjustToNextBusinessDay(getTodayLocalDate())
+    : null;
+
+  // A taxa com encargos mede o fluxo econômico real:
+  // emissão -> maior data entre vencimento ajustado, pagamento efetivo ou hoje -> D+2 úteis.
+  // O "hoje" só entra para título aberto com encargo, para não somar encargo com prazo velho.
+  const dataBaseD2 = [vencimentoAjustado, pagamentoAjustado, dataAtualAjustada]
+    .filter(Boolean)
+    .reduce((latest, date) => (date > latest ? date : latest), vencimentoAjustado);
+  const dataFinal = addBusinessDays(dataBaseD2, 2);
+  const prazo = diffCalendarDays(dataBase, dataFinal);
+
+  return prazo > 0 ? prazo : null;
 }
 
 function formatarMesAno(ym) {
@@ -1662,9 +1721,20 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
       const key = normalizarChave(c);
       return key === "tx.efet" || key === "tx efet" || key === "txefet";
     });
+    const isRawTxEncargosCol = (col) => {
+      const key = normalizarChave(col).replace(/[^a-z0-9]+/g, " ").trim();
+      return key !== "__tx_encargos__" && key.includes("tx") && key.includes("encarg");
+    };
     const dctoCol = cols.find(c => c.toLowerCase() === "dcto" || c.toLowerCase() === "documento");
     const borderoCol = cols.find(c => normalizarChave(c).includes("border"));
-    const baseCols = cols.filter(c => c !== txEfetCol && c !== dctoCol && c !== borderoCol);
+    const baseCols = cols.filter(c => (
+      c !== txEfetCol &&
+      c !== dctoCol &&
+      c !== borderoCol &&
+      c !== "__encargo__" &&
+      c !== "__tx_encargos__" &&
+      !isRawTxEncargosCol(c)
+    ));
     const valorPgtoIndex = baseCols.findIndex(c => c.toLowerCase() === "vl pgto");
     const metricCols = [txEfetCol, "__encargo__", "__tx_encargos__"].filter(Boolean);
 
@@ -1702,20 +1772,12 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
     const borderoKey = findKeyAcrossRows(rows, k => normalizarChave(k).includes("border"));
     const rateKey = findKeyAcrossRows(rows, k => k.toLowerCase() === 'tx.efet' || k.toLowerCase().includes('tx.efet') || k.toLowerCase().includes('tx efet'));
 
-    const getPrazoComEncargos = (row) => {
-      const dataBase = parseIsoDateLocal(emisKey ? row[emisKey] : null);
-      const vencimento = parseIsoDateLocal(vctoKey ? row[vctoKey] : null);
-      if (!dataBase || !vencimento) return null;
-
-      const vencimentoAjustado = adjustToNextBusinessDay(vencimento);
-      const dataFinalBase = addBusinessDays(vencimentoAjustado, 2);
-      const prazoBase = diffCalendarDays(dataBase, dataFinalBase);
-      if (prazoBase <= 0) return null;
-
-      const dataQuitacao = parseIsoDateLocal(pgtoKey ? row[pgtoKey] : null);
-      const diasAtraso = dataQuitacao ? Math.max(0, diffCalendarDays(vencimento, dataQuitacao)) : 0;
-      return prazoBase + diasAtraso;
-    };
+    const getPrazoComEncargos = (row, encargo = 0) => getPrazoEfetivoComD2(
+      emisKey ? row[emisKey] : null,
+      vctoKey ? row[vctoKey] : null,
+      pgtoKey ? row[pgtoKey] : null,
+      Number(encargo) > 0
+    );
 
     const rowsComEncargo = rows.map(r => {
       const val = valKey ? (Number(r[valKey]) || 0) : 0;
@@ -1755,7 +1817,7 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
         const valorFace = valKey ? (Number(row[valKey]) || 0) : 0;
         const desagio = desagioKey ? (Number(row[desagioKey]) || 0) : 0;
         const encargo = Number(row.__encargo__) || 0;
-        const prazo = getPrazoComEncargos(row);
+        const prazo = getPrazoComEncargos(row, encargo);
 
         if (!prazo || valorFace <= 0) return;
 
@@ -2677,24 +2739,19 @@ const kpiData = useMemo(() => {
         }
         const txEncargosData = txEncargosMap.get(bNum);
         const encargoTitulo = jurosMulta > 0 ? jurosMulta : 0;
-        const dataBaseEnc = parseIsoDateLocal(emisKey ? r[emisKey] : null);
-        const vencimentoEnc = parseIsoDateLocal(vctoKey ? r[vctoKey] : null);
         const valorDescontado = val - desagioVal;
         const desagioEncargosTitulo = desagioVal + encargoTitulo;
+        const prazoEncargos = getPrazoEfetivoComD2(
+          emisKey ? r[emisKey] : null,
+          vctoKey ? r[vctoKey] : null,
+          pgtoKey ? r[pgtoKey] : null,
+          encargoTitulo > 0
+        );
 
-        if (valorDescontado > 0 && dataBaseEnc && vencimentoEnc) {
-          const vencimentoAjustado = adjustToNextBusinessDay(vencimentoEnc);
-          const dataFinalBase = addBusinessDays(vencimentoAjustado, 2);
-          const prazoBase = diffCalendarDays(dataBaseEnc, dataFinalBase);
-          const dataQuitacao = parseIsoDateLocal(pgtoKey ? r[pgtoKey] : null);
-          const diasAtraso = dataQuitacao ? Math.max(0, diffCalendarDays(vencimentoEnc, dataQuitacao)) : 0;
-          const prazoEncargos = prazoBase > 0 ? prazoBase + diasAtraso : null;
-
-          if (prazoEncargos) {
-            txEncargosData.totalDescontado += valorDescontado;
-            txEncargosData.totalDesagioEncargos += desagioEncargosTitulo;
-            txEncargosData.weightedPrazo += valorDescontado * prazoEncargos;
-          }
+        if (valorDescontado > 0 && prazoEncargos) {
+          txEncargosData.totalDescontado += valorDescontado;
+          txEncargosData.totalDesagioEncargos += desagioEncargosTitulo;
+          txEncargosData.weightedPrazo += valorDescontado * prazoEncargos;
         }
       }
 
