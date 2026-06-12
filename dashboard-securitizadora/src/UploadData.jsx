@@ -77,6 +77,8 @@ const normalizarTexto = (val) =>
     .replace(/[\u0300-\u036f]/g, "")
     .trim();
 
+const isStatusRecomprado = (status) => normalizarTexto(status) === "recomprado";
+
 const isInadimplente = (row) =>
   normalizarTexto(row?.inadimplencia ?? row?.Inadimplencia ?? row?.["Inadimplência"]) === "sim";
 
@@ -980,7 +982,12 @@ const updateSecInfoInadimplenciaFromSmartRows = async (rows, setSmartProgress) =
     const txEncargos = cleanNumber(sourceRow["Tx.Efet"]) ?? 0;
 
     setExistingColumns(payload, targetRow, ["inadimplencia"], nextInadimplencia ?? null);
-    setExistingColumns(payload, targetRow, ["Status"], sourceRow.Status ?? null);
+    setExistingColumns(
+      payload,
+      targetRow,
+      ["Status"],
+      isStatusRecomprado(targetRow.Status) ? targetRow.Status : sourceRow.Status ?? null
+    );
     setExistingColumns(payload, targetRow, ["Dt.Pgto", "Dt Pgto", "Data Pgto", "Data de Pgto", "Data de Pagamento", "Pgto"], pgto);
     setExistingColumns(payload, targetRow, ["Vl.Pgto", "Vl Pgto", "Vl Pgto.", "Valor Pgto", "Valor Pago"], vlPgto);
     setExistingColumns(payload, targetRow, ["Encargos", "Encargo", "Juros e Multa", "Rec."], encargos);
@@ -2036,7 +2043,7 @@ auditoria.finalRows = finalRows.map((item) => ({ ...item }));
       const borderos = Array.from(new Set(finalRows.map((row) => row["Borderô"]).filter((value) => value !== null && value !== undefined && value !== "")));
       const { data: existingData, error: fetchErr } = await supabase
         .from("secInfo")
-        .select('id,Dcto,"Borderô",Vcto,"Cód.Red",Desagio,"Tx.Efet"')
+        .select('id,Dcto,"Borderô",Vcto,"Cód.Red",Desagio,"Tx.Efet",Status')
         .in('"Borderô"', borderos);
 
       if (fetchErr) throw new Error(`Erro ao checar banco: ${fetchErr.message}`);
@@ -2053,6 +2060,9 @@ auditoria.finalRows = finalRows.map((item) => ({ ...item }));
         const existingRow = existingMap[secInfoKey(row)];
         if (existingRow?.id) {
           const updateRow = { ...row };
+          if (isStatusRecomprado(existingRow.Status)) {
+            updateRow.Status = existingRow.Status;
+          }
           updateRow["Cód.Red"] = existingRow["Cód.Red"];
           if (updateRow.Desagio === null || updateRow.Desagio === undefined) {
             updateRow.Desagio = existingRow.Desagio;
