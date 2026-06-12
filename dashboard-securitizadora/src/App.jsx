@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "./supabaseClient";
 import MicroDashboard from "./MicroDashboard";
 import MacroDashboard from "./MacroDashboard";
+import ResumoMatinal from "./ResumoMatinal";
 import PatrimonioDashboard from "./PatrimonioDashboard";
 import UploadData from "./UploadData";
 import NFeConverter from "./NFeConverter";
@@ -16,6 +17,7 @@ export default function App() {
   const [isMobile, setIsMobile] = useState(false);
   const [isTablet, setIsTablet] = useState(false);
   const [hideValues, setHideValues] = useState(false);
+  const [microInitialFilter, setMicroInitialFilter] = useState(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
@@ -54,6 +56,11 @@ export default function App() {
     setIsSidebarOpen(open);
     if (mobile !== undefined) setIsMobile(mobile);
     if (tablet !== undefined) setIsTablet(tablet);
+  };
+
+  const handleResumoMatinalFilter = (filter) => {
+    setMicroInitialFilter({ ...filter, token: Date.now() });
+    setActiveTab("micro");
   };
 
   const shouldShiftLayout = activeTab === "micro" && !isMobile;
@@ -346,6 +353,17 @@ export default function App() {
 
                 <button
                   onClick={() => {
+                    setActiveTab("resumoMatinal");
+                    setIsSidebarOpen(false);
+                  }}
+                  style={getTabStyle(activeTab === "resumoMatinal")}
+                >
+                  Resumo Matinal
+                </button>
+
+                <button
+                  onClick={() => {
+                    setMicroInitialFilter(null);
                     setActiveTab("micro");
                   }}
                   style={getTabStyle(activeTab === "micro")}
@@ -391,6 +409,7 @@ export default function App() {
                 onSidebarToggle={handleSidebarToggle}
                 hideValues={hideValues}
                 setHideValues={setHideValues}
+                initialFilter={microInitialFilter}
               />
             )}
 
@@ -400,6 +419,10 @@ export default function App() {
                 hideValues={hideValues}
                 setHideValues={setHideValues}
               />
+            )}
+
+            {activeTab === "resumoMatinal" && (
+              <ResumoMatinal hideValues={hideValues} onNavigateToMicro={handleResumoMatinalFilter} />
             )}
 
             {activeTab === "patrimonio" && (

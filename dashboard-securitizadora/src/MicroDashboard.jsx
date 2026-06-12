@@ -2184,20 +2184,38 @@ function CustomDropdown({ value, options, onChange, placeholder, formatOption = 
 }
 
 // --- EXPORTAÇÃO DO MICRODASHBOARD ---
-export default function MicroDashboard({ session, onSidebarToggle, hideValues, setHideValues }) {
+export default function MicroDashboard({ session, onSidebarToggle, hideValues, setHideValues, initialFilter = null }) {
+  const hasInitialFilter = Boolean(initialFilter?.type);
+  const hasInitialSearchFilter = initialFilter?.type === "bordero" || initialFilter?.type === "dcto";
+  const initialSourceTable = hasInitialSearchFilter && initialFilter?.sourceTable
+    ? initialFilter.sourceTable
+    : BOTH_DATA_SOURCE;
+  const initialBorderoValue = initialFilter?.type === "bordero"
+    ? normalizarBuscaSimples(initialFilter.value)
+    : "";
+  const initialDctoValue = initialFilter?.type === "dcto"
+    ? getDocumentoBase(initialFilter.value)
+    : "";
+
   const [loading, setLoading] = useState(false);
   const [rows, setRows] = useState([]);
-  const [dataSourceTable, setDataSourceTable] = useState(BOTH_DATA_SOURCE);
+  const [dataSourceTable, setDataSourceTable] = useState(initialSourceTable);
   
   const [viewMode, setViewMode] = useState('all'); 
   const [insightFilter, setInsightFilter] = useState(null);
-  const [borderoFilter, setBorderoFilter] = useState(null); 
-  const [dctoFilter, setDctoFilter] = useState(null); 
+  const [borderoFilter, setBorderoFilter] = useState(() => initialBorderoValue
+    ? { key: initialFilter.key || "Borderô", value: initialBorderoValue, sourceTable: initialFilter.sourceTable }
+    : null
+  );
+  const [dctoFilter, setDctoFilter] = useState(() => initialDctoValue
+    ? { key: initialFilter.key || "Dcto", value: initialDctoValue, sourceTable: initialFilter.sourceTable }
+    : null
+  );
   
   const [relacionamentos, setRelacionamentos] = useState([]);
-  const [clienteSelecionado, setClienteSelecionado] = useState("");
+  const [clienteSelecionado, setClienteSelecionado] = useState(() => initialFilter?.type === "cliente" ? initialFilter.value || "" : "");
   const [grupoSelecionado, setGrupoSelecionado] = useState("");
-  const [sacadoSelecionado, setSacadoSelecionado] = useState("");
+  const [sacadoSelecionado, setSacadoSelecionado] = useState(() => initialFilter?.type === "sacado" ? initialFilter.value || "" : "");
   const [rowsConcentracaoSacado, setRowsConcentracaoSacado] = useState([]);
 
   // ESTADOS DE CONTROLO DA SIDEBAR
@@ -2239,16 +2257,17 @@ export default function MicroDashboard({ session, onSidebarToggle, hideValues, s
 
   // ESTADOS DE DATA
   const [dateFilter, setDateFilter] = useState(() => {
+    if (hasInitialFilter) return { type: 'emis', start: '', end: '' };
     const init = getInitDateStr();
     return { type: 'emis', start: init.start, end: init.end };
   });
-  const [activeQuickDate, setActiveQuickDate] = useState('ytd');
+  const [activeQuickDate, setActiveQuickDate] = useState(hasInitialFilter ? null : 'ytd');
   
   const [inputType, setInputType] = useState("emis");
-  const [inputDateStart, setInputDateStart] = useState(() => getInitDateStr().start);
-  const [inputDateEnd, setInputDateEnd] = useState(() => getInitDateStr().end);
-  const [borderoSearchInput, setBorderoSearchInput] = useState("");
-  const [dctoSearchInput, setDctoSearchInput] = useState("");
+  const [inputDateStart, setInputDateStart] = useState(() => hasInitialFilter ? "" : getInitDateStr().start);
+  const [inputDateEnd, setInputDateEnd] = useState(() => hasInitialFilter ? "" : getInitDateStr().end);
+  const [borderoSearchInput, setBorderoSearchInput] = useState(() => initialFilter?.type === "bordero" ? String(initialFilter.value ?? "") : "");
+  const [dctoSearchInput, setDctoSearchInput] = useState(() => initialFilter?.type === "dcto" ? String(initialFilter.value ?? "") : "");
 
   // MEMÓRIA PARA ESTADO DE DATAS (LÓGICA DE UX)
   const latestDateFilter = useRef(dateFilter);
@@ -2257,7 +2276,8 @@ export default function MicroDashboard({ session, onSidebarToggle, hideValues, s
   const savedQuickDate = useRef(null);
   const prevHasEntity = useRef(false);
   const drillFilterContext = useRef(null);
-  const suppressEntityFilterEffect = useRef(false);
+  const suppressEntityFilterEffect = useRef(hasInitialFilter);
+  const appliedInitialFilterToken = useRef(initialFilter?.token ?? null);
 
   const relacionamentoIndex = useMemo(() => criarIndiceRelacionamentos(relacionamentos), [relacionamentos]);
   const clienteSelecionadoKey = useMemo(() => chaveEntidadePrefixo(clienteSelecionado), [clienteSelecionado]);
@@ -2280,6 +2300,60 @@ export default function MicroDashboard({ session, onSidebarToggle, hideValues, s
     setActiveQuickDate(null);
     setDateFilter(newFilter);
   };
+
+  useEffect(() => {
+    if (!initialFilter?.type) return;
+    if (appliedInitialFilterToken.current === initialFilter.token) return;
+    appliedInitialFilterToken.current = initialFilter.token;
+
+    drillFilterContext.current = null;
+    setRows([]);
+    setRowsConcentracaoSacado([]);
+    setViewMode("all");
+    setInsightFilter(null);
+    setDateFilter({ type: "emis", start: "", end: "" });
+    setActiveQuickDate(null);
+    setGrupoSelecionado("");
+    setBorderoSearchInput("");
+    setDctoSearchInput("");
+
+    if (initialFilter.type === "cliente") {
+      suppressEntityFilterEffect.current = true;
+      setClienteSelecionado(initialFilter.value || "");
+      setSacadoSelecionado("");
+      setBorderoFilter(null);
+      setDctoFilter(null);
+      return;
+    }
+
+    if (initialFilter.type === "sacado") {
+      suppressEntityFilterEffect.current = true;
+      setClienteSelecionado("");
+      setSacadoSelecionado(initialFilter.value || "");
+      setBorderoFilter(null);
+      setDctoFilter(null);
+      return;
+    }
+
+    suppressEntityFilterEffect.current = true;
+    setClienteSelecionado("");
+    setSacadoSelecionado("");
+
+    if (initialFilter.type === "bordero") {
+      if (initialFilter.sourceTable) setDataSourceTable(initialFilter.sourceTable);
+      aplicarBuscaBordero(initialFilter.value, {
+        sourceTable: initialFilter.sourceTable,
+      });
+      return;
+    }
+
+    if (initialFilter.type === "dcto") {
+      if (initialFilter.sourceTable) setDataSourceTable(initialFilter.sourceTable);
+      aplicarBuscaDcto(initialFilter.value, {
+        sourceTable: initialFilter.sourceTable,
+      });
+    }
+  }, [initialFilter]);
 
   useEffect(() => {
     // Ao trocar WBA/Smart/Ambos, mantém todos os filtros aplicados.
@@ -2414,16 +2488,30 @@ export default function MicroDashboard({ session, onSidebarToggle, hideValues, s
   const getDctoSearchKey = () =>
     findKeyAcrossRows(rows, k => k.toLowerCase() === "dcto" || k.toLowerCase() === "documento") || "Dcto";
 
-  const aplicarBuscaBordero = () => {
-    const value = normalizarBuscaSimples(borderoSearchInput);
+  const aplicarBuscaBordero = (valueOverride, options = {}) => {
+    const hasOverride = typeof valueOverride === "string" || typeof valueOverride === "number";
+    const rawValue = hasOverride ? valueOverride : borderoSearchInput;
+    const value = normalizarBuscaSimples(rawValue);
     if (!value) return;
-    applyExclusiveDrillFilter("bordero", { key: getBorderoSearchKey(), value });
+    if (hasOverride) setBorderoSearchInput(String(rawValue ?? ""));
+    applyExclusiveDrillFilter("bordero", {
+      key: options.key || getBorderoSearchKey(),
+      value,
+      sourceTable: options.sourceTable,
+    });
   };
 
-  const aplicarBuscaDcto = () => {
-    const baseValue = getDocumentoBase(dctoSearchInput);
+  const aplicarBuscaDcto = (valueOverride, options = {}) => {
+    const hasOverride = typeof valueOverride === "string" || typeof valueOverride === "number";
+    const rawValue = hasOverride ? valueOverride : dctoSearchInput;
+    const baseValue = getDocumentoBase(rawValue);
     if (!baseValue) return;
-    applyExclusiveDrillFilter("dcto", { key: getDctoSearchKey(), value: baseValue });
+    if (hasOverride) setDctoSearchInput(String(rawValue ?? ""));
+    applyExclusiveDrillFilter("dcto", {
+      key: options.key || getDctoSearchKey(),
+      value: baseValue,
+      sourceTable: options.sourceTable,
+    });
   };
 
   const limparBuscaBorderoDcto = () => {
