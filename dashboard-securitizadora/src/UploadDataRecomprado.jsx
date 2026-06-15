@@ -77,11 +77,6 @@ const normalizarTexto = (val) =>
     .replace(/[\u0300-\u036f]/g, "")
     .trim();
 
-const isStatusRecomprado = (status) => {
-  const normalized = normalizarTexto(status).replace(/[^a-z0-9]/g, "");
-  return normalized === "rec" || normalized.startsWith("recompr");
-};
-
 const isInadimplente = (row) =>
   normalizarTexto(row?.inadimplencia ?? row?.Inadimplencia ?? row?.["Inadimplência"]) === "sim";
 
@@ -477,6 +472,93 @@ const getSmartValue = (row, aliases) => {
   return null;
 };
 
+
+const RECOMPRA_STATUS = "Recomprado";
+const RECOMPRA_BATCH_SIZE = 500;
+
+const RECOMPRA_HEADER_ALIASES = {
+  Dcto: ["DCTO", "Dcto", "Documento", "DOCUMENTO", "Doc", "DOC"],
+  Vcto: ["VCTO", "Vcto", "Vencimento", "VENCIMENTO", "Data Vcto", "Data de Vencimento"],
+};
+
+const chunkArrayGeneric = (arr, size = RECOMPRA_BATCH_SIZE) => {
+  const chunks = [];
+  for (let i = 0; i < arr.length; i += size) {
+    chunks.push(arr.slice(i, i + size));
+  }
+  return chunks;
+};
+
+const formatIsoFromParts = (year, month, day) =>
+  `${String(year).padStart(4, "0")}-${padDatePart(month)}-${padDatePart(day)}`;
+
+const excelSerialDateToIso = (value) => {
+  const serial = Number(value);
+  if (!Number.isFinite(serial)) return null;
+
+  const parsed = XLSX.SSF.parse_date_code(serial);
+  if (parsed?.y && parsed?.m && parsed?.d) {
+    return formatIsoFromParts(parsed.y, parsed.m, parsed.d);
+  }
+
+  return null;
+};
+
+const cleanRecompraDate = (value) => {
+  if (value === null || value === undefined || value === "") return null;
+
+  if (value instanceof Date && !isNaN(value)) {
+    return formatIsoFromParts(value.getFullYear(), value.getMonth() + 1, value.getDate());
+  }
+
+  if (typeof value === "number") {
+    return excelSerialDateToIso(value);
+  }
+
+  let raw = String(value).trim();
+  if (!raw) return null;
+
+  raw = raw.replace(/^="(.*)"$/, "$1").trim();
+
+  if (/^\d+(\.\d+)?$/.test(raw)) {
+    const serialDate = excelSerialDateToIso(raw);
+    if (serialDate) return serialDate;
+  }
+
+  raw = raw.split("T")[0].trim().replace(/\./g, "-");
+
+  const isoMatch = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (isoMatch) {
+    const [, year, month, day] = isoMatch;
+    return formatIsoFromParts(year, month, day);
+  }
+
+  const brMatch = raw.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})$/);
+  if (brMatch) {
+    const [, day, month, yearPart] = brMatch;
+    return formatIsoFromParts(expandYear(yearPart), month, day);
+  }
+
+  return null;
+};
+
+const findRecompraHeaderRow = (rows) =>
+  rows.findIndex((row) => {
+    const normalized = row.map(normalizeSmartHeader);
+    return RECOMPRA_HEADER_ALIASES.Dcto.some((alias) =>
+      normalized.includes(normalizeSmartHeader(alias))
+    ) && RECOMPRA_HEADER_ALIASES.Vcto.some((alias) =>
+      normalized.includes(normalizeSmartHeader(alias))
+    );
+  });
+
+const recompraMatchKey = (dcto, vcto) => {
+  const dctoKey = normalizeDctoKey(dcto);
+  const vctoKey = cleanRecompraDate(vcto) || limpaChave(vcto);
+  if (!dctoKey || !vctoKey) return "";
+  return `${dctoKey}__${vctoKey}`;
+};
+
 const SECINFO_SOURCE_ALIASES = {
   Cliente: ["CEDENTE", "Cedente", "Cliente"],
   "Dt.Emis": ["DATA EMISSÃO", "Data emissao", "Data emissão", "Dt.Emis"],
@@ -725,68 +807,6 @@ const normalizeDctoKey = (value) => {
   if (/^\d+$/.test(normalized)) return normalized.replace(/^0+/, "") || "0";
   return normalized;
 };
-
-const secInfoNormalizedKey = (row) =>
-  `${normalizeDctoKey(row?.Dcto)}__${limpaChave(row?.["Borderô"])}__${limpaChave(row?.Vcto)}`;
-
-const codRedKey = (row) => limpaChave(row?.["Cód.Red"]);
-
-const getSecInfoStatus = (row) => row?.Status ?? row?.status ?? row?.STATUS ?? "";
-
-const isSecInfoRecomprado = (row) => isStatusRecomprado(getSecInfoStatus(row));
-
-const protectRecompradoStatus = (payload, existingRow) => {
-  if (!isSecInfoRecomprado(existingRow)) return false;
-
-  delete payload.Status;
-  delete payload.status;
-  delete payload.STATUS;
-  return true;
-};
-
-const addUniqueLookupRow = (lookup, key, row) => {
-  if (!key) return;
-  if (lookup.has(key)) {
-    lookup.set(key, null);
-    return;
-  }
-  lookup.set(key, row);
-};
-
-const getUniqueLookupRow = (lookup, key) => {
-  if (!key || !lookup.has(key)) return null;
-  return lookup.get(key) || null;
-};
-
-const buildSecInfoLookup = (rows) => {
-  const lookup = {
-    byExact: new Map(),
-    byNormalizedExact: new Map(),
-    byCodRed: new Map(),
-    byDctoBordero: new Map(),
-    byNormalizedDctoBordero: new Map(),
-    byDctoVcto: new Map(),
-  };
-
-  (rows || []).forEach((row) => {
-    addUniqueLookupRow(lookup.byExact, secInfoKey(row), row);
-    addUniqueLookupRow(lookup.byNormalizedExact, secInfoNormalizedKey(row), row);
-    addUniqueLookupRow(lookup.byCodRed, codRedKey(row), row);
-    addUniqueLookupRow(lookup.byDctoBordero, dctoBorderoKey(row), row);
-    addUniqueLookupRow(lookup.byNormalizedDctoBordero, dctoNormalizedBorderoKey(row), row);
-    addUniqueLookupRow(lookup.byDctoVcto, dctoVctoKey(row), row);
-  });
-
-  return lookup;
-};
-
-const findExistingSecInfoRow = (row, lookup) =>
-  getUniqueLookupRow(lookup.byExact, secInfoKey(row)) ||
-  getUniqueLookupRow(lookup.byNormalizedExact, secInfoNormalizedKey(row)) ||
-  getUniqueLookupRow(lookup.byCodRed, codRedKey(row)) ||
-  getUniqueLookupRow(lookup.byDctoBordero, dctoBorderoKey(row)) ||
-  getUniqueLookupRow(lookup.byNormalizedDctoBordero, dctoNormalizedBorderoKey(row)) ||
-  getUniqueLookupRow(lookup.byDctoVcto, dctoVctoKey(row));
 
 const dateKeyVariants = (value) => {
   const variants = new Set();
@@ -1045,13 +1065,9 @@ const updateSecInfoInadimplenciaFromSmartRows = async (rows, setSmartProgress) =
     const vlPgto = cleanNumber(sourceRow["Vl Pgto"]);
     const encargos = getSourceEncargos(sourceRow);
     const txEncargos = cleanNumber(sourceRow["Tx.Efet"]) ?? 0;
-    const statusProtected = isSecInfoRecomprado(targetRow);
 
     setExistingColumns(payload, targetRow, ["inadimplencia"], nextInadimplencia ?? null);
-    if (!statusProtected) {
-      setExistingColumns(payload, targetRow, ["Status"], sourceRow.Status ?? null);
-    }
-    protectRecompradoStatus(payload, targetRow);
+    setExistingColumns(payload, targetRow, ["Status"], sourceRow.Status ?? null);
     setExistingColumns(payload, targetRow, ["Dt.Pgto", "Dt Pgto", "Data Pgto", "Data de Pgto", "Data de Pagamento", "Pgto"], pgto);
     setExistingColumns(payload, targetRow, ["Vl.Pgto", "Vl Pgto", "Vl Pgto.", "Valor Pgto", "Valor Pago"], vlPgto);
     setExistingColumns(payload, targetRow, ["Encargos", "Encargo", "Juros e Multa", "Rec."], encargos);
@@ -1062,7 +1078,7 @@ const updateSecInfoInadimplenciaFromSmartRows = async (rows, setSmartProgress) =
       txEncargos
     );
 
-    return { payload, statusProtected };
+    return payload;
   };
 
   const payloadSignature = (payload) =>
@@ -1078,17 +1094,15 @@ const updateSecInfoInadimplenciaFromSmartRows = async (rows, setSmartProgress) =
 
   const matchedRows = [];
   const rowsToUpdate = [];
-  const protectedRecompradoIds = new Set();
 
   secInfoRows.forEach((targetRow) => {
     const match = findMatchedSource(targetRow);
     if (!match) return;
 
     const { matchedSource, matchType } = match;
-    const { payload, statusProtected } = buildWbaUpdatePayload(matchedSource.row, targetRow, matchedSource.nextValue);
+    const payload = buildWbaUpdatePayload(matchedSource.row, targetRow, matchedSource.nextValue);
 
     if (Object.keys(payload).length <= 1) return;
-    if (statusProtected) protectedRecompradoIds.add(targetRow.id);
 
     matchedRows.push({
       id: targetRow.id,
@@ -1119,7 +1133,6 @@ const updateSecInfoInadimplenciaFromSmartRows = async (rows, setSmartProgress) =
   console.log("Linhas candidatas encontradas na secInfo:", secInfoRows?.length || 0);
   console.log("Matches totais:", matchedRows.length);
   console.log("Linhas enviadas para update:", uniqueRowsToUpdate.length);
-  console.log("Status Recomprado preservados:", protectedRecompradoIds.size);
   if (matchedRows.length === 0) {
     console.table(sourceItems.slice(0, 10).map((item) => item.row));
     console.table((secInfoRows || []).slice(0, 10));
@@ -1127,23 +1140,20 @@ const updateSecInfoInadimplenciaFromSmartRows = async (rows, setSmartProgress) =
   console.groupEnd();
 
   let updatedCount = 0;
-  for (let i = 0; i < uniqueRowsToUpdate.length; i += 1) {
-    const { id, ...updatePayload } = uniqueRowsToUpdate[i];
-    if (Object.keys(updatePayload).length === 0) continue;
+  const UPDATE_BATCH_SIZE = 500;
 
+  for (let i = 0; i < uniqueRowsToUpdate.length; i += UPDATE_BATCH_SIZE) {
+    const batch = uniqueRowsToUpdate.slice(i, i + UPDATE_BATCH_SIZE);
     const { error } = await supabase
       .from("secInfo")
-      .update(updatePayload)
-      .eq("id", id);
+      .upsert(batch, { onConflict: "id" });
 
     if (error) {
       throw new Error(`Erro ao atualizar dados WBA na secInfo: ${error.message}`);
     }
 
-    updatedCount += 1;
-    if (updatedCount % 25 === 0 || updatedCount === uniqueRowsToUpdate.length) {
-      setSmartProgress(`Atualizando dados WBA na secInfo... ${updatedCount} / ${uniqueRowsToUpdate.length}`);
-    }
+    updatedCount += batch.length;
+    setSmartProgress(`Atualizando dados WBA na secInfo... ${updatedCount} / ${uniqueRowsToUpdate.length}`);
   }
 
   return {
@@ -1153,7 +1163,6 @@ const updateSecInfoInadimplenciaFromSmartRows = async (rows, setSmartProgress) =
     matchedCount: matchedRows.length,
     fallbackMatchedCount,
     changedCount: uniqueRowsToUpdate.length,
-    protectedRecompradoStatusCount: protectedRecompradoIds.size,
   };
 };
 
@@ -1166,6 +1175,12 @@ export default function UploadData() {
   const [smartLoading, setSmartLoading] = useState(false);
   const [smartStatus, setSmartStatus] = useState("");
   const [smartProgress, setSmartProgress] = useState("");
+
+  const [recompraFiles, setRecompraFiles] = useState([]);
+  const [recompraLoading, setRecompraLoading] = useState(false);
+  const [recompraStatus, setRecompraStatus] = useState("");
+  const [recompraProgress, setRecompraProgress] = useState("");
+  const [recompraUnmatchedRows, setRecompraUnmatchedRows] = useState([]);
 
   const [snapshotLoading, setSnapshotLoading] = useState(false);
   const [snapshotStatus, setSnapshotStatus] = useState("");
@@ -1213,6 +1228,186 @@ export default function UploadData() {
         limpaChave(row.Vcto)
       ),
     };
+  };
+
+  const readRecompraRows = async (file) => {
+    const buffer = await file.arrayBuffer();
+    const workbook = XLSX.read(buffer, { type: "array", cellDates: true });
+    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rawRows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: "", raw: true });
+    const rows = rawRows.filter((row) => row.some((value) => value !== null && value !== undefined && value !== ""));
+
+    if (rows.length === 0) {
+      throw new Error(`O arquivo ${file.name} está vazio.`);
+    }
+
+    const headerIndex = findRecompraHeaderRow(rows);
+    const headers = headerIndex >= 0 ? rows[headerIndex] : null;
+    const dataRows = headerIndex >= 0 ? rows.slice(headerIndex + 1) : rows;
+
+    const mappedRows = dataRows
+      .map((row, index) => {
+        const sourceRow = headers ? buildSmartSourceRow(headers, row) : null;
+        const dctoValue = sourceRow
+          ? getSmartValue(sourceRow, RECOMPRA_HEADER_ALIASES.Dcto)
+          : row[0];
+        const vctoValue = sourceRow
+          ? getSmartValue(sourceRow, RECOMPRA_HEADER_ALIASES.Vcto)
+          : row[1];
+
+        const dcto = limpaChave(dctoValue);
+        const vcto = cleanRecompraDate(vctoValue);
+
+        return {
+          fileName: file.name,
+          lineNumber: headerIndex >= 0 ? headerIndex + index + 2 : index + 1,
+          Dcto: dcto,
+          dctoNormalized: normalizeDctoKey(dcto),
+          Vcto: vcto,
+          key: recompraMatchKey(dcto, vcto),
+        };
+      })
+      .filter((row) => row.Dcto && row.Vcto && row.key);
+
+    if (mappedRows.length === 0) {
+      throw new Error(
+        `Não encontrei linhas válidas em ${file.name}. O arquivo precisa ter DCTO na primeira coluna e VCTO na segunda, ou cabeçalhos DCTO/VCTO.`
+      );
+    }
+
+    return mappedRows;
+  };
+
+  const processRecompraFiles = async () => {
+    if (recompraFiles.length === 0) {
+      setRecompraStatus("❌ Selecione o arquivo Excel de recompra primeiro.");
+      setRecompraUnmatchedRows([]);
+      return;
+    }
+
+    setRecompraLoading(true);
+    setRecompraStatus("");
+    setRecompraUnmatchedRows([]);
+    setRecompraProgress(`Lendo ${recompraFiles.length} arquivo(s)...`);
+
+    try {
+      const rowsByFile = await Promise.all(recompraFiles.map(readRecompraRows));
+      const sourceRows = rowsByFile.flatMap((rows) => rows);
+      const sourceMap = new Map();
+
+      sourceRows.forEach((row) => {
+        if (!sourceMap.has(row.key)) sourceMap.set(row.key, row);
+      });
+
+      const uniqueSourceRows = Array.from(sourceMap.values());
+      const vctos = Array.from(new Set(uniqueSourceRows.map((row) => row.Vcto))).filter(Boolean);
+
+      if (vctos.length === 0) {
+        throw new Error("Não encontrei nenhum VCTO válido para buscar na secInfo.");
+      }
+
+      setRecompraProgress(`Buscando candidatos na secInfo por ${vctos.length} vencimento(s)...`);
+
+      const candidatesById = new Map();
+
+      for (const chunk of chunkArrayGeneric(vctos, RECOMPRA_BATCH_SIZE)) {
+        const { data, error } = await supabase
+          .from("secInfo")
+          .select("id,Dcto,Vcto,Status")
+          .in("Vcto", chunk);
+
+        if (error) {
+          throw new Error(`Erro ao buscar títulos na secInfo: ${error.message}`);
+        }
+
+        (data || []).forEach((row) => candidatesById.set(row.id, row));
+      }
+
+      const candidates = Array.from(candidatesById.values());
+      const matchedSourceKeys = new Set();
+      const idsToUpdate = [];
+      let alreadyRecompradoCount = 0;
+
+      candidates.forEach((targetRow) => {
+        const targetDcto = normalizeDctoKey(targetRow.Dcto);
+        const targetVctoVariants = Array.from(dateKeyVariants(targetRow.Vcto)).filter((variant) =>
+          /^\d{4}-\d{2}-\d{2}$/.test(variant)
+        );
+
+        const matchedKey = targetVctoVariants
+          .map((vcto) => `${targetDcto}__${vcto}`)
+          .find((key) => sourceMap.has(key));
+
+        if (!matchedKey) return;
+
+        matchedSourceKeys.add(matchedKey);
+
+        if (normalizarTexto(targetRow.Status) === normalizarTexto(RECOMPRA_STATUS)) {
+          alreadyRecompradoCount += 1;
+          return;
+        }
+
+        idsToUpdate.push(targetRow.id);
+      });
+
+      const uniqueIdsToUpdate = Array.from(new Set(idsToUpdate));
+      let updatedCount = 0;
+
+      for (const chunk of chunkArrayGeneric(uniqueIdsToUpdate, RECOMPRA_BATCH_SIZE)) {
+        const { error } = await supabase
+          .from("secInfo")
+          .update({ Status: RECOMPRA_STATUS })
+          .in("id", chunk);
+
+        if (error) {
+          throw new Error(`Erro ao atualizar Status para Recomprado: ${error.message}`);
+        }
+
+        updatedCount += chunk.length;
+        setRecompraProgress(`Atualizando Status... ${updatedCount} / ${uniqueIdsToUpdate.length}`);
+      }
+
+      const unmatchedRows = uniqueSourceRows
+        .filter((row) => !matchedSourceKeys.has(row.key))
+        .map((row) => ({
+          arquivo: row.fileName,
+          linha: row.lineNumber,
+          dcto: row.Dcto,
+          dctoNormalizado: row.dctoNormalized,
+          vcto: row.Vcto,
+          chave: row.key,
+        }));
+
+      const unmatchedCount = unmatchedRows.length;
+      setRecompraUnmatchedRows(unmatchedRows);
+
+      console.group("Atualização de Recomprados secInfo");
+      console.log("Linhas válidas no upload:", sourceRows.length);
+      console.log("Chaves únicas Dcto + Vcto:", uniqueSourceRows.length);
+      console.log("Candidatos buscados por Vcto:", candidates.length);
+      console.log("Títulos atualizados:", updatedCount);
+      console.log("Já estavam Recomprado:", alreadyRecompradoCount);
+      console.log("Chaves sem match:", unmatchedCount);
+      if (unmatchedCount > 0) {
+        console.table(unmatchedRows.slice(0, 100));
+      }
+      console.groupEnd();
+
+      setRecompraStatus(
+        `✅ Recompra processada: ${updatedCount} título(s) marcado(s) como Recomprado. ${alreadyRecompradoCount} já estavam Recomprado. ${unmatchedCount} chave(s) DCTO + VCTO sem match.`
+      );
+      setRecompraProgress("");
+      setRecompraFiles([]);
+      const input = document.getElementById("recompra-upload-input");
+      if (input) input.value = "";
+      await carregarRiscoAtualSnapshot();
+    } catch (err) {
+      setRecompraStatus(`❌ Erro: ${err.message}`);
+      setRecompraProgress("");
+      console.error(err);
+    } finally {
+      setRecompraLoading(false);
+    }
   };
 
   const processSmartFiles = async () => {
@@ -1364,11 +1559,8 @@ export default function UploadData() {
       }
 
       const secInfoInadimplencia = await updateSecInfoInadimplenciaFromSmartRows(secInfoInadimplenciaRows, setSmartProgress);
-      const recompradoMessage = secInfoInadimplencia.protectedRecompradoStatusCount
-        ? ` (${secInfoInadimplencia.protectedRecompradoStatusCount} status Recomprado preservado(s) na secInfo)`
-        : "";
 
-      setSmartStatus(`✅ Dados Atualizados com Sucesso${recompradoMessage}`);
+      setSmartStatus("✅ Dados Atualizados com Sucesso");
       setSmartProgress("");
       setSmartFiles([]);
       document.getElementById("smart-upload-input").value = "";
@@ -2117,22 +2309,23 @@ auditoria.finalRows = finalRows.map((item) => ({ ...item }));
       const borderos = Array.from(new Set(finalRows.map((row) => row["Borderô"]).filter((value) => value !== null && value !== undefined && value !== "")));
       const { data: existingData, error: fetchErr } = await supabase
         .from("secInfo")
-        .select('id,Dcto,"Borderô",Vcto,"Cód.Red",Desagio,"Tx.Efet","Status"')
+        .select('id,Dcto,"Borderô",Vcto,"Cód.Red",Desagio,"Tx.Efet"')
         .in('"Borderô"', borderos);
 
       if (fetchErr) throw new Error(`Erro ao checar banco: ${fetchErr.message}`);
 
-      const existingLookup = buildSecInfoLookup(existingData || []);
+      const existingMap = {};
+      (existingData || []).forEach((r) => {
+        existingMap[secInfoKey(r)] = r;
+      });
 
       const rowsToInsert = [];
       const rowsToUpdate = [];
-      let preservedRecompradoStatusCount = 0;
 
       finalRows.forEach((row) => {
-        const existingRow = findExistingSecInfoRow(row, existingLookup);
+        const existingRow = existingMap[secInfoKey(row)];
         if (existingRow?.id) {
           const updateRow = { ...row };
-          if (protectRecompradoStatus(updateRow, existingRow)) preservedRecompradoStatusCount += 1;
           updateRow["Cód.Red"] = existingRow["Cód.Red"];
           if (updateRow.Desagio === null || updateRow.Desagio === undefined) {
             updateRow.Desagio = existingRow.Desagio;
@@ -2188,10 +2381,7 @@ auditoria.finalRows = finalRows.map((item) => ({ ...item }));
         }
       }
 
-      const recompradoMessage = preservedRecompradoStatusCount
-        ? ` ${preservedRecompradoStatusCount} status Recomprado preservado(s).`
-        : "";
-      setStatus(`✅ Banco de dados atualizado: ${rowsToInsertWithCodRed.length} novo(s), ${rowsToUpdate.length} atualizado(s).${recompradoMessage}`);
+      setStatus(`✅ Banco de dados atualizado: ${rowsToInsertWithCodRed.length} novo(s), ${rowsToUpdate.length} atualizado(s).`);
       setProgress("");
       setFiles([]);
       document.getElementById("upload-input").value = "";
@@ -2354,6 +2544,107 @@ auditoria.finalRows = finalRows.map((item) => ({ ...item }));
         {smartStatus && (
           <div style={{ marginTop: "16px", padding: "12px", borderRadius: "8px", background: smartStatus.includes("❌") ? "#fef2f2" : "#ecfdf5", color: smartStatus.includes("❌") ? "#991b1b" : "#065f46", fontWeight: "500", fontSize: "14px", textAlign: "center" }}>
             {smartStatus}
+          </div>
+        )}
+      </div>
+
+      <div style={cardStyle}>
+        <h2 style={{ marginTop: 0, color: "#111827", fontSize: "20px" }}>Marcar Recomprados</h2>
+        <p style={{ color: "#6b7280", fontSize: "14px", marginBottom: "20px" }}>
+          Faça upload do Excel com DCTO e VCTO. O sistema procura na tabela secInfo pelo mesmo Dcto e mesmo Vcto e muda o Status para Recomprado.
+        </p>
+
+        <div style={{ marginBottom: "20px" }}>
+          <input
+            id="recompra-upload-input"
+            type="file"
+            multiple
+            accept=".xlsx, .xls"
+            onChange={(e) => {
+              setRecompraFiles(Array.from(e.target.files || []));
+              setRecompraUnmatchedRows([]);
+              setRecompraStatus("");
+            }}
+            disabled={recompraLoading}
+            style={{
+              boxSizing: "border-box",
+              width: "100%",
+              padding: "12px",
+              border: "2px dashed #fecaca",
+              borderRadius: "8px",
+              background: "#fff7ed",
+              cursor: "pointer",
+            }}
+          />
+          <div style={{ fontSize: "13px", color: "#9a3412", marginTop: "8px", fontWeight: "600" }}>
+            {recompraFiles.length > 0
+              ? `${recompraFiles.length} arquivo(s) selecionado(s): ${recompraFiles.map((file) => file.name).join(", ")}`
+              : "Nenhum arquivo de recompra selecionado."}
+          </div>
+        </div>
+
+        <button
+          onClick={processRecompraFiles}
+          disabled={recompraLoading || recompraFiles.length === 0}
+          style={{
+            boxSizing: "border-box",
+            width: "100%",
+            padding: "12px",
+            borderRadius: "8px",
+            border: "none",
+            background: (recompraLoading || recompraFiles.length === 0) ? "#9ca3af" : "#c2410c",
+            color: "#fff",
+            fontWeight: "700",
+            fontSize: "15px",
+            cursor: (recompraLoading || recompraFiles.length === 0) ? "not-allowed" : "pointer",
+            transition: "background 0.2s",
+          }}
+        >
+          {recompraLoading ? "Processando recompra..." : "Atualizar Status para Recomprado"}
+        </button>
+
+        {recompraProgress && (
+          <div style={{ marginTop: "16px", fontSize: "14px", color: "#c2410c", fontWeight: "700", textAlign: "center" }}>
+            {recompraProgress}
+          </div>
+        )}
+
+        {recompraStatus && (
+          <div style={{ marginTop: "16px", padding: "12px", borderRadius: "8px", background: recompraStatus.includes("❌") ? "#fef2f2" : "#ecfdf5", color: recompraStatus.includes("❌") ? "#991b1b" : "#065f46", fontWeight: "500", fontSize: "14px", textAlign: "center" }}>
+            {recompraStatus}
+          </div>
+        )}
+
+        {recompraUnmatchedRows.length > 0 && (
+          <div style={{ marginTop: "20px", border: "1px solid #fed7aa", borderRadius: "10px", overflow: "hidden", background: "#fff7ed" }}>
+            <div style={{ padding: "12px 14px", borderBottom: "1px solid #fed7aa", color: "#9a3412", fontWeight: "800", fontSize: "14px" }}>
+              Entradas sem match na secInfo ({recompraUnmatchedRows.length})
+            </div>
+
+            <div style={{ maxHeight: "320px", overflow: "auto", background: "#fff" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+                <thead>
+                  <tr style={{ background: "#ffedd5", color: "#7c2d12", textAlign: "left" }}>
+                    <th style={{ padding: "10px", borderBottom: "1px solid #fed7aa" }}>Arquivo</th>
+                    <th style={{ padding: "10px", borderBottom: "1px solid #fed7aa" }}>Linha</th>
+                    <th style={{ padding: "10px", borderBottom: "1px solid #fed7aa" }}>DCTO</th>
+                    <th style={{ padding: "10px", borderBottom: "1px solid #fed7aa" }}>DCTO normalizado</th>
+                    <th style={{ padding: "10px", borderBottom: "1px solid #fed7aa" }}>VCTO</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recompraUnmatchedRows.map((row, index) => (
+                    <tr key={`${row.chave}-${index}`} style={{ borderBottom: "1px solid #f3f4f6" }}>
+                      <td style={{ padding: "9px 10px", color: "#374151", whiteSpace: "nowrap" }}>{row.arquivo}</td>
+                      <td style={{ padding: "9px 10px", color: "#374151" }}>{row.linha}</td>
+                      <td style={{ padding: "9px 10px", color: "#111827", fontWeight: "700", whiteSpace: "nowrap" }}>{row.dcto}</td>
+                      <td style={{ padding: "9px 10px", color: "#6b7280", whiteSpace: "nowrap" }}>{row.dctoNormalizado}</td>
+                      <td style={{ padding: "9px 10px", color: "#111827", whiteSpace: "nowrap" }}>{formatDateBR(row.vcto)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </div>

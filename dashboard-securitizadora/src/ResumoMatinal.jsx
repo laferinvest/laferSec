@@ -79,6 +79,119 @@ const formatIsoDate = (date) => {
   return `${year}-${month}-${day}`;
 };
 
+const parseIsoDate = (iso) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(iso || ""))) return null;
+  const [year, month, day] = iso.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  date.setHours(0, 0, 0, 0);
+  return date;
+};
+
+const addDays = (iso, days) => {
+  const date = parseIsoDate(iso);
+  if (!date) return "";
+  date.setDate(date.getDate() + days);
+  return formatIsoDate(date);
+};
+
+const getIsoWeekday = (iso) => {
+  const date = parseIsoDate(iso);
+  return date ? date.getDay() : null;
+};
+
+const FIXED_BR_HOLIDAYS = [
+  "01-01",
+  "04-21",
+  "05-01",
+  "09-07",
+  "10-12",
+  "11-02",
+  "11-15",
+  "11-20",
+  "12-25",
+];
+
+const EXTRA_HOLIDAYS = [];
+
+const getEasterIso = (year) => {
+  const a = year % 19;
+  const b = Math.floor(year / 100);
+  const c = year % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31);
+  const day = ((h + l - 7 * m + 114) % 31) + 1;
+  return formatIsoDate(new Date(year, month - 1, day));
+};
+
+const getMovableBrHolidays = (year) => {
+  const easterIso = getEasterIso(year);
+  return [
+    addDays(easterIso, -48),
+    addDays(easterIso, -47),
+    addDays(easterIso, -2),
+    addDays(easterIso, 60),
+  ];
+};
+
+const getDefaultBrHolidays = (year) => [
+  ...FIXED_BR_HOLIDAYS.map((monthDay) => `${year}-${monthDay}`),
+  ...getMovableBrHolidays(year),
+  ...EXTRA_HOLIDAYS,
+];
+
+const isHoliday = (iso) => {
+  const date = parseIsoDate(iso);
+  if (!date) return false;
+  return getDefaultBrHolidays(date.getFullYear()).includes(iso);
+};
+
+const isBusinessDay = (iso) => {
+  const weekday = getIsoWeekday(iso);
+  return weekday !== 0 && weekday !== 6 && !isHoliday(iso);
+};
+
+const shiftVencimentoToBusinessDay = (iso) => {
+  let adjustedIso = iso || "";
+
+  while (adjustedIso && !isBusinessDay(adjustedIso)) {
+    adjustedIso = addDays(adjustedIso, 1);
+  }
+
+  return adjustedIso;
+};
+
+const getResumoPeriod = (selectedDateIso) => {
+  const isMondayMorningCatchup = getIsoWeekday(selectedDateIso) === 0;
+  if (!isMondayMorningCatchup) {
+    return {
+      selectedDateIso,
+      inadimplenciaDateIso: selectedDateIso,
+      operacaoDateIso: selectedDateIso,
+      paymentStartIso: selectedDateIso,
+      paymentEndIso: selectedDateIso,
+      isMondayMorningCatchup: false,
+    };
+  }
+
+  const sextaAnteriorIso = addDays(selectedDateIso, -2);
+  return {
+    selectedDateIso,
+    inadimplenciaDateIso: sextaAnteriorIso,
+    operacaoDateIso: sextaAnteriorIso,
+    paymentStartIso: sextaAnteriorIso,
+    paymentEndIso: selectedDateIso,
+    isMondayMorningCatchup: true,
+  };
+};
+
 const formatDate = (value) => {
   const iso = toLocalIsoDate(value);
   if (!iso) return "";
@@ -347,6 +460,8 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
     setSelectedDateIso(nextDate >= getTodayIso() ? maxSelectableDateIso : nextDate);
   };
 
+  const resumoPeriod = useMemo(() => getResumoPeriod(selectedDateIso), [selectedDateIso]);
+
   useEffect(() => {
     let ignore = false;
 
@@ -382,17 +497,31 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
   const resumo = useMemo(() => {
     const validRows = rows.filter((row) => row.Cliente && row.Sacado && row.Entrada > 0);
 
-    const inadimplenciaOntem = validRows.filter((row) => row.Vcto === selectedDateIso && isOpen(row));
-    const quitadosOntem = validRows.filter((row) => (
-      (row.Vcto === selectedDateIso && (isQuitadoStatus(row.Status) || isRecompradoStatus(row.Status))) ||
-      (row.Pgto === selectedDateIso && row.Vcto > selectedDateIso && (isQuitadoStatus(row.Status) || isRecompradoStatus(row.Status) || hasPayment(row)))
-    ));
+    const isPaymentInPeriod = (row) =>
+      row.Pgto >= resumoPeriod.paymentStartIso && row.Pgto <= resumoPeriod.paymentEndIso;
+    const isQuitadoOuPago = (row) =>
+      isQuitadoStatus(row.Status) || isRecompradoStatus(row.Status) || hasPayment(row);
+    const getVctoOperacional = (row) => shiftVencimentoToBusinessDay(row.Vcto);
+
+    const inadimplenciaOntem = validRows.filter((row) => getVctoOperacional(row) === resumoPeriod.inadimplenciaDateIso && isOpen(row));
+    const quitadosOntem = validRows.filter((row) => {
+      const vctoOperacional = getVctoOperacional(row);
+
+      if (resumoPeriod.isMondayMorningCatchup) {
+        return isPaymentInPeriod(row) && vctoOperacional >= resumoPeriod.inadimplenciaDateIso && isQuitadoOuPago(row);
+      }
+
+      return (
+        (vctoOperacional === resumoPeriod.inadimplenciaDateIso && (isQuitadoStatus(row.Status) || isRecompradoStatus(row.Status))) ||
+        (isPaymentInPeriod(row) && vctoOperacional > resumoPeriod.inadimplenciaDateIso && isQuitadoOuPago(row))
+      );
+    });
     const quitadosEmAtraso = validRows.filter((row) => (
-      row.Pgto === selectedDateIso &&
-      row.Vcto < selectedDateIso &&
-      (isQuitadoStatus(row.Status) || isRecompradoStatus(row.Status) || hasPayment(row))
+      isPaymentInPeriod(row) &&
+      getVctoOperacional(row) < resumoPeriod.inadimplenciaDateIso &&
+      isQuitadoOuPago(row)
     ));
-    const operacoesOntem = validRows.filter((row) => row["Dt.Emis"] === selectedDateIso);
+    const operacoesOntem = validRows.filter((row) => row["Dt.Emis"] === resumoPeriod.operacaoDateIso);
 
     const volumeOperado = operacoesOntem.reduce((acc, row) => acc + row.Entrada, 0);
     const desagioOperado = operacoesOntem.reduce((acc, row) => acc + row.Desagio, 0);
@@ -413,7 +542,7 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
       desagioOperado,
       taxaMediaPonderada,
     };
-  }, [rows, selectedDateIso]);
+  }, [rows, resumoPeriod]);
 
   if (loading) {
     return (
@@ -431,6 +560,23 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
     );
   }
 
+  const selectedDateLabel = formatDate(selectedDateIso);
+  const paymentWindowLabel = resumoPeriod.isMondayMorningCatchup
+    ? `${formatDate(resumoPeriod.paymentStartIso)} a ${formatDate(resumoPeriod.paymentEndIso)}`
+    : selectedDateLabel;
+  const inadimplenciaSubtitle = resumoPeriod.isMondayMorningCatchup
+    ? `Títulos com vencimento em ${formatDate(resumoPeriod.inadimplenciaDateIso)} que ainda estão em aberto.`
+    : "Títulos com vencimento na data selecionada que ainda estão em aberto.";
+  const quitadosSubtitle = resumoPeriod.isMondayMorningCatchup
+    ? `Títulos quitados entre ${paymentWindowLabel}, sem vencimento anterior a ${formatDate(resumoPeriod.inadimplenciaDateIso)}.`
+    : "Títulos com vencimento na data selecionada ou antecipados nessa data.";
+  const quitadosAtrasoSubtitle = resumoPeriod.isMondayMorningCatchup
+    ? `Títulos quitados entre ${paymentWindowLabel} com vencimento anterior a ${formatDate(resumoPeriod.inadimplenciaDateIso)}.`
+    : "Títulos quitados na data selecionada com vencimento anterior.";
+  const operacoesSubtitle = resumoPeriod.isMondayMorningCatchup
+    ? `Novos títulos emitidos em ${formatDate(resumoPeriod.operacaoDateIso)}.`
+    : "Novos títulos emitidos na data selecionada.";
+
   return (
     <main style={{ display: "flex", flexDirection: "column", gap: "24px", paddingBottom: "24px" }}>
       <div style={{ background: "#fff", padding: "22px 24px", borderRadius: "12px", border: "1px solid #e5e7eb", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)", display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "center", flexWrap: "wrap" }}>
@@ -439,7 +585,7 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
             Resumo Matinal
           </h1>
           <p style={{ margin: "8px 0 0", color: "#6b7280", fontSize: "14px", fontWeight: 500 }}>
-            Visão operacional de {formatDate(selectedDateIso)}.
+            Visão operacional de {paymentWindowLabel}.
           </p>
         </div>
         <label style={{ display: "flex", flexDirection: "column", gap: "6px", minWidth: "190px" }}>
@@ -458,7 +604,7 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
 
       <MorningSection
         title="Inadimplência do Dia"
-        subtitle="Títulos com vencimento na data selecionada que ainda estão em aberto."
+        subtitle={inadimplenciaSubtitle}
         rows={resumo.inadimplenciaOntem}
         hideValues={hideValues}
         accent="#ef4444"
@@ -468,7 +614,7 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
 
       <MorningSection
         title="Quitados do Dia"
-        subtitle="Títulos com vencimento na data selecionada ou antecipados nessa data."
+        subtitle={quitadosSubtitle}
         rows={resumo.quitadosOntem}
         hideValues={hideValues}
         accent="#22c55e"
@@ -478,7 +624,7 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
 
       <MorningSection
         title="Quitado em Atraso"
-        subtitle="Títulos quitados na data selecionada com vencimento anterior."
+        subtitle={quitadosAtrasoSubtitle}
         rows={resumo.quitadosEmAtraso}
         hideValues={hideValues}
         accent="#f59e0b"
@@ -488,7 +634,7 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
 
       <MorningSection
         title="Operações do Dia"
-        subtitle="Novos títulos emitidos na data selecionada."
+        subtitle={operacoesSubtitle}
         rows={resumo.operacoesOntem}
         hideValues={hideValues}
         accent="#4f46e5"
