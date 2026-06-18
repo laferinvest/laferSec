@@ -452,16 +452,18 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
   const [error, setError] = useState("");
 
   const maxSelectableDateIso = useMemo(getYesterdayIso, []);
+  const todayIso = useMemo(getTodayIso, []);
   const [selectedDateIso, setSelectedDateIso] = useState(maxSelectableDateIso);
 
   const handleSelectedDateChange = (event) => {
     const nextDate = event.target.value;
     if (!nextDate) return;
-    setSelectedDateIso(nextDate >= getTodayIso() ? maxSelectableDateIso : nextDate);
+    setSelectedDateIso(nextDate >= todayIso ? maxSelectableDateIso : nextDate);
   };
 
   const resumoPeriod = useMemo(() => getResumoPeriod(selectedDateIso), [selectedDateIso]);
-  const todayDueDateIso = useMemo(() => shiftVencimentoToBusinessDay(getTodayIso()), []);
+  const todayDueDateIso = useMemo(() => shiftVencimentoToBusinessDay(todayIso), [todayIso]);
+  const monthStartIso = useMemo(() => `${todayIso.slice(0, 8)}01`, [todayIso]);
 
   useEffect(() => {
     let ignore = false;
@@ -524,10 +526,15 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
     ));
     const operacoesOntem = validRows.filter((row) => row["Dt.Emis"] === resumoPeriod.operacaoDateIso);
     const vencemHoje = validRows.filter((row) => getVctoOperacional(row) === todayDueDateIso && isOpen(row));
+    const inadimplentesMes = validRows.filter((row) => {
+      const vctoOperacional = getVctoOperacional(row);
+      return vctoOperacional >= monthStartIso && vctoOperacional < todayIso && isOpen(row);
+    });
 
     const volumeOperado = operacoesOntem.reduce((acc, row) => acc + row.Entrada, 0);
     const desagioOperado = operacoesOntem.reduce((acc, row) => acc + row.Desagio, 0);
     const totalVencemHoje = vencemHoje.reduce((acc, row) => acc + row.Entrada, 0);
+    const totalInadimplentesMes = inadimplentesMes.reduce((acc, row) => acc + row.Entrada, 0);
     const taxaMediaPonderada = volumeOperado > 0
       ? operacoesOntem.reduce((acc, row) => acc + row["Tx.Efet"] * row.Entrada, 0) / volumeOperado
       : 0;
@@ -542,12 +549,14 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
       quitadosEmAtraso: [...quitadosEmAtraso].sort(sortByCedente),
       operacoesOntem: [...operacoesOntem].sort(sortByCedente),
       vencemHoje: [...vencemHoje].sort(sortByCedente),
+      inadimplentesMes: [...inadimplentesMes].sort(sortByCedente),
       volumeOperado,
       desagioOperado,
       totalVencemHoje,
+      totalInadimplentesMes,
       taxaMediaPonderada,
     };
-  }, [rows, resumoPeriod, todayDueDateIso]);
+  }, [rows, resumoPeriod, todayDueDateIso, monthStartIso, todayIso]);
 
   if (loading) {
     return (
@@ -581,9 +590,10 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
   const operacoesSubtitle = resumoPeriod.isMondayMorningCatchup
     ? `Novos títulos emitidos em ${formatDate(resumoPeriod.operacaoDateIso)}.`
     : "Novos títulos emitidos na data selecionada.";
-  const vencemHojeSubtitle = todayDueDateIso === getTodayIso()
+  const vencemHojeSubtitle = todayDueDateIso === todayIso
     ? "Títulos em aberto com vencimento operacional hoje."
     : `Títulos em aberto com vencimento operacional em ${formatDate(todayDueDateIso)} por ajuste de fim de semana ou feriado.`;
+  const inadimplentesMesSubtitle = `Títulos em aberto com vencimento operacional vencido no mês corrente, desde ${formatDate(monthStartIso)}.`;
 
   return (
     <main style={{ display: "flex", flexDirection: "column", gap: "24px", paddingBottom: "24px" }}>
@@ -686,6 +696,25 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
             value={formatMoney(resumo.totalVencemHoje, hideValues)}
             sublabel={`${resumo.vencemHoje.length} título(s) em aberto`}
             color="#0ea5e9"
+          />
+        </div>
+      </MorningSection>
+
+      <MorningSection
+        title="Inadimplentes do Mês"
+        subtitle={inadimplentesMesSubtitle}
+        rows={resumo.inadimplentesMes}
+        hideValues={hideValues}
+        accent="#b91c1c"
+        order={6}
+        onNavigateToMicro={onNavigateToMicro}
+      >
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px" }}>
+          <SummaryMetric
+            label="Total Inadimplente"
+            value={formatMoney(resumo.totalInadimplentesMes, hideValues)}
+            sublabel={`${resumo.inadimplentesMes.length} título(s) em aberto`}
+            color="#b91c1c"
           />
         </div>
       </MorningSection>
