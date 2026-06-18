@@ -336,7 +336,7 @@ function montarEmailConfirmacao(d) {
     <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111827;line-height:1.55;">
       <p>À ${escapeHtml(sacado)},<br />A/C de [RESPONSÁVEL].</p>
 
-      <p>Meu nome é Daniel Ferreira, trabalho na Lafer Invest Securitizadora S/A, empresa parceira da ${escapeHtml(cedente)}.</p>
+      <p>Meu nome é Daniel Ferreira, trabalho na Lafer Invest Securitizadora S/A, empresa parceira da ${escapeHtml(cedente)}. Nós estamos fazendo a compra de recebíveis deles e precisamos fazer uma checagem de recebimento de mercadoria.</p>
 
       <p>Nós negociamos com eles a NF de número ${escapeHtml(numeroNfe)}:</p>
 
@@ -365,7 +365,7 @@ function montarEmailConfirmacao(d) {
   const plainText = `À ${sacado},
 A/C de [RESPONSÁVEL].
 
-Meu nome é Daniel Ferreira, trabalho na Lafer Invest Securitizadora S/A, empresa parceira da ${cedente}.
+Meu nome é Daniel Ferreira, trabalho na Lafer Invest Securitizadora S/A, empresa parceira da ${cedente}. Nós estamos fazendo a compra de recebíveis deles e precisamos fazer uma checagem de recebimento de mercadoria.
 
 Nós negociamos com eles a NF de número ${numeroNfe}:
 
