@@ -461,6 +461,7 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
   };
 
   const resumoPeriod = useMemo(() => getResumoPeriod(selectedDateIso), [selectedDateIso]);
+  const todayDueDateIso = useMemo(() => shiftVencimentoToBusinessDay(getTodayIso()), []);
 
   useEffect(() => {
     let ignore = false;
@@ -522,9 +523,11 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
       isQuitadoOuPago(row)
     ));
     const operacoesOntem = validRows.filter((row) => row["Dt.Emis"] === resumoPeriod.operacaoDateIso);
+    const vencemHoje = validRows.filter((row) => getVctoOperacional(row) === todayDueDateIso && isOpen(row));
 
     const volumeOperado = operacoesOntem.reduce((acc, row) => acc + row.Entrada, 0);
     const desagioOperado = operacoesOntem.reduce((acc, row) => acc + row.Desagio, 0);
+    const totalVencemHoje = vencemHoje.reduce((acc, row) => acc + row.Entrada, 0);
     const taxaMediaPonderada = volumeOperado > 0
       ? operacoesOntem.reduce((acc, row) => acc + row["Tx.Efet"] * row.Entrada, 0) / volumeOperado
       : 0;
@@ -538,11 +541,13 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
       quitadosOntem: [...quitadosOntem].sort(sortByCedente),
       quitadosEmAtraso: [...quitadosEmAtraso].sort(sortByCedente),
       operacoesOntem: [...operacoesOntem].sort(sortByCedente),
+      vencemHoje: [...vencemHoje].sort(sortByCedente),
       volumeOperado,
       desagioOperado,
+      totalVencemHoje,
       taxaMediaPonderada,
     };
-  }, [rows, resumoPeriod]);
+  }, [rows, resumoPeriod, todayDueDateIso]);
 
   if (loading) {
     return (
@@ -576,6 +581,9 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
   const operacoesSubtitle = resumoPeriod.isMondayMorningCatchup
     ? `Novos títulos emitidos em ${formatDate(resumoPeriod.operacaoDateIso)}.`
     : "Novos títulos emitidos na data selecionada.";
+  const vencemHojeSubtitle = todayDueDateIso === getTodayIso()
+    ? "Títulos em aberto com vencimento operacional hoje."
+    : `Títulos em aberto com vencimento operacional em ${formatDate(todayDueDateIso)} por ajuste de fim de semana ou feriado.`;
 
   return (
     <main style={{ display: "flex", flexDirection: "column", gap: "24px", paddingBottom: "24px" }}>
@@ -658,6 +666,25 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
             label="Taxa Média Ponderada"
             value={formatRate(resumo.taxaMediaPonderada) || "0,00%"}
             sublabel="Ponderada pelo valor de face"
+            color="#0ea5e9"
+          />
+        </div>
+      </MorningSection>
+
+      <MorningSection
+        title="Vencimentos de Hoje"
+        subtitle={vencemHojeSubtitle}
+        rows={resumo.vencemHoje}
+        hideValues={hideValues}
+        accent="#0ea5e9"
+        order={5}
+        onNavigateToMicro={onNavigateToMicro}
+      >
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px" }}>
+          <SummaryMetric
+            label="Total a Vencer"
+            value={formatMoney(resumo.totalVencemHoje, hideValues)}
+            sublabel={`${resumo.vencemHoje.length} título(s) em aberto`}
             color="#0ea5e9"
           />
         </div>
