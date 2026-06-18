@@ -79,6 +79,48 @@ const normalizarTexto = (val) =>
 
 const isStatusRecomprado = (status) => normalizarTexto(status) === "recomprado";
 
+const getRowStatus = (row) =>
+  row?.Status ??
+  row?.["Situação"] ??
+  row?.["SITUAÇÃO"] ??
+  row?.Situacao ??
+  row?.SITUACAO ??
+  row?.Estado ??
+  "";
+
+const isStatusBaixado = (rowOrStatus) => {
+  const status = typeof rowOrStatus === "object" ? getRowStatus(rowOrStatus) : rowOrStatus;
+  const normalized = normalizarTexto(status);
+  return (
+    normalized.includes("baixad") ||
+    normalized.includes("liquidad") ||
+    normalized.includes("quitad")
+  );
+};
+
+const isStatusAberto = (rowOrStatus) => {
+  const status = typeof rowOrStatus === "object" ? getRowStatus(rowOrStatus) : rowOrStatus;
+  const normalized = normalizarTexto(status);
+  return (
+    normalized.includes("abert") ||
+    normalized === "a vencer" ||
+    normalized.includes("vencido")
+  );
+};
+
+const getRowPgto = (row) =>
+  row?.Pgto ??
+  row?.["Dt.Pgto"] ??
+  row?.["Dt Pgto"] ??
+  row?.["Data Pgto"] ??
+  row?.["Data de Pgto"] ??
+  row?.["Data de Pagamento"] ??
+  row?.["Data de quitação"] ??
+  row?.["DATA DE QUITAÇÃO"] ??
+  "";
+
+const hasRowPgto = (row) => Boolean(limpaChave(getRowPgto(row)));
+
 const isInadimplente = (row) =>
   normalizarTexto(row?.inadimplencia ?? row?.Inadimplencia ?? row?.["Inadimplência"]) === "sim";
 
@@ -654,6 +696,13 @@ const smartKey = (row) =>
 
 const secInfoKey = smartKey;
 
+const entidadeDctoKey = (entidade, dcto) =>
+  `${normalizarChaveTexto(entidade)}__${limpaChave(dcto)}`;
+
+const clienteDctoKey = (row) => entidadeDctoKey(row?.Cliente, row?.Dcto);
+
+const sacadoDctoKey = (row) => entidadeDctoKey(row?.Sacado, row?.Dcto);
+
 const withoutSmartCodRed = (row) => {
   const copy = { ...row };
   delete copy["Cód.Red"];
@@ -809,6 +858,14 @@ const updateSecInfoInadimplenciaFromSmartRows = async (rows, setSmartProgress) =
     )
   );
 
+  const dctos = Array.from(
+    new Set(
+      sourceItems
+        .map((item) => item.row.Dcto)
+        .filter((value) => value !== null && value !== undefined && value !== "")
+    )
+  );
+
   setSmartProgress(`Atualizando dados WBA na secInfo para ${sourceItems.length} título(s)...`);
 
   const secInfoRowsById = new Map();
@@ -862,6 +919,7 @@ const updateSecInfoInadimplenciaFromSmartRows = async (rows, setSmartProgress) =
 
   await fetchSecInfoCandidates('"Borderô"', borderos, "Borderô");
   await fetchSecInfoCandidates("Vcto", vctos, "Vcto");
+  await fetchSecInfoCandidates("Dcto", dctos, "Dcto");
 
   const secInfoRows = Array.from(secInfoRowsById.values());
 
@@ -943,7 +1001,43 @@ const updateSecInfoInadimplenciaFromSmartRows = async (rows, setSmartProgress) =
     return null;
   };
 
+  const openReplacementIndex = {
+    clienteDcto: new Map(),
+    sacadoDcto: new Map(),
+  };
+
+  sourceItems.forEach((item) => {
+    const row = item.row;
+    if (hasRowPgto(row) || isStatusBaixado(row)) return;
+    if (!isStatusAberto(row) && hasRowPgto(row)) return;
+
+    if (limpaChave(row.Cliente)) {
+      addToIndex(openReplacementIndex.clienteDcto, clienteDctoKey(row), item);
+    }
+    if (limpaChave(row.Sacado)) {
+      addToIndex(openReplacementIndex.sacadoDcto, sacadoDctoKey(row), item);
+    }
+  });
+
+  const findOpenReplacementSource = (targetRow) => {
+    if (!isStatusBaixado(targetRow) && !hasRowPgto(targetRow)) return null;
+
+    const candidates = [];
+    candidates.push(...(openReplacementIndex.clienteDcto.get(clienteDctoKey(targetRow)) || []));
+    candidates.push(...(openReplacementIndex.sacadoDcto.get(sacadoDctoKey(targetRow)) || []));
+
+    return getSafeMatch(Array.from(new Set(candidates)));
+  };
+
   const findMatchedSource = (targetRow) => {
+    const openReplacement = findOpenReplacementSource(targetRow);
+    if (openReplacement) {
+      return {
+        matchedSource: openReplacement,
+        matchType: "Dcto aberto sem Pgto substitui título baixado",
+      };
+    }
+
     const searchSteps = [
       { index: sourceIndex.rawBordero, normalized: false, bordero: true, matchType: "Dcto + Dt.Emis + Vcto + Borderô" },
       { index: sourceIndex.normalizedBordero, normalized: true, bordero: true, matchType: "Dcto normalizado + Dt.Emis + Vcto + Borderô" },
@@ -973,6 +1067,11 @@ const updateSecInfoInadimplenciaFromSmartRows = async (rows, setSmartProgress) =
     });
   };
 
+  const setExistingColumnsWhenPresent = (payload, targetRow, columnNames, value) => {
+    if (value === undefined) return;
+    setExistingColumns(payload, targetRow, columnNames, value);
+  };
+
   const buildWbaUpdatePayload = (sourceRow, targetRow, nextInadimplencia) => {
     const payload = { id: targetRow.id };
 
@@ -988,6 +1087,11 @@ const updateSecInfoInadimplenciaFromSmartRows = async (rows, setSmartProgress) =
       ["Status"],
       isStatusRecomprado(targetRow.Status) ? targetRow.Status : sourceRow.Status ?? null
     );
+    setExistingColumnsWhenPresent(payload, targetRow, ["Cliente"], sourceRow.Cliente);
+    setExistingColumnsWhenPresent(payload, targetRow, ["Sacado"], sourceRow.Sacado);
+    setExistingColumnsWhenPresent(payload, targetRow, ["Dt.Emis"], cleanDate(sourceRow["Dt.Emis"]) || null);
+    setExistingColumnsWhenPresent(payload, targetRow, ["Vcto"], cleanDate(sourceRow.Vcto) || null);
+    setExistingColumnsWhenPresent(payload, targetRow, ["Entrada"], cleanNumber(sourceRow.Entrada));
     setExistingColumns(payload, targetRow, ["Dt.Pgto", "Dt Pgto", "Data Pgto", "Data de Pgto", "Data de Pagamento", "Pgto"], pgto);
     setExistingColumns(payload, targetRow, ["Vl.Pgto", "Vl Pgto", "Vl Pgto.", "Valor Pgto", "Valor Pago"], vlPgto);
     setExistingColumns(payload, targetRow, ["Encargos", "Encargo", "Juros e Multa", "Rec."], encargos);
@@ -1912,8 +2016,8 @@ const clienteLimpo = String(newRow["Cliente"] || "").trim();
 
 auditoria.extraidasBrutas.push({ ...newRow });
 
-if (!limpaChave(newRow["Dcto"]) || !limpaChave(newRow["Borderô"]) || !limpaChave(newRow["Vcto"])) {
-  auditoria.semCodRed.push({ ...newRow, motivoExclusao: "Sem chave Dcto + Borderô + Vcto" });
+if (!limpaChave(newRow["Dcto"]) || !limpaChave(newRow["Vcto"])) {
+  auditoria.semCodRed.push({ ...newRow, motivoExclusao: "Sem chave Dcto + Vcto" });
   return;
 }
 
@@ -1942,7 +2046,15 @@ allExtractedRows.push(newRow);
 
 const rowsAfterSum = [];
 for (let key in groupedByDcto) {
-  const group = groupedByDcto[key];
+  const originalGroup = groupedByDcto[key];
+  const openRows = originalGroup.filter((row) =>
+    isStatusAberto(row) || (!hasRowPgto(row) && !isStatusBaixado(row))
+  );
+  const baixadoRows = originalGroup.filter((row) =>
+    isStatusBaixado(row) || hasRowPgto(row)
+  );
+  const shouldIgnoreBaixados = openRows.length > 0 && baixadoRows.length > 0;
+  const group = shouldIgnoreBaixados ? openRows : originalGroup;
 
   if (group.length === 1) {
     rowsAfterSum.push({
@@ -1957,10 +2069,12 @@ for (let key in groupedByDcto) {
     };
 
     auditoria.duplicidadesDcto.push({
-  cliente: limpaChave(group[0]["Cliente"]),
-  dcto: limpaChave(group[0]["Dcto"]),
-  qtd: group.length,
-  linhas: group.map((item) => ({ ...item })),
+  cliente: limpaChave(originalGroup[0]["Cliente"]),
+  dcto: limpaChave(originalGroup[0]["Dcto"]),
+  qtd: originalGroup.length,
+  linhas: originalGroup.map((item) => ({ ...item })),
+  linhasConsideradas: shouldIgnoreBaixados ? group.map((item) => ({ ...item })) : undefined,
+  motivoAjuste: shouldIgnoreBaixados ? "Baixados ignorados por haver título aberto no mesmo Cliente + Dcto" : undefined,
 });
 
     let bestRow =
@@ -2008,7 +2122,7 @@ const seenSecInfoKeys = new Set();
 
 rowsAfterSum.forEach((r) => {
   const rowKey = secInfoKey(r);
-  if (!limpaChave(r["Dcto"]) || !limpaChave(r["Borderô"]) || !limpaChave(r["Vcto"])) return;
+  if (!limpaChave(r["Dcto"]) || !limpaChave(r["Vcto"])) return;
 
   const sacadoStr = String(r["Sacado"] || "").trim().replace(/\s/g, "");
   const sacadoPlaceholder =
@@ -2041,23 +2155,72 @@ auditoria.finalRows = finalRows.map((item) => ({ ...item }));
 
       const BATCH_SIZE = 500;
       const borderos = Array.from(new Set(finalRows.map((row) => row["Borderô"]).filter((value) => value !== null && value !== undefined && value !== "")));
-      const { data: existingData, error: fetchErr } = await supabase
-        .from("secInfo")
-        .select('id,Dcto,"Borderô",Vcto,"Cód.Red",Desagio,"Tx.Efet",Status')
-        .in('"Borderô"', borderos);
+      const vctosSemBordero = Array.from(
+        new Set(
+          finalRows
+            .filter((row) => !limpaChave(row["Borderô"]))
+            .map((row) => row.Vcto)
+            .filter((value) => value !== null && value !== undefined && value !== "")
+        )
+      );
+      const dctosSemBordero = Array.from(
+        new Set(
+          finalRows
+            .filter((row) => !limpaChave(row["Borderô"]))
+            .map((row) => row.Dcto)
+            .filter((value) => value !== null && value !== undefined && value !== "")
+        )
+      );
+      const existingDataById = new Map();
 
-      if (fetchErr) throw new Error(`Erro ao checar banco: ${fetchErr.message}`);
+      const addExistingRows = (rows) => {
+        (rows || []).forEach((row) => {
+          if (row?.id) existingDataById.set(row.id, row);
+        });
+      };
+
+      const fetchExistingByChunks = async (field, values, label) => {
+        if (!values.length) return;
+        for (let i = 0; i < values.length; i += BATCH_SIZE) {
+          const chunk = values.slice(i, i + BATCH_SIZE);
+          const { data, error } = await supabase
+            .from("secInfo")
+            .select('id,Cliente,Sacado,Dcto,"Borderô",Vcto,"Cód.Red",Desagio,"Tx.Efet",Status')
+            .in(field, chunk);
+
+          if (error) throw new Error(`Erro ao checar banco por ${label}: ${error.message}`);
+          addExistingRows(data);
+        }
+      };
+
+      await fetchExistingByChunks('"Borderô"', borderos, "Borderô");
+      await fetchExistingByChunks("Vcto", vctosSemBordero, "Vcto");
+      await fetchExistingByChunks("Dcto", dctosSemBordero, "Dcto");
+
+      const existingData = Array.from(existingDataById.values());
 
       const existingMap = {};
+      const existingBaixadoByClienteDcto = {};
+      const existingBaixadoBySacadoDcto = {};
       (existingData || []).forEach((r) => {
         existingMap[secInfoKey(r)] = r;
+        if (isStatusBaixado(r)) {
+          existingBaixadoByClienteDcto[clienteDctoKey(r)] = r;
+          existingBaixadoBySacadoDcto[sacadoDctoKey(r)] = r;
+        }
       });
 
       const rowsToInsert = [];
       const rowsToUpdate = [];
 
       finalRows.forEach((row) => {
-        const existingRow = existingMap[secInfoKey(row)];
+        const existingRow =
+          existingMap[secInfoKey(row)] ||
+          (isStatusAberto(row)
+            ? existingBaixadoByClienteDcto[clienteDctoKey(row)] ||
+              existingBaixadoBySacadoDcto[sacadoDctoKey(row)]
+            : null);
+
         if (existingRow?.id) {
           const updateRow = { ...row };
           if (isStatusRecomprado(existingRow.Status)) {
