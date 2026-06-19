@@ -239,6 +239,8 @@ const isQuitadoStatus = (status) => {
 
 const isRecompradoStatus = (status) => normalizeText(status).includes("recompr");
 
+const isRefinanciadoStatus = (status) => normalizeText(status).includes("refinanci");
+
 const hasPayment = (row) => Boolean(toLocalIsoDate(row.Pgto));
 
 const isFinalized = (row) =>
@@ -528,7 +530,12 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
     const vencemHoje = validRows.filter((row) => getVctoOperacional(row) === todayDueDateIso && isOpen(row));
     const inadimplentesMes = validRows.filter((row) => {
       const vctoOperacional = getVctoOperacional(row);
-      return vctoOperacional >= monthStartIso && vctoOperacional < todayIso && isOpen(row);
+      return (
+        vctoOperacional >= monthStartIso &&
+        vctoOperacional < todayIso &&
+        isOpen(row) &&
+        !isRefinanciadoStatus(row.Status)
+      );
     });
 
     const volumeOperado = operacoesOntem.reduce((acc, row) => acc + row.Entrada, 0);
@@ -542,6 +549,9 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
     const sortByCedente = (a, b) =>
       String(a.Cliente || "").localeCompare(String(b.Cliente || ""), "pt-BR") ||
       String(a.Sacado || "").localeCompare(String(b.Sacado || ""), "pt-BR");
+    const sortByVencimentoMaisRecente = (a, b) =>
+      String(getVctoOperacional(b)).localeCompare(String(getVctoOperacional(a))) ||
+      sortByCedente(a, b);
 
     return {
       inadimplenciaOntem: [...inadimplenciaOntem].sort(sortByCedente),
@@ -549,7 +559,7 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
       quitadosEmAtraso: [...quitadosEmAtraso].sort(sortByCedente),
       operacoesOntem: [...operacoesOntem].sort(sortByCedente),
       vencemHoje: [...vencemHoje].sort(sortByCedente),
-      inadimplentesMes: [...inadimplentesMes].sort(sortByCedente),
+      inadimplentesMes: [...inadimplentesMes].sort(sortByVencimentoMaisRecente),
       volumeOperado,
       desagioOperado,
       totalVencemHoje,
