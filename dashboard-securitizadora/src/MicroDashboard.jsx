@@ -1735,6 +1735,21 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
       c !== "__tx_encargos__" &&
       !isRawTxEncargosCol(c)
     ));
+    const isVctoCol = (col) => {
+      const key = normalizarChave(col);
+      return key === "vcto" || (key.includes("vcto") && !key.includes("vl"));
+    };
+    const isValorFaceCol = (col) => {
+      const key = normalizarChave(col);
+      return key === "entrada" || key === "valor de face" || key === "valor face";
+    };
+    const vctoIndex = baseCols.findIndex(isVctoCol);
+    const valorFaceIndex = baseCols.findIndex(isValorFaceCol);
+    if (vctoIndex >= 0 && valorFaceIndex >= 0 && valorFaceIndex !== vctoIndex + 1) {
+      const [valorFaceCol] = baseCols.splice(valorFaceIndex, 1);
+      const nextVctoIndex = baseCols.findIndex(isVctoCol);
+      baseCols.splice(nextVctoIndex + 1, 0, valorFaceCol);
+    }
     const valorPgtoIndex = baseCols.findIndex(c => c.toLowerCase() === "vl pgto");
     const metricCols = [txEfetCol, "__encargo__", "__tx_encargos__"].filter(Boolean);
 
