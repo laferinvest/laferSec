@@ -435,11 +435,11 @@ const getInitDateStr = () => {
 const GRUPOS_ECONOMICOS = [
   {
     label: "BDP Broadcast",
-    prefixos: ["466 -", "479 -"]
+    prefixos: ["BDP Broadcast"]
   },
   {
     label: "JL & D Confecções",
-    prefixos: ["613 -", "614 -", "615 -", "617 -", "605 -"]
+    prefixos: ["JL & D Confecções"]
   },
   {
     label: "MG Packing",
@@ -597,15 +597,17 @@ function EvolutionCharts({ rows, dateFilter, setDateFilter, setBorderoFilter, se
   const [hoveredIndex2, setHoveredIndex2] = useState(null);
   const [hoveredIndex3, setHoveredIndex3] = useState(null);
   const [hoveredIndex4, setHoveredIndex4] = useState(null);
+  const [hoveredIndex5, setHoveredIndex5] = useState(null);
 
   const [dragState, setDragState] = useState({ isDragging: false, startIndex: null, currentIndex: null, type: null });
 
-  const { chartData, chartDataRate, chartDataDesagio } = useMemo(() => {
+  const { chartData, chartDataRate, chartDataDesagio, chartDataPrazoMedio } = useMemo(() => {
     const grouped = {};
     const groupedRate = {};
     const groupedDesagio = {};
+    const groupedPrazo = {};
 
-    if (rows.length === 0) return { chartData: [], chartDataRate: [], chartDataDesagio: [] };
+    if (rows.length === 0) return { chartData: [], chartDataRate: [], chartDataDesagio: [], chartDataPrazoMedio: [] };
 
     const emisKey = findKeyAcrossRows(rows, k => k.toLowerCase().includes('emis'));
     const vctoKey = findKeyAcrossRows(rows, k => k.toLowerCase() === 'vcto' || (k.toLowerCase().includes('vcto') && !k.toLowerCase().includes('vl')));
@@ -647,6 +649,18 @@ function EvolutionCharts({ rows, dateFilter, setDateFilter, setBorderoFilter, se
             ? getScopedTitleKey(r, idx, dataSourceTable)
             : bNum;
           if (!groupedDesagio[ym].has(desagioGroupKey)) groupedDesagio[ym].set(desagioGroupKey, desagioVal);
+
+          const emissao = parseIsoDateLocal(r[emisKey]);
+          const vencimento = vctoKey ? parseIsoDateLocal(r[vctoKey]) : null;
+          if (emissao && vencimento && val > 0) {
+            const prazo = diffCalendarDays(emissao, vencimento);
+            if (prazo > 0) {
+              if (!groupedPrazo[ym]) groupedPrazo[ym] = { face: 0, weightedPrazo: 0, titulos: 0 };
+              groupedPrazo[ym].face += val;
+              groupedPrazo[ym].weightedPrazo += prazo * val;
+              groupedPrazo[ym].titulos += 1;
+            }
+          }
         }
       }
 
@@ -696,7 +710,18 @@ function EvolutionCharts({ rows, dateFilter, setDateFilter, setBorderoFilter, se
       return { ym, label: formatarMesAno(ym), value: sumDesagio };
     });
 
-    return { chartData: cData, chartDataRate: cDataRate, chartDataDesagio: cDataDesagio };
+    const cDataPrazoMedio = sortedMonths.map(ym => {
+      const prazoMes = groupedPrazo[ym];
+
+      return {
+        ym,
+        label: formatarMesAno(ym),
+        prazoMedio: prazoMes?.face > 0 ? prazoMes.weightedPrazo / prazoMes.face : 0,
+        titulos: prazoMes?.titulos || 0
+      };
+    });
+
+    return { chartData: cData, chartDataRate: cDataRate, chartDataDesagio: cDataDesagio, chartDataPrazoMedio: cDataPrazoMedio };
   }, [rows, dataSourceTable]);
 
   useEffect(() => {
@@ -749,6 +774,7 @@ function EvolutionCharts({ rows, dateFilter, setDateFilter, setBorderoFilter, se
   };
   const formatAxisPct = (val) => Math.floor(val) + '%';
   const formatAxisRate = (val) => val.toFixed(1) + '%';
+  const formatAxisDays = (val) => `${Math.round(val)}d`;
 
   const maxVal1 = Math.max(...chartData.map(d => d.value), 10);
   const points1 = chartData.map((d, i) => {
@@ -785,6 +811,28 @@ function EvolutionCharts({ rows, dateFilter, setDateFilter, setBorderoFilter, se
   });
   const pathD4 = points4.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
   const areaD4 = points4.length > 1 ? `${pathD4} L ${points4[points4.length - 1].x} ${svgHeight - paddingBottom} L ${points4[0].x} ${svgHeight - paddingBottom} Z` : "";
+
+  const prazoValues = chartDataPrazoMedio.map(d => d.prazoMedio);
+  const minVal5 = Math.min(...prazoValues);
+  const maxVal5Raw = Math.max(...prazoValues);
+  const rangeVal5 = Math.max(1, maxVal5Raw - minVal5);
+  const yMin5 = Math.max(0, Math.floor(minVal5 - rangeVal5 * 0.15));
+  const yMax5 = Math.ceil(maxVal5Raw + rangeVal5 * 0.15);
+  const yRange5 = Math.max(1, yMax5 - yMin5);
+  const points5 = chartDataPrazoMedio.map((d, i) => {
+    const x = chartDataPrazoMedio.length > 1 ? paddingX + (i / (chartDataPrazoMedio.length - 1)) * chartWidth : paddingX + chartWidth / 2;
+    const y = paddingTop + ((yMax5 - d.prazoMedio) / yRange5) * chartHeight;
+    return { ...d, x, y };
+  });
+  const pathD5 = points5.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+  const areaD5 = points5.length > 1 ? `${pathD5} L ${points5[points5.length - 1].x} ${svgHeight - paddingBottom} L ${points5[0].x} ${svgHeight - paddingBottom} Z` : "";
+  const trendSkipCount5 = chartDataPrazoMedio.length >= 5 ? 2 : 1;
+  const trendData5 = chartDataPrazoMedio.slice(trendSkipCount5);
+  const hasTrendComparison5 = trendData5.length > 1;
+  const firstTrendValue5 = hasTrendComparison5 ? trendData5[0].prazoMedio : (chartDataPrazoMedio[0]?.prazoMedio || 0);
+  const lastTrendValue5 = chartDataPrazoMedio[chartDataPrazoMedio.length - 1]?.prazoMedio || 0;
+  const deltaPrazo5 = hasTrendComparison5 ? lastTrendValue5 - firstTrendValue5 : 0;
+  const trendColor5 = !hasTrendComparison5 ? "#4b5563" : deltaPrazo5 > 0 ? "#dc2626" : "#059669";
 
   const isPointSelected = (p, i, type) => {
     if (dragState.isDragging && dragState.type === type) {
@@ -827,7 +875,7 @@ function EvolutionCharts({ rows, dateFilter, setDateFilter, setBorderoFilter, se
     return null;
   }
 
-const chartBoxStyle = { flex: "1 1 400px", minWidth: "250px", maxWidth: "100%", background: "#fff", padding: "20px", borderRadius: "10px", border: "1px solid #e5e7eb", boxShadow: "0 4px 12px rgba(0,0,0,0.05)", boxSizing: "border-box" };
+const chartBoxStyle = { flex: "0 1 calc(50% - 12px)", minWidth: "320px", maxWidth: "100%", background: "#fff", padding: "20px", borderRadius: "10px", border: "1px solid #e5e7eb", boxShadow: "0 4px 12px rgba(0,0,0,0.05)", boxSizing: "border-box" };
 return (
     <div style={{ background: "#fff", padding: "24px", borderRadius: "12px", boxShadow: "0 8px 20px rgba(0, 0, 0, 0.06)", border: "1px solid #e5e7eb" }}>
       <div onClick={() => setIsCollapsed(!isCollapsed)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", userSelect: "none" }}>
@@ -891,53 +939,67 @@ return (
             </div>
 
             <div style={chartBoxStyle}>
-              <h3 style={{ margin: "0 0 16px 0", color: "#111827", fontSize: "16px", fontWeight: "600" }}>
-                Percentual de Atraso <span style={{fontSize: "12px", color:"#9ca3af", fontWeight: "400"}}>(Vencimento)</span>
-              </h3>
+              <div style={{ marginBottom: "12px" }}>
+                <div>
+                  <h3 style={{ margin: 0, color: "#111827", fontSize: "16px", fontWeight: "600" }}>
+                    Evolução do Prazo Médio <span style={{fontSize: "12px", color:"#9ca3af", fontWeight: "400"}}>(Emissão)</span>
+                  </h3>
+                  <p style={{ margin: "4px 0 0", color: "#6b7280", fontSize: "12px", fontWeight: "500" }}>
+                    Média ponderada dos títulos emitidos em cada mês.
+                  </p>
+                </div>
+              </div>
               <div style={{ position: "relative", width: "100%", height: "auto" }}>
                 <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} style={{ width: "100%", height: "auto", overflow: "visible" }}>
-                  <defs><linearGradient id="gradientArea2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#ef4444" stopOpacity="0.3" /><stop offset="100%" stopColor="#ef4444" stopOpacity="0.0" /></linearGradient></defs>
-                  {renderHighlight(points2, 'vcto', '239, 68, 68')}
+                  <defs><linearGradient id="gradientArea5" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={trendColor5} stopOpacity="0.25" /><stop offset="100%" stopColor={trendColor5} stopOpacity="0.0" /></linearGradient></defs>
+                  {renderHighlight(points5, 'emis', '5, 150, 105')}
                   <line x1={paddingX} y1={paddingTop} x2={svgWidth - paddingRight} y2={paddingTop} stroke="#f3f4f6" strokeWidth="1" />
                   <line x1={paddingX} y1={paddingTop + chartHeight / 2} x2={svgWidth - paddingRight} y2={paddingTop + chartHeight / 2} stroke="#f3f4f6" strokeWidth="1" />
                   <line x1={paddingX} y1={svgHeight - paddingBottom} x2={svgWidth - paddingRight} y2={svgHeight - paddingBottom} stroke="#e5e7eb" strokeWidth="1" />
-                  <text x={paddingX - 8} y={paddingTop + 4} fill="#9ca3af" fontSize="11px" fontWeight="500" textAnchor="end">{formatAxisPct(maxVal2)}</text>
-                  <text x={paddingX - 8} y={paddingTop + chartHeight / 2 + 4} fill="#9ca3af" fontSize="11px" fontWeight="500" textAnchor="end">{formatAxisPct(maxVal2 / 2)}</text>
-                  <text x={paddingX - 8} y={svgHeight - paddingBottom + 4} fill="#9ca3af" fontSize="11px" fontWeight="500" textAnchor="end">0%</text>
-                  {points2.length > 1 && <path d={areaD2} fill="url(#gradientArea2)" />}
-                  <path d={pathD2} fill="none" stroke="#ef4444" strokeWidth="3" strokeLinejoin="round" />
-                  
-                  {points2.map((p, i) => {
-                    const isSelected = isPointSelected(p, i, 'vcto');
-                    return isSelected ? <circle key={`sel2-${i}`} cx={p.x} cy={p.y} r="5" fill="#ef4444" stroke="#fff" strokeWidth="2" /> : null;
+                  <text x={paddingX - 8} y={paddingTop + 4} fill="#9ca3af" fontSize="11px" fontWeight="500" textAnchor="end">{formatAxisDays(yMax5)}</text>
+                  <text x={paddingX - 8} y={paddingTop + chartHeight / 2 + 4} fill="#9ca3af" fontSize="11px" fontWeight="500" textAnchor="end">{formatAxisDays((yMax5 + yMin5) / 2)}</text>
+                  <text x={paddingX - 8} y={svgHeight - paddingBottom + 4} fill="#9ca3af" fontSize="11px" fontWeight="500" textAnchor="end">{formatAxisDays(yMin5)}</text>
+                  {points5.length > 1 && <path d={areaD5} fill="url(#gradientArea5)" />}
+                  <path d={pathD5} fill="none" stroke={trendColor5} strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" />
+
+                  {points5.map((p, i) => {
+                    const isSelected = isPointSelected(p, i, 'emis');
+                    return isSelected ? <circle key={`sel5-${i}`} cx={p.x} cy={p.y} r="5" fill={trendColor5} stroke="#fff" strokeWidth="2" /> : null;
                   })}
-                  {points2.map((p, i) => {
-                    if (i % step !== 0 && i !== points2.length - 1) return null;
-                    const isSelected = isPointSelected(p, i, 'vcto');
-                    return <text key={`lab2-${i}`} x={p.x} y={svgHeight - paddingBottom + 16} fill={isSelected ? "#ef4444" : "#6b7280"} fontSize="11px" fontWeight={isSelected ? "700" : "400"} textAnchor="end" transform={`rotate(-45, ${p.x}, ${svgHeight - paddingBottom + 16})`}>{p.label}</text>;
+                  {points5.map((p, i) => {
+                    if (i % step !== 0 && i !== points5.length - 1) return null;
+                    const isSelected = isPointSelected(p, i, 'emis');
+                    return <text key={`lab5-${i}`} x={p.x} y={svgHeight - paddingBottom + 16} fill={isSelected ? trendColor5 : "#6b7280"} fontSize="11px" fontWeight={isSelected ? "700" : "400"} textAnchor="end" transform={`rotate(-45, ${p.x}, ${svgHeight - paddingBottom + 16})`}>{p.label}</text>;
                   })}
-                  {hoveredIndex2 !== null && (
+                  {hoveredIndex5 !== null && points5[hoveredIndex5] && (
                     <g>
-                      <line x1={points2[hoveredIndex2].x} y1={paddingTop} x2={points2[hoveredIndex2].x} y2={svgHeight - paddingBottom} stroke="#9ca3af" strokeWidth="1" strokeDasharray="4 4" />
-                      <circle cx={points2[hoveredIndex2].x} cy={points2[hoveredIndex2].y} r="5" fill="#fff" stroke="#ef4444" strokeWidth="2" />
-                      <rect x={points2[hoveredIndex2].x - 35} y={points2[hoveredIndex2].y - 35} width="70" height="26" rx="4" fill="#111827" opacity="0.9" />
-                      <text x={points2[hoveredIndex2].x} y={points2[hoveredIndex2].y - 18} fill="#fff" fontSize="12px" fontWeight="600" textAnchor="middle">{points2[hoveredIndex2].pctAtraso.toFixed(1)}%</text>
+                      <line x1={points5[hoveredIndex5].x} y1={paddingTop} x2={points5[hoveredIndex5].x} y2={svgHeight - paddingBottom} stroke="#9ca3af" strokeWidth="1" strokeDasharray="4 4" />
+                      <circle cx={points5[hoveredIndex5].x} cy={points5[hoveredIndex5].y} r="5" fill="#fff" stroke={trendColor5} strokeWidth="2" />
+                      <rect x={Math.max(paddingX, Math.min(svgWidth - paddingRight - 150, points5[hoveredIndex5].x - 75))} y={Math.max(8, points5[hoveredIndex5].y - 48)} width="150" height="36" rx="6" fill="#111827" opacity="0.94" />
+                      <text x={Math.max(paddingX + 75, Math.min(svgWidth - paddingRight - 75, points5[hoveredIndex5].x))} y={Math.max(25, points5[hoveredIndex5].y - 27)} fill="#fff" fontSize="12px" fontWeight="700" textAnchor="middle">
+                        {points5[hoveredIndex5].prazoMedio.toFixed(1).replace('.', ',')} dias
+                      </text>
+                      <text x={Math.max(paddingX + 75, Math.min(svgWidth - paddingRight - 75, points5[hoveredIndex5].x))} y={Math.max(39, points5[hoveredIndex5].y - 13)} fill="#d1d5db" fontSize="10px" fontWeight="500" textAnchor="middle">
+                        {points5[hoveredIndex5].label} - {points5[hoveredIndex5].titulos} títulos
+                      </text>
                     </g>
                   )}
-                  {points2.map((p, i) => (
-                    <rect key={`interact2-${i}`} x={p.x - segmentWidth / 2} y={paddingTop} width={segmentWidth} height={chartHeight} fill="transparent"
-                      onMouseDown={(e) => { e.preventDefault(); setDragState({ isDragging: true, startIndex: i, currentIndex: i, type: 'vcto' }); }}
-                      onMouseEnter={() => { setHoveredIndex2(i); if (dragState.isDragging && dragState.type === 'vcto') setDragState(prev => ({...prev, currentIndex: i})); }}
-                      onMouseLeave={() => setHoveredIndex2(null)}
+                  {points5.map((p, i) => (
+                    <rect key={`interact5-${i}`} x={p.x - segmentWidth / 2} y={paddingTop} width={segmentWidth} height={chartHeight} fill="transparent"
+                      onMouseDown={(e) => { e.preventDefault(); setDragState({ isDragging: true, startIndex: i, currentIndex: i, type: 'emis' }); }}
+                      onMouseEnter={() => { setHoveredIndex5(i); if (dragState.isDragging && dragState.type === 'emis') setDragState(prev => ({...prev, currentIndex: i})); }}
+                      onMouseLeave={() => setHoveredIndex5(null)}
                       style={{ cursor: "crosshair" }}
                     />
                   ))}
                 </svg>
               </div>
             </div>
+
+
           </div>
 
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "24px" }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "24px", marginBottom: "24px" }}>
             <div style={chartBoxStyle}>
               <h3 style={{ margin: "0 0 16px 0", color: "#111827", fontSize: "16px", fontWeight: "600" }}>
                 Evolução da Taxa Média <span style={{fontSize: "12px", color:"#9ca3af", fontWeight: "400"}}>(Emissão)</span>
@@ -986,6 +1048,57 @@ return (
 
             <div style={chartBoxStyle}>
               <h3 style={{ margin: "0 0 16px 0", color: "#111827", fontSize: "16px", fontWeight: "600" }}>
+                Percentual de Atraso <span style={{fontSize: "12px", color:"#9ca3af", fontWeight: "400"}}>(Vencimento)</span>
+              </h3>
+              <div style={{ position: "relative", width: "100%", height: "auto" }}>
+                <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} style={{ width: "100%", height: "auto", overflow: "visible" }}>
+                  <defs><linearGradient id="gradientArea2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#ef4444" stopOpacity="0.3" /><stop offset="100%" stopColor="#ef4444" stopOpacity="0.0" /></linearGradient></defs>
+                  {renderHighlight(points2, 'vcto', '239, 68, 68')}
+                  <line x1={paddingX} y1={paddingTop} x2={svgWidth - paddingRight} y2={paddingTop} stroke="#f3f4f6" strokeWidth="1" />
+                  <line x1={paddingX} y1={paddingTop + chartHeight / 2} x2={svgWidth - paddingRight} y2={paddingTop + chartHeight / 2} stroke="#f3f4f6" strokeWidth="1" />
+                  <line x1={paddingX} y1={svgHeight - paddingBottom} x2={svgWidth - paddingRight} y2={svgHeight - paddingBottom} stroke="#e5e7eb" strokeWidth="1" />
+                  <text x={paddingX - 8} y={paddingTop + 4} fill="#9ca3af" fontSize="11px" fontWeight="500" textAnchor="end">{formatAxisPct(maxVal2)}</text>
+                  <text x={paddingX - 8} y={paddingTop + chartHeight / 2 + 4} fill="#9ca3af" fontSize="11px" fontWeight="500" textAnchor="end">{formatAxisPct(maxVal2 / 2)}</text>
+                  <text x={paddingX - 8} y={svgHeight - paddingBottom + 4} fill="#9ca3af" fontSize="11px" fontWeight="500" textAnchor="end">0%</text>
+                  {points2.length > 1 && <path d={areaD2} fill="url(#gradientArea2)" />}
+                  <path d={pathD2} fill="none" stroke="#ef4444" strokeWidth="3" strokeLinejoin="round" />
+                  
+                  {points2.map((p, i) => {
+                    const isSelected = isPointSelected(p, i, 'vcto');
+                    return isSelected ? <circle key={`sel2-${i}`} cx={p.x} cy={p.y} r="5" fill="#ef4444" stroke="#fff" strokeWidth="2" /> : null;
+                  })}
+                  {points2.map((p, i) => {
+                    if (i % step !== 0 && i !== points2.length - 1) return null;
+                    const isSelected = isPointSelected(p, i, 'vcto');
+                    return <text key={`lab2-${i}`} x={p.x} y={svgHeight - paddingBottom + 16} fill={isSelected ? "#ef4444" : "#6b7280"} fontSize="11px" fontWeight={isSelected ? "700" : "400"} textAnchor="end" transform={`rotate(-45, ${p.x}, ${svgHeight - paddingBottom + 16})`}>{p.label}</text>;
+                  })}
+                  {hoveredIndex2 !== null && (
+                    <g>
+                      <line x1={points2[hoveredIndex2].x} y1={paddingTop} x2={points2[hoveredIndex2].x} y2={svgHeight - paddingBottom} stroke="#9ca3af" strokeWidth="1" strokeDasharray="4 4" />
+                      <circle cx={points2[hoveredIndex2].x} cy={points2[hoveredIndex2].y} r="5" fill="#fff" stroke="#ef4444" strokeWidth="2" />
+                      <rect x={points2[hoveredIndex2].x - 35} y={points2[hoveredIndex2].y - 35} width="70" height="26" rx="4" fill="#111827" opacity="0.9" />
+                      <text x={points2[hoveredIndex2].x} y={points2[hoveredIndex2].y - 18} fill="#fff" fontSize="12px" fontWeight="600" textAnchor="middle">{points2[hoveredIndex2].pctAtraso.toFixed(1)}%</text>
+                    </g>
+                  )}
+                  {points2.map((p, i) => (
+                    <rect key={`interact2-${i}`} x={p.x - segmentWidth / 2} y={paddingTop} width={segmentWidth} height={chartHeight} fill="transparent"
+                      onMouseDown={(e) => { e.preventDefault(); setDragState({ isDragging: true, startIndex: i, currentIndex: i, type: 'vcto' }); }}
+                      onMouseEnter={() => { setHoveredIndex2(i); if (dragState.isDragging && dragState.type === 'vcto') setDragState(prev => ({...prev, currentIndex: i})); }}
+                      onMouseLeave={() => setHoveredIndex2(null)}
+                      style={{ cursor: "crosshair" }}
+                    />
+                  ))}
+                </svg>
+              </div>
+            </div>
+
+
+
+          </div>
+
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "24px" }}>
+            <div style={chartBoxStyle}>
+              <h3 style={{ margin: "0 0 16px 0", color: "#111827", fontSize: "16px", fontWeight: "600" }}>
                 Evolução do Deságio <span style={{fontSize: "12px", color:"#9ca3af", fontWeight: "400"}}>(Emissão)</span>
               </h3>
               <div style={{ position: "relative", width: "100%", height: "auto" }}>
@@ -1029,7 +1142,6 @@ return (
                 </svg>
               </div>
             </div>
-
           </div>
         </div>
       </CollapsePanel>
@@ -1698,6 +1810,7 @@ const sectionSubtitleStyle = {
 
 const COLUNAS_OCULTAS_SET = new Set(["id", "created_at", "Cód.Red", "UF", "Banco", "Rec.", "Estado", "_status", "_sourceTable", "_rowKey", "_clienteEntityKey", "_sacadoEntityKey", "clienteEntityKey", "sacadoEntityKey", "ClienteEntityKey", "SacadoEntityKey", "Juros e Multa", "Qtd Linhas Agrupadas", "Detalhes Agrupamento", "inadimplencia", "Inadimplencia", "Inadimplência"]);
 
+
 function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, borderoFilter, setBorderoFilter, dctoFilter, setDctoFilter, setDateFilter, setInsightFilter, setClienteSelecionado, setSacadoSelecionado, hideValues, dataSourceTable = "secInfo", onBorderoDrill, onDctoDrill }) {
   const fmtM = (v) => hideValues ? "R$ -" : formatarMoeda(v);
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -2100,10 +2213,12 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
             boxShadow: "inset 0px 4px 6px -4px rgba(0,0,0,0.05)",
             borderRadius: "0 0 12px 12px", 
             display: "flex", 
-            justifyContent: "flex-end", 
+            justifyContent: "space-between", 
             alignItems: "center",
-            gap: "32px", 
-            flexWrap: "wrap" 
+            gap: "24px", 
+            flexWrap: "nowrap",
+            overflowX: "auto",
+            whiteSpace: "nowrap"
           }}>
             <div>
               <span style={{ color: "#4b5563", fontWeight: "500", marginRight: "8px", fontSize: "14px" }}>Deságio Total:</span>
