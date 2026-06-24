@@ -1199,6 +1199,7 @@ export default function UploadData() {
   const [smartLoading, setSmartLoading] = useState(false);
   const [smartStatus, setSmartStatus] = useState("");
   const [smartProgress, setSmartProgress] = useState("");
+  const [smartDeletedRows, setSmartDeletedRows] = useState([]);
 
   const [snapshotLoading, setSnapshotLoading] = useState(false);
   const [snapshotStatus, setSnapshotStatus] = useState("");
@@ -1257,6 +1258,7 @@ export default function UploadData() {
     setSmartLoading(true);
     setSmartStatus("");
     setSmartProgress(`Processando ${smartFiles.length} arquivo(s)...`);
+    setSmartDeletedRows([]);
 
     try {
       const rowsByFile = await Promise.all(smartFiles.map(readSmartRows));
@@ -1292,37 +1294,26 @@ export default function UploadData() {
 
       let insertedCount = 0;
       let updatedCount = 0;
+      let deletedCount = 0;
 
       if (smartRows.length > 0) {
-      const borderos = Array.from(
-        new Set(
-          smartRows
-            .map((row) => row["Borderô"])
-            .filter((value) => value !== null && value !== undefined && value !== "")
-        )
-      );
-      setSmartProgress(`Checando ${smartRows.length} registros em ${SMART_TABLE}...`);
-
-      const chunkArray = (arr, size = SMART_BATCH_SIZE) => {
-        const chunks = [];
-        for (let i = 0; i < arr.length; i += size) {
-          chunks.push(arr.slice(i, i + size));
-        }
-        return chunks;
-      };
+      setSmartProgress(`Checando registros atuais em ${SMART_TABLE}...`);
 
       const existingRows = [];
-      for (const borderoChunk of chunkArray(borderos, SMART_BATCH_SIZE)) {
+      for (let from = 0; ; from += SMART_BATCH_SIZE) {
+        const to = from + SMART_BATCH_SIZE - 1;
         const { data, error: existingError } = await supabase
           .from(SMART_TABLE)
-          .select('id,Dcto,"Borderô",Vcto')
-          .in('"Borderô"', borderoChunk);
+          .select('id,Cliente,Sacado,Dcto,"Borderô",Vcto,Entrada')
+          .order("id", { ascending: true })
+          .range(from, to);
 
         if (existingError) {
           throw new Error(`Erro ao checar registros Smart: ${existingError.message}`);
         }
 
         existingRows.push(...(data || []));
+        if (!data || data.length < SMART_BATCH_SIZE) break;
       }
 
       const existingMap = {};
@@ -1332,6 +1323,17 @@ export default function UploadData() {
 
       const rowsToInsert = [];
       const rowsToUpdate = [];
+      const smartKeysInFile = new Set(smartRows.map((row) => smartKey(row)));
+      const rowsToDelete = existingRows.filter((row) => row.id && !smartKeysInFile.has(smartKey(row)));
+      const deletedRowsSummary = rowsToDelete.map((row) => ({
+        id: row.id,
+        Cliente: row.Cliente || "",
+        Sacado: row.Sacado || "",
+        Dcto: row.Dcto || "",
+        Bordero: row["Borderô"] || "",
+        Vcto: row.Vcto || "",
+        Entrada: row.Entrada || 0,
+      }));
 
       smartRows.forEach((row) => {
         const existingRow = existingMap[smartKey(row)];
@@ -1341,6 +1343,28 @@ export default function UploadData() {
           rowsToInsert.push(row);
         }
       });
+
+      for (let i = 0; i < rowsToDelete.length; i += SMART_BATCH_SIZE) {
+        const batch = rowsToDelete.slice(i, i + SMART_BATCH_SIZE);
+        const ids = batch.map((row) => row.id);
+        const { data: deletedRows, error } = await supabase
+          .from(SMART_TABLE)
+          .delete()
+          .in("id", ids)
+          .select("id");
+
+        if (error) {
+          throw new Error(`Erro ao excluir Smart removido do arquivo: ${error.message}`);
+        }
+
+        if ((deletedRows || []).length !== ids.length) {
+          throw new Error(`Exclusão Smart não confirmou todos os registros (${(deletedRows || []).length}/${ids.length}). Verifique a permissão de delete no Supabase.`);
+        }
+
+        deletedCount += deletedRows.length;
+        setSmartProgress(`Excluindo removidos do Smart... ${deletedCount} / ${rowsToDelete.length}`);
+      }
+      setSmartDeletedRows(deletedRowsSummary);
 
       let rowsToInsertWithCodRed = [];
 
@@ -1398,7 +1422,7 @@ export default function UploadData() {
 
       const secInfoInadimplencia = await updateSecInfoInadimplenciaFromSmartRows(secInfoInadimplenciaRows, setSmartProgress);
 
-      setSmartStatus("✅ Dados Atualizados com Sucesso");
+      setSmartStatus(`✅ Dados Atualizados com Sucesso: ${insertedCount} novo(s), ${updatedCount} atualizado(s), ${deletedCount} removido(s).`);
       setSmartProgress("");
       setSmartFiles([]);
       document.getElementById("smart-upload-input").value = "";
@@ -2444,6 +2468,40 @@ auditoria.finalRows = finalRows.map((item) => ({ ...item }));
         {smartStatus && (
           <div style={{ marginTop: "16px", padding: "12px", borderRadius: "8px", background: smartStatus.includes("❌") ? "#fef2f2" : "#ecfdf5", color: smartStatus.includes("❌") ? "#991b1b" : "#065f46", fontWeight: "500", fontSize: "14px", textAlign: "center" }}>
             {smartStatus}
+          </div>
+        )}
+
+        {smartDeletedRows.length > 0 && (
+          <div style={{ marginTop: "12px", border: "1px solid #fecaca", borderRadius: "8px", overflow: "hidden", background: "#fff" }}>
+            <div style={{ padding: "10px 12px", background: "#fef2f2", color: "#991b1b", fontSize: "13px", fontWeight: 700 }}>
+              Registros removidos do secInfoSmart
+            </div>
+            <div style={{ maxHeight: "260px", overflow: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", whiteSpace: "nowrap" }}>
+                <thead>
+                  <tr>
+                    {["id", "Cliente", "Sacado", "Dcto", "Bordero", "Vcto", "Entrada"].map((col) => (
+                      <th key={col} style={{ position: "sticky", top: 0, background: "#fff7ed", color: "#7f1d1d", textAlign: "left", padding: "8px 10px", borderBottom: "1px solid #fecaca", fontWeight: 700 }}>
+                        {col}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {smartDeletedRows.map((row) => (
+                    <tr key={row.id}>
+                      <td style={{ padding: "8px 10px", borderBottom: "1px solid #fee2e2" }}>{row.id}</td>
+                      <td style={{ padding: "8px 10px", borderBottom: "1px solid #fee2e2" }}>{row.Cliente}</td>
+                      <td style={{ padding: "8px 10px", borderBottom: "1px solid #fee2e2" }}>{row.Sacado}</td>
+                      <td style={{ padding: "8px 10px", borderBottom: "1px solid #fee2e2" }}>{row.Dcto}</td>
+                      <td style={{ padding: "8px 10px", borderBottom: "1px solid #fee2e2" }}>{row.Bordero}</td>
+                      <td style={{ padding: "8px 10px", borderBottom: "1px solid #fee2e2" }}>{row.Vcto}</td>
+                      <td style={{ padding: "8px 10px", borderBottom: "1px solid #fee2e2", textAlign: "right" }}>{formatarMoeda(row.Entrada)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </div>
