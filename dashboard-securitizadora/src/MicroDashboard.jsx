@@ -589,7 +589,16 @@ function registroValidoParaAnalise(row) {
 }
 
 // --- COMPONENTE DE EVOLUÇÃO ---
-function EvolutionCharts({ rows, dateFilter, setDateFilter, setBorderoFilter, setDctoFilter, hideValues, dataSourceTable = "secInfo" }) {
+const PAYMENT_DUE_BUCKETS = [
+  { key: "0_7", label: "7 dias", minDays: 0, maxDays: 7 },
+  { key: "8_15", label: "7-15 dias", minDays: 8, maxDays: 15 },
+  { key: "16_30", label: "15-30 dias", minDays: 16, maxDays: 30 },
+  { key: "31_60", label: "1-2 meses", minDays: 31, maxDays: 60 },
+  { key: "61_90", label: "2-3 meses", minDays: 61, maxDays: 90 },
+  { key: "91_plus", label: "3+ meses", minDays: 91, maxDays: null },
+];
+
+function EvolutionCharts({ rows, dateFilter, setDateFilter, setBorderoFilter, setDctoFilter, setInsightFilter, insightFilter, setViewMode, hideValues, dataSourceTable = "secInfo" }) {
   const fmtM = (v) => hideValues ? "R$ -" : formatarMoeda(v);
   const [isCollapsed, setIsCollapsed] = useState(false);
 
@@ -598,16 +607,33 @@ function EvolutionCharts({ rows, dateFilter, setDateFilter, setBorderoFilter, se
   const [hoveredIndex3, setHoveredIndex3] = useState(null);
   const [hoveredIndex4, setHoveredIndex4] = useState(null);
   const [hoveredIndex5, setHoveredIndex5] = useState(null);
+  const [hoveredIndex6, setHoveredIndex6] = useState(null);
 
   const [dragState, setDragState] = useState({ isDragging: false, startIndex: null, currentIndex: null, type: null });
 
-  const { chartData, chartDataRate, chartDataDesagio, chartDataPrazoMedio } = useMemo(() => {
+  const { chartData, chartDataRate, chartDataDesagio, chartDataPrazoMedio, chartDataVencimentos } = useMemo(() => {
     const grouped = {};
     const groupedRate = {};
     const groupedDesagio = {};
     const groupedPrazo = {};
+    const today = getTodayLocalDate();
+    const dueBuckets = PAYMENT_DUE_BUCKETS.map(bucket => {
+      const startDate = new Date(today);
+      startDate.setDate(today.getDate() + bucket.minDays);
+      const endDate = new Date(today);
+      if (bucket.maxDays !== null) endDate.setDate(today.getDate() + bucket.maxDays);
+      else endDate.setFullYear(today.getFullYear() + 20);
 
-    if (rows.length === 0) return { chartData: [], chartDataRate: [], chartDataDesagio: [], chartDataPrazoMedio: [] };
+      return {
+        ...bucket,
+        start: formatToLocalISO(startDate),
+        end: formatToLocalISO(endDate),
+        value: 0,
+        count: 0,
+      };
+    });
+
+    if (rows.length === 0) return { chartData: [], chartDataRate: [], chartDataDesagio: [], chartDataPrazoMedio: [], chartDataVencimentos: dueBuckets };
 
     const emisKey = findKeyAcrossRows(rows, k => k.toLowerCase().includes('emis'));
     const vctoKey = findKeyAcrossRows(rows, k => k.toLowerCase() === 'vcto' || (k.toLowerCase().includes('vcto') && !k.toLowerCase().includes('vl')));
@@ -677,6 +703,18 @@ function EvolutionCharts({ rows, dateFilter, setDateFilter, setBorderoFilter, se
             }
           }
         }
+
+        const vencimento = parseIsoDateLocal(r[vctoKey]);
+        if (vencimento && r._status === "aVencer" && val > 0) {
+          const daysUntilDue = diffCalendarDays(today, vencimento);
+          const bucket = dueBuckets.find(item =>
+            daysUntilDue >= item.minDays && (item.maxDays === null || daysUntilDue <= item.maxDays)
+          );
+          if (bucket) {
+            bucket.value += val;
+            bucket.count += 1;
+          }
+        }
       }
     });
 
@@ -721,7 +759,7 @@ function EvolutionCharts({ rows, dateFilter, setDateFilter, setBorderoFilter, se
       };
     });
 
-    return { chartData: cData, chartDataRate: cDataRate, chartDataDesagio: cDataDesagio, chartDataPrazoMedio: cDataPrazoMedio };
+    return { chartData: cData, chartDataRate: cDataRate, chartDataDesagio: cDataDesagio, chartDataPrazoMedio: cDataPrazoMedio, chartDataVencimentos: dueBuckets };
   }, [rows, dataSourceTable]);
 
   useEffect(() => {
@@ -834,6 +872,22 @@ function EvolutionCharts({ rows, dateFilter, setDateFilter, setBorderoFilter, se
   const deltaPrazo5 = hasTrendComparison5 ? lastTrendValue5 - firstTrendValue5 : 0;
   const trendColor5 = !hasTrendComparison5 ? "#4b5563" : deltaPrazo5 > 0 ? "#dc2626" : "#059669";
 
+  const maxVal6 = Math.max(...chartDataVencimentos.map(d => d.value), 10);
+  const barGap6 = 12;
+  const barWidth6 = Math.max(28, (chartWidth - barGap6 * (chartDataVencimentos.length - 1)) / chartDataVencimentos.length);
+  const bars6 = chartDataVencimentos.map((d, i) => {
+    const height = (d.value / maxVal6) * chartHeight;
+    const x = paddingX + i * (barWidth6 + barGap6);
+    const y = svgHeight - paddingBottom - height;
+    return { ...d, x, y, height, width: barWidth6 };
+  });
+  const activeDueBucketKey = bars6.find(bucket =>
+    insightFilter === "aVencer" &&
+    dateFilter.type === "vcto" &&
+    dateFilter.start === bucket.start &&
+    dateFilter.end === bucket.end
+  )?.key || null;
+
   const isPointSelected = (p, i, type) => {
     if (dragState.isDragging && dragState.type === type) {
       const minIdx = Math.min(dragState.startIndex, dragState.currentIndex);
@@ -874,6 +928,21 @@ function EvolutionCharts({ rows, dateFilter, setDateFilter, setBorderoFilter, se
     }
     return null;
   }
+
+  const handleDueBucketClick = (bucket) => {
+    const isActive = activeDueBucketKey === bucket.key;
+    if (isActive) {
+      setDateFilter({ type: "vcto", start: "", end: "" });
+      if (setInsightFilter) setInsightFilter(null);
+      if (setViewMode) setViewMode("all");
+    } else {
+      setDateFilter({ type: "vcto", start: bucket.start, end: bucket.end });
+      if (setInsightFilter) setInsightFilter("aVencer");
+      if (setViewMode) setViewMode("open");
+    }
+    setBorderoFilter(null);
+    setDctoFilter(null);
+  };
 
 const chartBoxStyle = { flex: "0 1 calc(50% - 12px)", minWidth: "320px", maxWidth: "100%", background: "#fff", padding: "20px", borderRadius: "10px", border: "1px solid #e5e7eb", boxShadow: "0 4px 12px rgba(0,0,0,0.05)", boxSizing: "border-box" };
 return (
@@ -944,9 +1013,6 @@ return (
                   <h3 style={{ margin: 0, color: "#111827", fontSize: "16px", fontWeight: "600" }}>
                     Evolução do Prazo Médio <span style={{fontSize: "12px", color:"#9ca3af", fontWeight: "400"}}>(Emissão)</span>
                   </h3>
-                  <p style={{ margin: "4px 0 0", color: "#6b7280", fontSize: "12px", fontWeight: "500" }}>
-                    Média ponderada dos títulos emitidos em cada mês.
-                  </p>
                 </div>
               </div>
               <div style={{ position: "relative", width: "100%", height: "auto" }}>
@@ -1139,6 +1205,90 @@ return (
                       style={{ cursor: "crosshair" }}
                     />
                   ))}
+                </svg>
+              </div>
+            </div>
+
+            <div style={chartBoxStyle}>
+              <h3 style={{ margin: "0 0 16px 0", color: "#111827", fontSize: "16px", fontWeight: "600" }}>
+                Pagamentos a Cair <span style={{fontSize: "12px", color:"#9ca3af", fontWeight: "400"}}>(Vencimento)</span>
+              </h3>
+              <div style={{ position: "relative", width: "100%", height: "auto" }}>
+                <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} style={{ width: "100%", height: "auto", overflow: "visible" }}>
+                  <defs><linearGradient id="gradientArea6" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#0ea5e9" stopOpacity="0.85" /><stop offset="100%" stopColor="#38bdf8" stopOpacity="0.55" /></linearGradient></defs>
+                  <line x1={paddingX} y1={paddingTop} x2={svgWidth - paddingRight} y2={paddingTop} stroke="#f3f4f6" strokeWidth="1" />
+                  <line x1={paddingX} y1={paddingTop + chartHeight / 2} x2={svgWidth - paddingRight} y2={paddingTop + chartHeight / 2} stroke="#f3f4f6" strokeWidth="1" />
+                  <line x1={paddingX} y1={svgHeight - paddingBottom} x2={svgWidth - paddingRight} y2={svgHeight - paddingBottom} stroke="#e5e7eb" strokeWidth="1" />
+                  <text x={paddingX - 8} y={paddingTop + 4} fill="#9ca3af" fontSize="11px" fontWeight="500" textAnchor="end">{formatAxisVal(maxVal6)}</text>
+                  <text x={paddingX - 8} y={paddingTop + chartHeight / 2 + 4} fill="#9ca3af" fontSize="11px" fontWeight="500" textAnchor="end">{formatAxisVal(maxVal6 / 2)}</text>
+                  <text x={paddingX - 8} y={svgHeight - paddingBottom + 4} fill="#9ca3af" fontSize="11px" fontWeight="500" textAnchor="end">0</text>
+
+                  {bars6.map((bar, i) => {
+                    const isActive = activeDueBucketKey === bar.key;
+                    const isDimmed = activeDueBucketKey && !isActive;
+                    return (
+                      <g
+                        key={bar.key}
+                        onClick={() => handleDueBucketClick(bar)}
+                        onMouseEnter={() => setHoveredIndex6(i)}
+                        onMouseLeave={() => setHoveredIndex6(null)}
+                        style={{ cursor: "pointer" }}
+                      >
+                        {isActive && (
+                          <rect x={bar.x - 5} y={paddingTop} width={bar.width + 10} height={chartHeight} rx="6" fill="rgba(14, 165, 233, 0.08)" />
+                        )}
+                        <rect
+                          x={bar.x - 5}
+                          y={paddingTop}
+                          width={bar.width + 10}
+                          height={chartHeight}
+                          fill="transparent"
+                        />
+                        <rect
+                          x={bar.x}
+                          y={bar.y}
+                          width={bar.width}
+                          height={Math.max(2, bar.height)}
+                          rx="5"
+                          fill={isActive ? "#0369a1" : "url(#gradientArea6)"}
+                          opacity={isDimmed ? 0.32 : 1}
+                          style={{ transition: "opacity 0.2s" }}
+                        />
+                        <text x={bar.x + bar.width / 2} y={svgHeight - paddingBottom + 16} fill={isActive ? "#0369a1" : "#6b7280"} fontSize="11px" fontWeight={isActive ? "700" : "500"} textAnchor="end" transform={`rotate(-35, ${bar.x + bar.width / 2}, ${svgHeight - paddingBottom + 16})`}>
+                          {bar.label}
+                        </text>
+                      </g>
+                    );
+                  })}
+
+                  {hoveredIndex6 !== null && bars6[hoveredIndex6] && (
+                    <g pointerEvents="none">
+                      <line
+                        x1={bars6[hoveredIndex6].x + bars6[hoveredIndex6].width / 2}
+                        y1={paddingTop}
+                        x2={bars6[hoveredIndex6].x + bars6[hoveredIndex6].width / 2}
+                        y2={svgHeight - paddingBottom}
+                        stroke="#9ca3af"
+                        strokeWidth="1"
+                        strokeDasharray="4 4"
+                      />
+                      <circle
+                        cx={bars6[hoveredIndex6].x + bars6[hoveredIndex6].width / 2}
+                        cy={Math.min(svgHeight - paddingBottom - 2, bars6[hoveredIndex6].y)}
+                        r="5"
+                        fill="#fff"
+                        stroke="#0ea5e9"
+                        strokeWidth="2"
+                      />
+                      <rect x={Math.max(paddingX, Math.min(svgWidth - paddingRight - 150, bars6[hoveredIndex6].x + bars6[hoveredIndex6].width / 2 - 75))} y={Math.max(8, bars6[hoveredIndex6].y - 50)} width="150" height="38" rx="6" fill="#111827" opacity="0.94" />
+                      <text x={Math.max(paddingX + 75, Math.min(svgWidth - paddingRight - 75, bars6[hoveredIndex6].x + bars6[hoveredIndex6].width / 2))} y={Math.max(25, bars6[hoveredIndex6].y - 29)} fill="#fff" fontSize="11px" fontWeight="700" textAnchor="middle">
+                        {fmtM(bars6[hoveredIndex6].value)}
+                      </text>
+                      <text x={Math.max(paddingX + 75, Math.min(svgWidth - paddingRight - 75, bars6[hoveredIndex6].x + bars6[hoveredIndex6].width / 2))} y={Math.max(40, bars6[hoveredIndex6].y - 14)} fill="#d1d5db" fontSize="10px" fontWeight="500" textAnchor="middle">
+                        {bars6[hoveredIndex6].count} titulos - {bars6[hoveredIndex6].label}
+                      </text>
+                    </g>
+                  )}
                 </svg>
               </div>
             </div>
@@ -3875,7 +4025,7 @@ return (
   />
 )}
               
-              <EvolutionCharts rows={evolutionRows} dateFilter={dateFilter} setDateFilter={handleSetDateFilter} setBorderoFilter={setBorderoFilter} setDctoFilter={setDctoFilter} hideValues={hideValues} dataSourceTable={dataSourceTable} />
+              <EvolutionCharts rows={evolutionRows} dateFilter={dateFilter} setDateFilter={handleSetDateFilter} setBorderoFilter={setBorderoFilter} setDctoFilter={setDctoFilter} setInsightFilter={setInsightFilter} insightFilter={insightFilter} setViewMode={setViewMode} hideValues={hideValues} dataSourceTable={dataSourceTable} />
             </div>
           )}
 
