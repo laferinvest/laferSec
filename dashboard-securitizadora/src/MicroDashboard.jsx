@@ -871,6 +871,7 @@ function EvolutionCharts({ rows, dateFilter, setDateFilter, setBorderoFilter, se
   const lastTrendValue5 = chartDataPrazoMedio[chartDataPrazoMedio.length - 1]?.prazoMedio || 0;
   const deltaPrazo5 = hasTrendComparison5 ? lastTrendValue5 - firstTrendValue5 : 0;
   const trendColor5 = !hasTrendComparison5 ? "#4b5563" : deltaPrazo5 > 0 ? "#dc2626" : "#059669";
+  const trendRgb5 = trendColor5 === "#dc2626" ? "220, 38, 38" : trendColor5 === "#059669" ? "5, 150, 105" : "75, 85, 99";
 
   const maxVal6 = Math.max(...chartDataVencimentos.map(d => d.value), 10);
   const barGap6 = 12;
@@ -1018,7 +1019,7 @@ return (
               <div style={{ position: "relative", width: "100%", height: "auto" }}>
                 <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} style={{ width: "100%", height: "auto", overflow: "visible" }}>
                   <defs><linearGradient id="gradientArea5" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={trendColor5} stopOpacity="0.25" /><stop offset="100%" stopColor={trendColor5} stopOpacity="0.0" /></linearGradient></defs>
-                  {renderHighlight(points5, 'emis', '5, 150, 105')}
+                  {renderHighlight(points5, 'emis', trendRgb5)}
                   <line x1={paddingX} y1={paddingTop} x2={svgWidth - paddingRight} y2={paddingTop} stroke="#f3f4f6" strokeWidth="1" />
                   <line x1={paddingX} y1={paddingTop + chartHeight / 2} x2={svgWidth - paddingRight} y2={paddingTop + chartHeight / 2} stroke="#f3f4f6" strokeWidth="1" />
                   <line x1={paddingX} y1={svgHeight - paddingBottom} x2={svgWidth - paddingRight} y2={svgHeight - paddingBottom} stroke="#e5e7eb" strokeWidth="1" />
