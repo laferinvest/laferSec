@@ -424,7 +424,38 @@ function MorningTable({ rows, hideValues, onNavigateToMicro }) {
   );
 }
 
-function MorningSection({ title, subtitle, rows, hideValues, accent = "#4f46e5", children, onNavigateToMicro, order = 0 }) {
+function CedenteGroupedMorningTables({ groups, hideValues, onNavigateToMicro, color = "#4f46e5" }) {
+  if (!groups.length) {
+    return <MorningTable rows={[]} hideValues={hideValues} onNavigateToMicro={onNavigateToMicro} />;
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+      {groups.map((group) => (
+        <section key={group.key} style={{ border: "1px solid #e5e7eb", borderRadius: "8px", overflow: "hidden", background: "#fff" }}>
+          <div style={{ padding: "14px 16px", background: "#f9fafb", borderBottom: "1px solid #e5e7eb", display: "flex", justifyContent: "space-between", gap: "14px", alignItems: "center", flexWrap: "wrap" }}>
+            <div>
+              <h3 style={{ margin: 0, color: "#111827", fontSize: "15px", fontWeight: 800 }}>
+                {group.label}
+              </h3>
+              <p style={{ margin: "5px 0 0", color: "#6b7280", fontSize: "12px", fontWeight: 700 }}>
+                {group.rows.length} título(s)
+              </p>
+            </div>
+            <div style={{ color, fontSize: "18px", lineHeight: 1, fontWeight: 800 }}>
+              {formatMoney(group.total, hideValues)}
+            </div>
+          </div>
+          <div style={{ padding: "14px" }}>
+            <MorningTable rows={group.rows} hideValues={hideValues} onNavigateToMicro={onNavigateToMicro} />
+          </div>
+        </section>
+      ))}
+    </div>
+  );
+}
+
+function MorningSection({ title, subtitle, rows, hideValues, accent = "#4f46e5", children, onNavigateToMicro, order = 0, tableContent }) {
   return (
     <section style={{ order, background: "#fff", border: "1px solid #e5e7eb", borderRadius: "12px", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)", overflow: "hidden" }}>
       <div style={{ padding: "18px 22px", borderTop: `4px solid ${accent}`, borderBottom: "1px solid #e5e7eb", display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "center", flexWrap: "wrap" }}>
@@ -442,7 +473,7 @@ function MorningSection({ title, subtitle, rows, hideValues, accent = "#4f46e5",
       </div>
       <div style={{ padding: "20px 22px", display: "flex", flexDirection: "column", gap: "16px" }}>
         {children}
-        <MorningTable rows={rows} hideValues={hideValues} onNavigateToMicro={onNavigateToMicro} />
+        {tableContent || <MorningTable rows={rows} hideValues={hideValues} onNavigateToMicro={onNavigateToMicro} />}
       </div>
     </section>
   );
@@ -556,13 +587,46 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
       String(getVctoOperacional(b)).localeCompare(String(getVctoOperacional(a))) ||
       sortByCedente(a, b);
 
+    const buildCedenteGroups = (groupRows) => {
+      const orderedRows = [...groupRows].sort(sortByVencimentoMaisRecente);
+      const groups = Array.from(orderedRows.reduce((acc, row) => {
+        const key = row.Cliente || "Sem cedente";
+        const existingGroup = acc.get(key) || {
+          key,
+          label: formatEntityName(key) || "Sem cedente",
+          total: 0,
+          rows: [],
+        };
+
+        existingGroup.total += row.Entrada;
+        existingGroup.rows.push(row);
+        acc.set(key, existingGroup);
+        return acc;
+      }, new Map()).values()).sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
+
+      return { rows: orderedRows, groups };
+    };
+
+    const inadimplenciaOntemAgrupada = buildCedenteGroups(inadimplenciaOntem);
+    const quitadosOntemAgrupados = buildCedenteGroups(quitadosOntem);
+    const quitadosEmAtrasoAgrupados = buildCedenteGroups(quitadosEmAtraso);
+    const operacoesOntemAgrupadas = buildCedenteGroups(operacoesOntem);
+    const vencemHojeAgrupados = buildCedenteGroups(vencemHoje);
+    const inadimplentesMesAgrupados = buildCedenteGroups(inadimplentesMes);
+
     return {
-      inadimplenciaOntem: [...inadimplenciaOntem].sort(sortByCedente),
-      quitadosOntem: [...quitadosOntem].sort(sortByCedente),
-      quitadosEmAtraso: [...quitadosEmAtraso].sort(sortByCedente),
-      operacoesOntem: [...operacoesOntem].sort(sortByCedente),
-      vencemHoje: [...vencemHoje].sort(sortByCedente),
-      inadimplentesMes: [...inadimplentesMes].sort(sortByVencimentoMaisRecente),
+      inadimplenciaOntem: inadimplenciaOntemAgrupada.rows,
+      quitadosOntem: quitadosOntemAgrupados.rows,
+      quitadosEmAtraso: quitadosEmAtrasoAgrupados.rows,
+      operacoesOntem: operacoesOntemAgrupadas.rows,
+      vencemHoje: vencemHojeAgrupados.rows,
+      inadimplentesMes: inadimplentesMesAgrupados.rows,
+      gruposInadimplenciaOntem: inadimplenciaOntemAgrupada.groups,
+      gruposQuitadosOntem: quitadosOntemAgrupados.groups,
+      gruposQuitadosEmAtraso: quitadosEmAtrasoAgrupados.groups,
+      gruposOperacoesOntem: operacoesOntemAgrupadas.groups,
+      gruposVencemHoje: vencemHojeAgrupados.groups,
+      gruposInadimplentesMes: inadimplentesMesAgrupados.groups,
       volumeOperado,
       desagioOperado,
       totalInadimplenciaOntem,
@@ -610,6 +674,14 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
     ? "Títulos em aberto com vencimento operacional hoje."
     : `Títulos em aberto com vencimento operacional em ${formatDate(todayDueDateIso)} por ajuste de fim de semana ou feriado.`;
   const inadimplentesMesSubtitle = `Títulos em aberto com vencimento operacional vencido no mês corrente, desde ${formatDate(monthStartIso)}.`;
+  const renderCedenteGroups = (groups, color) => (
+    <CedenteGroupedMorningTables
+      groups={groups}
+      hideValues={hideValues}
+      onNavigateToMicro={onNavigateToMicro}
+      color={color}
+    />
+  );
 
   return (
     <main style={{ display: "flex", flexDirection: "column", gap: "24px", paddingBottom: "24px" }}>
@@ -644,6 +716,7 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
         accent="#ef4444"
         order={2}
         onNavigateToMicro={onNavigateToMicro}
+        tableContent={renderCedenteGroups(resumo.gruposInadimplenciaOntem, "#ef4444")}
       >
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px" }}>
           <SummaryMetric
@@ -663,6 +736,7 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
         accent="#22c55e"
         order={3}
         onNavigateToMicro={onNavigateToMicro}
+        tableContent={renderCedenteGroups(resumo.gruposQuitadosOntem, "#22c55e")}
       >
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px" }}>
           <SummaryMetric
@@ -682,6 +756,7 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
         accent="#f59e0b"
         order={4}
         onNavigateToMicro={onNavigateToMicro}
+        tableContent={renderCedenteGroups(resumo.gruposQuitadosEmAtraso, "#f59e0b")}
       >
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px" }}>
           <SummaryMetric
@@ -701,6 +776,7 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
         accent="#4f46e5"
         order={1}
         onNavigateToMicro={onNavigateToMicro}
+        tableContent={renderCedenteGroups(resumo.gruposOperacoesOntem, "#4f46e5")}
       >
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px" }}>
           <SummaryMetric
@@ -732,6 +808,7 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
         accent="#0ea5e9"
         order={5}
         onNavigateToMicro={onNavigateToMicro}
+        tableContent={renderCedenteGroups(resumo.gruposVencemHoje, "#0ea5e9")}
       >
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px" }}>
           <SummaryMetric
@@ -751,6 +828,7 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
         accent="#b91c1c"
         order={6}
         onNavigateToMicro={onNavigateToMicro}
+        tableContent={renderCedenteGroups(resumo.gruposInadimplentesMes, "#b91c1c")}
       >
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px" }}>
           <SummaryMetric
