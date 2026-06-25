@@ -540,6 +540,9 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
 
     const volumeOperado = operacoesOntem.reduce((acc, row) => acc + row.Entrada, 0);
     const desagioOperado = operacoesOntem.reduce((acc, row) => acc + row.Desagio, 0);
+    const totalInadimplenciaOntem = inadimplenciaOntem.reduce((acc, row) => acc + row.Entrada, 0);
+    const totalQuitadosOntem = quitadosOntem.reduce((acc, row) => acc + row.Entrada, 0);
+    const totalQuitadosEmAtraso = quitadosEmAtraso.reduce((acc, row) => acc + row.Entrada, 0);
     const totalVencemHoje = vencemHoje.reduce((acc, row) => acc + row.Entrada, 0);
     const totalInadimplentesMes = inadimplentesMes.reduce((acc, row) => acc + row.Entrada, 0);
     const taxaMediaPonderada = volumeOperado > 0
@@ -562,6 +565,9 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
       inadimplentesMes: [...inadimplentesMes].sort(sortByVencimentoMaisRecente),
       volumeOperado,
       desagioOperado,
+      totalInadimplenciaOntem,
+      totalQuitadosOntem,
+      totalQuitadosEmAtraso,
       totalVencemHoje,
       totalInadimplentesMes,
       taxaMediaPonderada,
@@ -638,7 +644,16 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
         accent="#ef4444"
         order={2}
         onNavigateToMicro={onNavigateToMicro}
-      />
+      >
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px" }}>
+          <SummaryMetric
+            label="Total Inadimplente"
+            value={formatMoney(resumo.totalInadimplenciaOntem, hideValues)}
+            sublabel={`${resumo.inadimplenciaOntem.length} título(s) em aberto`}
+            color="#ef4444"
+          />
+        </div>
+      </MorningSection>
 
       <MorningSection
         title="Quitados do Dia"
@@ -648,7 +663,16 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
         accent="#22c55e"
         order={3}
         onNavigateToMicro={onNavigateToMicro}
-      />
+      >
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px" }}>
+          <SummaryMetric
+            label="Total Quitado"
+            value={formatMoney(resumo.totalQuitadosOntem, hideValues)}
+            sublabel={`${resumo.quitadosOntem.length} título(s) quitado(s)`}
+            color="#22c55e"
+          />
+        </div>
+      </MorningSection>
 
       <MorningSection
         title="Quitado em Atraso"
@@ -658,7 +682,16 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
         accent="#f59e0b"
         order={4}
         onNavigateToMicro={onNavigateToMicro}
-      />
+      >
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px" }}>
+          <SummaryMetric
+            label="Total Quitado em Atraso"
+            value={formatMoney(resumo.totalQuitadosEmAtraso, hideValues)}
+            sublabel={`${resumo.quitadosEmAtraso.length} título(s) quitado(s)`}
+            color="#f59e0b"
+          />
+        </div>
+      </MorningSection>
 
       <MorningSection
         title="Operações do Dia"
