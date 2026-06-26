@@ -47,6 +47,11 @@ function formatarNomeEntidade(nome) {
   );
 }
 
+function formatarNomeCedente(nome, hideValues) {
+  if (!nome) return "";
+  return hideValues ? "Cedente oculto" : formatarNomeEntidade(nome);
+}
+
 function normalizarValor(valor) {
   const raw = String(valor || "");
   const cached = genericNormalizeCache.get(raw);
@@ -426,7 +431,8 @@ function MacroDetailedTable({ rows, focus, setFocus, setSelectedSlice, hideValue
                       const valNum = Number(String(valor).replace('%', '').replace(',', '.'));
                       valor = !isNaN(valNum) && valor ? `${valNum.toFixed(2).replace('.', ',')}%` : escapeText(valor);
                     }
-                    if (c === "Cliente" || c === "Sacado") valor = formatarNomeEntidade(valorOriginal);
+                    if (c === "Cliente") valor = formatarNomeCedente(valorOriginal, hideValues);
+                    if (c === "Sacado") valor = formatarNomeEntidade(valorOriginal);
 
                     // Cross-Navigation Otimizado (Sem JavaScript Inline Styles)
                     if (c === "Cliente" && focus === 'sacado') {
@@ -1347,7 +1353,7 @@ const negotiationDesEncTop5Percent = currentNegotiationStats.sorted.length
                         >
                           <div style={{ padding: "16px 20px", display: "flex", alignItems: "center", gap: "12px", minWidth: 0 }}>
                             <span style={{ width: "12px", height: "12px", borderRadius: "999px", background: color, flexShrink: 0 }} />
-                            <span style={{ fontSize: "16px", fontWeight: "700", color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={formatarNomeEntidade(slice.name)}>{formatarNomeEntidade(slice.name)}</span>
+                            <span style={{ fontSize: "16px", fontWeight: "700", color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={focus === 'cedente' ? formatarNomeCedente(slice.name, hideValues) : formatarNomeEntidade(slice.name)}>{focus === 'cedente' ? formatarNomeCedente(slice.name, hideValues) : formatarNomeEntidade(slice.name)}</span>
                           </div>
                           <div style={{ padding: "16px 20px", textAlign: "right", color: "#0f172a" }}>
                             <div style={{ fontSize: "16px", fontWeight: "800" }}>{fmtM(slice.val)}</div>
@@ -1489,7 +1495,7 @@ const negotiationDesEncTop5Percent = currentNegotiationStats.sorted.length
                     >
                       <div style={{ padding: "16px 20px", display: "flex", alignItems: "center", gap: "12px", minWidth: 0 }}>
                         <span style={{ width: "12px", height: "12px", borderRadius: "999px", background: color, flexShrink: 0 }} />
-                        <span style={{ fontSize: "16px", fontWeight: "700", color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={formatarNomeEntidade(slice.name)}>{formatarNomeEntidade(slice.name)}</span>
+                        <span style={{ fontSize: "16px", fontWeight: "700", color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={focus === 'cedente' ? formatarNomeCedente(slice.name, hideValues) : formatarNomeEntidade(slice.name)}>{focus === 'cedente' ? formatarNomeCedente(slice.name, hideValues) : formatarNomeEntidade(slice.name)}</span>
                       </div>
                       <div style={{ padding: "16px 20px", textAlign: "right", fontSize: "16px", fontWeight: "800", color: "#0f172a" }}>{fmtM(slice.val)}</div>
                       <div style={{ padding: "16px 20px", textAlign: "right", fontSize: "16px", fontWeight: "800", color: "#475569" }}>{(slice.percent * 100).toFixed(2).replace('.', ',')}%</div>
@@ -1691,7 +1697,7 @@ const negotiationDesEncTop5Percent = currentNegotiationStats.sorted.length
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
                 <div>
                   <h3 style={{ margin: "0 0 4px 0", color: "#111827", fontSize: "18px" }}>
-                    Títulos em Aberto de: <span style={{ color: "#4f46e5" }}>{formatarNomeEntidade(selectedSlice)}</span>
+                    Títulos em Aberto de: <span style={{ color: "#4f46e5" }}>{focus === 'cedente' ? formatarNomeCedente(selectedSlice, hideValues) : formatarNomeEntidade(selectedSlice)}</span>
                   </h3>
                   <div style={{ fontSize: "13px", color: "#6b7280" }}>
                     <strong>{detailedRows.length}</strong> registo(s) encontrado(s) totalizando <strong>{fmtM(detailedRows.reduce((acc, row) => { const vk = Object.keys(row).find(k => k.toLowerCase() === 'entrada' || k.toLowerCase().includes('valor')); return acc + (vk ? Number(row[vk]) || 0 : 0) }, 0))}</strong>
@@ -1737,7 +1743,7 @@ const negotiationDesEncTop5Percent = currentNegotiationStats.sorted.length
                         title="Clique para ver os títulos detalhados"
                       >
                         <td style={{ padding: "14px 16px", fontWeight: "600", color: "#6b7280" }}>{item.rank}º</td>
-                        <td style={{ padding: "14px 16px", fontWeight: "600", color: "#4f46e5" }}>{formatarNomeEntidade(item.name)}</td>
+                        <td style={{ padding: "14px 16px", fontWeight: "600", color: "#4f46e5" }}>{focus === 'cedente' ? formatarNomeCedente(item.name, hideValues) : formatarNomeEntidade(item.name)}</td>
                         <td style={{ padding: "14px 16px", fontWeight: "600", color: item.hasVar ? (item.varPct > 0 ? "#10b981" : item.varPct < 0 ? "#ef4444" : "#6b7280") : "#9ca3af" }}>
                           {item.hasVar ? `${item.varPct > 0 ? '+' : ''}${item.varPct.toFixed(1).replace('.', ',')}%` : '-'}
                         </td>
@@ -1757,7 +1763,7 @@ const negotiationDesEncTop5Percent = currentNegotiationStats.sorted.length
       {/* Tooltip do Gráfico de Pizza */}
       {tooltip.show && (
         <div style={{ position: 'fixed', top: tooltip.y + 15, left: tooltip.x + 15, background: 'rgba(17, 24, 39, 0.96)', color: '#fff', padding: '12px 16px', borderRadius: '10px', pointerEvents: 'none', zIndex: 9999, boxShadow: '0 10px 15px -3px rgba(0,0,0,0.3)' }}>
-          <div style={{ fontWeight: 700, fontSize: "14px", color: '#f3f4f6', marginBottom: "4px" }}>{formatarNomeEntidade(tooltip.label)}</div>
+          <div style={{ fontWeight: 700, fontSize: "14px", color: '#f3f4f6', marginBottom: "4px" }}>{focus === 'cedente' ? formatarNomeCedente(tooltip.label, hideValues) : formatarNomeEntidade(tooltip.label)}</div>
           <div style={{ fontSize: '18px', fontWeight: 700, color: '#10b981' }}>{fmtM(tooltip.value)}</div>
           <div style={{ marginTop: '2px', fontSize: '13px', color: '#9ca3af' }}>
             {tooltip.context === 'volume_negociado'

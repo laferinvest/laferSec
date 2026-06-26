@@ -84,6 +84,11 @@ function formatarNomeEntidade(nome) {
   );
 }
 
+function formatarNomeCedente(nome, hideValues) {
+  if (!nome) return "";
+  return hideValues ? "Cedente oculto" : formatarNomeEntidade(nome);
+}
+
 function normalizarChave(campo) {
   const raw = String(campo || "");
   const cached = genericNormalizeCache.get(raw);
@@ -1769,7 +1774,7 @@ function SacadoConcentrationCard({
                   Cedente
                 </div>
                 <div style={{ fontSize: "20px", color: "#111827", fontWeight: 800, marginTop: 6, wordBreak: "break-word" }}>
-                  {formatarNomeEntidade(card.cedente)}
+                  {formatarNomeCedente(card.cedente, hideValues)}
                 </div>
               </div>
 
@@ -1921,7 +1926,7 @@ function SacadoConcentrationCard({
           }}
         >
           <div style={{ fontWeight: 800, marginBottom: 4 }}>{formatarNomeEntidade(tooltip.label)}</div>
-          <div style={{ color: "#cbd5e1", marginBottom: 4 }}>{formatarNomeEntidade(tooltip.cedente)}</div>
+          <div style={{ color: "#cbd5e1", marginBottom: 4 }}>{formatarNomeCedente(tooltip.cedente, hideValues)}</div>
           <div>{fmtM(tooltip.value)}</div>
           <div>{hideValues ? "-" : `${tooltip.pct.toFixed(2).replace(".", ",")}%`}</div>
         </div>
@@ -2315,7 +2320,8 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
                           const valNum = Number(String(valor).replace('%', '').replace(',', '.'));
                           valor = !isNaN(valNum) && valor ? `${valNum.toFixed(2).replace('.', ',')}%` : escapeText(valor);
                         }
-                        if (c === "Cliente" || c === "Sacado") valor = formatarNomeEntidade(valorOriginal);
+                        if (c === "Cliente") valor = formatarNomeCedente(valorOriginal, hideValues);
+                        if (c === "Sacado") valor = formatarNomeEntidade(valorOriginal);
                         if (c === "__encargo__" && !(Number(valorOriginal) > 0)) valor = "—";
                         if (c === "__tx_encargos__" && !(Number(valorOriginal) > 0)) valor = "—";
 
@@ -2432,6 +2438,7 @@ function CustomDropdown({ value, options, onChange, placeholder, formatOption = 
   }, [options, normalizedSearchTerm, isOpen, formatOption]);
   const handleKeyDown = (e) => { if (e.key === 'Enter') { e.preventDefault(); if (isOpen && filteredOptions.length > 0) { onChange(filteredOptions[0]); setSearchTerm(""); setIsOpen(false); } } };
   const displayValue = isOpen ? searchTerm : formatOption(value);
+  const selectedPlaceholder = isOpen && value ? formatOption(value) : placeholder;
 
   // Em mobile, usa select nativo para evitar que o teclado virtual cause resize e feche o sidebar
   if (isMobileDevice) {
@@ -2452,7 +2459,7 @@ function CustomDropdown({ value, options, onChange, placeholder, formatOption = 
 
   return (
     <div ref={wrapperRef} style={{ position: "relative", width: "100%" }}>
-      <input type="text" value={displayValue} onChange={(e) => { setSearchTerm(e.target.value); setIsOpen(true); }} onFocus={() => { setIsOpen(true); setSearchTerm(""); }} onKeyDown={handleKeyDown} placeholder={isOpen && value ? value : placeholder} style={{ width: "100%", padding: "11px", paddingRight: "32px", borderRadius: "6px", border: "1px solid #d1d5db", background: "#fff", fontSize: "14px", color: "#111827", outline: "none", boxSizing: "border-box", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} />
+      <input type="text" value={displayValue} onChange={(e) => { setSearchTerm(e.target.value); setIsOpen(true); }} onFocus={() => { setIsOpen(true); setSearchTerm(""); }} onKeyDown={handleKeyDown} placeholder={selectedPlaceholder} style={{ width: "100%", padding: "11px", paddingRight: "32px", borderRadius: "6px", border: "1px solid #d1d5db", background: "#fff", fontSize: "14px", color: "#111827", outline: "none", boxSizing: "border-box", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} />
       <div style={{ position: "absolute", right: "12px", top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: "#6b7280", fontSize: "12px" }}>▼</div>
       {isOpen && (
         <div style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: "4px", background: "#fff", border: "1px solid #d1d5db", borderRadius: "8px", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1)", zIndex: 50, maxHeight: "250px", overflowY: "auto" }}>
@@ -3546,7 +3553,7 @@ return (
         <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
           <div>
             <label style={{ display: "block", marginBottom: 6, fontSize: "13px", fontWeight: "600", color: "#374151" }}>Cedente</label>
-            <CustomDropdown value={clienteSelecionado} onChange={(v) => { setClienteSelecionado(v); if (v) setGrupoSelecionado(""); }} options={clientesDisponiveis} placeholder="Selecione o Cedente..." formatOption={formatarNomeEntidade} />
+            <CustomDropdown value={clienteSelecionado} onChange={(v) => { setClienteSelecionado(v); if (v) setGrupoSelecionado(""); }} options={clientesDisponiveis} placeholder="Selecione o Cedente..." formatOption={(opt) => formatarNomeCedente(opt, hideValues)} />
           </div>
           <div>
             <label style={{ display: "block", marginBottom: 6, fontSize: "13px", fontWeight: "600", color: "#374151" }}>Grupo Econômico</label>
