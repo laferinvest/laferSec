@@ -219,6 +219,11 @@ const formatEntityName = (value) =>
     .replace(/^\d+\s*-\s*/, "")
     .replace(/\s*-\s*sacado\s*$/i, "");
 
+const formatPrivateEntityName = (value, hideValues, columnKey) => {
+  if (hideValues) return columnKey === "Sacado" ? "Sacado oculto" : "Cedente oculto";
+  return formatEntityName(value);
+};
+
 const getTodayIso = () => {
   const date = new Date();
   date.setHours(0, 0, 0, 0);
@@ -390,7 +395,9 @@ function MorningTable({ rows, hideValues, onNavigateToMicro }) {
                   if (column.type === "date") value = formatDate(value);
                   if (column.type === "money") value = formatMoney(value, hideValues);
                   if (column.type === "rate") value = formatRate(value);
-                  if (column.key === "Cliente" || column.key === "Sacado") value = formatEntityName(value);
+                  if (column.key === "Cliente" || column.key === "Sacado") {
+                    value = formatPrivateEntityName(value, hideValues, column.key);
+                  }
                   const cellFilter = getMicroFilterForCell(row, column.key);
                   const isDirectFilterCell = ["Cliente", "Sacado", "Dcto", "Borderô"].includes(column.key);
 
@@ -436,7 +443,7 @@ function CedenteGroupedMorningTables({ groups, hideValues, onNavigateToMicro, co
           <div style={{ padding: "14px 16px", background: "#f9fafb", borderBottom: "1px solid #e5e7eb", display: "flex", justifyContent: "space-between", gap: "14px", alignItems: "center", flexWrap: "wrap" }}>
             <div>
               <h3 style={{ margin: 0, color: "#111827", fontSize: "15px", fontWeight: 800 }}>
-                {group.label}
+                {hideValues ? "Cedente oculto" : group.label}
               </h3>
               <p style={{ margin: "5px 0 0", color: "#6b7280", fontSize: "12px", fontWeight: 700 }}>
                 {group.rows.length} título(s)

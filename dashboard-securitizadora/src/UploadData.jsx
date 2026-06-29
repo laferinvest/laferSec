@@ -46,7 +46,8 @@ const limpaChave = (val) => {
   return s;
 };
 
-const formatarMoeda = (valor) => {
+const formatarMoeda = (valor, hideValues = false) => {
+  if (hideValues) return "R$ -";
   const numero = Number(valor || 0);
   return new Intl.NumberFormat("pt-BR", {
     style: "currency",
@@ -336,26 +337,90 @@ function cedenteValido(cedente) {
   return Boolean(cedente);
 }
 
+function sacadoValido(sacado) {
+  if (!sacado) return false;
+  const s = String(sacado).trim();
+  return !(s === "0" || s.startsWith("0 -") || s.startsWith("0-"));
+}
+
 function registroValidoParaAnalise(row) {
-  return cedenteValido(row?.Cliente) && !isInadimplente(row);
+  return sacadoValido(row?.Sacado) && cedenteValido(row?.Cliente) && !isInadimplente(row);
+}
+
+const RISCO_ATUAL_TABLES = ["secInfo", "secInfoSmart"];
+const RISCO_ATUAL_PAGE_SIZE = 5000;
+
+const normalizarChaveCampo = (campo) =>
+  String(campo || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]/g, "");
+
+function getValorPorAliases(row, aliases) {
+  if (!row) return undefined;
+
+  const normalizado = Object.entries(row).reduce((acc, [key, value]) => {
+    acc[normalizarChaveCampo(key)] = value;
+    return acc;
+  }, {});
+
+  for (const alias of aliases) {
+    const value = normalizado[normalizarChaveCampo(alias)];
+    if (value !== undefined && value !== null && String(value).trim() !== "") return value;
+  }
+
+  return undefined;
+}
+
+function normalizarLinhaRiscoAtual(row, sourceTable, index) {
+  return {
+    ...row,
+    Cliente: getValorPorAliases(row, ["Cliente", "Cedente", "CEDENTE"]) ?? row?.Cliente ?? "",
+    Sacado: getValorPorAliases(row, ["Sacado", "SACADO"]) ?? row?.Sacado ?? "",
+    Vcto: getValorPorAliases(row, ["Vcto", "Vencimento", "VENCIMENTO"]) ?? row?.Vcto ?? null,
+    Pgto: getValorPorAliases(row, ["Pgto", "Dt.Pgto", "Dt Pgto", "Data Pgto", "Data de Pgto", "Data de Pagamento", "Data de quitacao", "DATA DE QUITACAO"]) ?? row?.Pgto ?? null,
+    Entrada: cleanNumber(getValorPorAliases(row, ["Entrada", "Valor", "Valor(R$)", "VALOR(R$)", "Total", "TOTAL", "TOTAL(R$)"])) ?? 0,
+    Status: getValorPorAliases(row, ["Status", "Situacao", "SITUACAO", "Estado"]) ?? row?.Status ?? row?.Estado ?? "",
+    inadimplencia: getValorPorAliases(row, ["inadimplencia", "Inadimplencia"]) ?? null,
+    _sourceTable: sourceTable,
+    _rowKey: `${sourceTable}-${row?.id ?? index}`,
+  };
+}
+
+async function fetchAllRiscoAtualRows(tableName) {
+  const allRows = [];
+
+  for (let from = 0; ; from += RISCO_ATUAL_PAGE_SIZE) {
+    const to = from + RISCO_ATUAL_PAGE_SIZE - 1;
+    const { data, error } = await supabase
+      .from(tableName)
+      .select("*")
+      .order("id", { ascending: false })
+      .range(from, to);
+
+    if (error) throw new Error(`Erro ao buscar ${tableName}: ${error.message}`);
+
+    allRows.push(...(data || []));
+    if (!data || data.length < RISCO_ATUAL_PAGE_SIZE) break;
+  }
+
+  return allRows;
+}
+
+async function carregarLinhasRiscoAtual() {
+  const results = await Promise.all(
+    RISCO_ATUAL_TABLES.map(async (tableName) => {
+      const rows = await fetchAllRiscoAtualRows(tableName);
+      return rows.map((row, index) => normalizarLinhaRiscoAtual(row, tableName, index));
+    })
+  );
+
+  return results.flat();
 }
 
 function calcularRiscoAtualIgualMicro(rows) {
   if (!rows || rows.length === 0) return 0;
-
-  const firstRow = rows[0];
-  const vctoKey = Object.keys(firstRow).find(
-    (k) => k.toLowerCase() === "vcto" || (k.toLowerCase().includes("vcto") && !k.toLowerCase().includes("vl"))
-  );
-  const pgtoKey = Object.keys(firstRow).find(
-    (k) => k.toLowerCase() === "pgto" || (k.toLowerCase().includes("pgto") && !k.toLowerCase().includes("vl"))
-  );
-  const statusKey = Object.keys(firstRow).find(
-    (k) => k.toLowerCase() === "status" || k.toLowerCase() === "estado"
-  );
-  const entradaKey = Object.keys(firstRow).find(
-    (k) => k.toLowerCase() === "entrada" || k.toLowerCase().includes("valor")
-  );
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -366,9 +431,9 @@ function calcularRiscoAtualIgualMicro(rows) {
     if (!registroValidoParaAnalise(r)) continue;
 
     let status = "invalido";
-    const vctoVal = vctoKey ? r[vctoKey] : null;
-    const pgtoVal = pgtoKey ? r[pgtoKey] : null;
-    const statusVal = statusKey ? String(r[statusKey] || "").trim().toUpperCase() : "";
+    const vctoVal = r.Vcto;
+    const pgtoVal = r.Pgto;
+    const statusVal = String(r.Status || "").trim().toUpperCase();
 
     if (statusVal === "REC" || statusVal.includes("REC")) {
       status = "recompra";
@@ -387,7 +452,7 @@ function calcularRiscoAtualIgualMicro(rows) {
     }
 
     if (status === "aVencer" || status === "atraso") {
-      riscoAtual += Number(r[entradaKey] || 0);
+      riscoAtual += Number(r.Entrada || 0);
     }
   }
 
@@ -1190,7 +1255,7 @@ const updateSecInfoInadimplenciaFromSmartRows = async (rows, setSmartProgress) =
   };
 };
 
-export default function UploadData() {
+export default function UploadData({ hideValues = false }) {
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("");
@@ -1438,10 +1503,8 @@ export default function UploadData() {
   const carregarRiscoAtualSnapshot = async () => {
     setSnapshotStatus("");
     try {
-      const { data, error } = await supabase.from("secInfo").select("*");
-      if (error) throw error;
-
-      const recebiveis = calcularRiscoAtualIgualMicro(data || []);
+      const rows = await carregarLinhasRiscoAtual();
+      const recebiveis = calcularRiscoAtualIgualMicro(rows);
       setSnapshotRiscoAtual(recebiveis);
       setSnapshotLastUpdated(new Date().toLocaleString("pt-BR"));
 
@@ -1789,9 +1852,9 @@ const exportarCreditoEmAberto = async () => {
     XLSX.writeFile(wb, nomeArquivo);
 
     setSnapshotStatus(
-      `✅ Excel exportado com sucesso! Principal: ${titulosPrincipais.length} título(s) | ${formatarMoeda(somaPrincipal)}${
+      `✅ Excel exportado com sucesso! Principal: ${titulosPrincipais.length} título(s) | ${formatarMoeda(somaPrincipal, hideValues)}${
         titulosExcluidos.length > 0
-          ? ` | Excluídos: ${titulosExcluidos.length} título(s) | ${formatarMoeda(somaExcluidos)}`
+          ? ` | Excluídos: ${titulosExcluidos.length} título(s) | ${formatarMoeda(somaExcluidos, hideValues)}`
           : ""
       }`
     );
@@ -2496,7 +2559,7 @@ auditoria.finalRows = finalRows.map((item) => ({ ...item }));
                       <td style={{ padding: "8px 10px", borderBottom: "1px solid #fee2e2" }}>{row.Dcto}</td>
                       <td style={{ padding: "8px 10px", borderBottom: "1px solid #fee2e2" }}>{row.Bordero}</td>
                       <td style={{ padding: "8px 10px", borderBottom: "1px solid #fee2e2" }}>{row.Vcto}</td>
-                      <td style={{ padding: "8px 10px", borderBottom: "1px solid #fee2e2", textAlign: "right" }}>{formatarMoeda(row.Entrada)}</td>
+                      <td style={{ padding: "8px 10px", borderBottom: "1px solid #fee2e2", textAlign: "right" }}>{formatarMoeda(row.Entrada, hideValues)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -2521,7 +2584,7 @@ auditoria.finalRows = finalRows.map((item) => ({ ...item }));
           </div>
           <div style={{ background: "#f8fafc", border: "1px solid #e5e7eb", borderRadius: "10px", padding: "16px" }}>
             <div style={{ fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.04em", color: "#6b7280", fontWeight: 700, marginBottom: "8px" }}>Recebíveis</div>
-            <div style={{ fontSize: "22px", fontWeight: 700, color: "#111827" }}>{formatarMoeda(snapshotRiscoAtual)}</div>
+            <div style={{ fontSize: "22px", fontWeight: 700, color: "#111827" }}>{formatarMoeda(snapshotRiscoAtual, hideValues)}</div>
             <div style={{ fontSize: "12px", color: "#6b7280", marginTop: "8px" }}>Baseado nos títulos em aberto</div>
           </div>
         </div>
@@ -2604,13 +2667,13 @@ auditoria.finalRows = finalRows.map((item) => ({ ...item }));
                         {String(item["Data"] || "").split("-").reverse().join("/")}
                       </td>
                       <td style={{ padding: "12px", fontSize: "14px", color: "#111827", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
-                        {formatarMoeda(item["Recebiveis"])}
+                        {formatarMoeda(item["Recebiveis"], hideValues)}
                       </td>
                       <td style={{ padding: "12px", fontSize: "14px", color: "#111827", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
-                        {formatarMoeda(item["Dinheiro Banco"])}
+                        {formatarMoeda(item["Dinheiro Banco"], hideValues)}
                       </td>
                       <td style={{ padding: "12px", fontSize: "14px", color: "#111827", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
-                        {formatarMoeda(item["Compra Debentures"])}
+                        {formatarMoeda(item["Compra Debentures"], hideValues)}
                       </td>
                     </tr>
                   ))

@@ -432,7 +432,7 @@ export default function App() {
               />
             )}
 
-            {activeTab === "upload" && <UploadData />}
+            {activeTab === "upload" && <UploadData hideValues={hideValues} />}
 
             {activeTab === "nfe" && <NFeConverter />}
           </div>
