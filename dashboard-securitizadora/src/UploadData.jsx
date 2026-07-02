@@ -128,6 +128,11 @@ const isInadimplente = (row) =>
 const normalizarChaveTexto = (val) =>
   normalizarTexto(val).replace(/[^a-z0-9]/g, "");
 
+const normalizarChaveEntidade = (val) =>
+  normalizarTexto(val)
+    .replace(/(?:^|[\s-]+)(sacado|cedente)\s*$/i, "")
+    .replace(/[^a-z0-9]/g, "");
+
 const isInadimplenciaColumn = (key) =>
   normalizarChaveTexto(key).startsWith("inadimplencia");
 
@@ -494,7 +499,7 @@ const SMART_HEADER_ALIASES = {
   Multa: ["MULTA(R$)", "Multa(R$)", "Multa"],
   Sacado: ["Sacado"],
   Status: ["Situação", "SITUAÇÃO", "Status"],
-  Desagio: ["Desagio", "Deságio", "DESÁGIO"],
+  Desagio: ["Desagio", "Deságio", "DESÁGIO", "Desagio(R$)", "Deságio(R$)", "DESÁGIO(R$)", "Desagio (R$)", "Deságio (R$)", "DESÁGIO (R$)"],
   "Tx.Efet": ["Tx.Efet", "TX.EFET", "Tx Efet"],
 };
 
@@ -593,7 +598,7 @@ const SECINFO_SOURCE_ALIASES = {
   Entrada: ["TOTAL(R$)", "TOTAL", "Total", "Entrada"],
   Sacado: ["SACADO", "Sacado"],
   Status: ["SITUAÇÃO", "Situação", "Status"],
-  Desagio: ["DESÁGIO", "Deságio", "Desagio"],
+  Desagio: ["DESÁGIO", "Deságio", "Desagio", "DESÁGIO(R$)", "Deságio(R$)", "Desagio(R$)", "DESÁGIO (R$)", "Deságio (R$)", "Desagio (R$)"],
   "Tx.Efet": ["Tx.Efet", "TX.EFET", "Tx Efet"],
 };
 
@@ -729,6 +734,9 @@ const applySmartEffectiveRates = (rows) => {
     let totalDescontado = 0;
     let totalDesagio = 0;
     let weightedPrazo = 0;
+    const hasDesagioPositivo = group.some((row) => (cleanNumber(row.Desagio) || 0) > 0);
+
+    if (!hasDesagioPositivo) return;
 
     group.forEach((row) => {
       const valorFace = cleanNumber(row.Entrada) || 0;
@@ -744,12 +752,14 @@ const applySmartEffectiveRates = (rows) => {
     });
 
     const prazoMedio = totalDescontado > 0 ? weightedPrazo / totalDescontado : null;
-    const txEfetiva = totalDescontado > 0 && prazoMedio > 0
+    const txEfetiva = totalDescontado > 0 && totalDesagio > 0 && prazoMedio > 0
       ? (Math.pow(1 + totalDesagio / totalDescontado, 30 / prazoMedio) - 1) * 100
       : null;
 
     group.forEach((row) => {
-      row["Tx.Efet"] = txEfetiva === null ? null : Number(txEfetiva.toFixed(6));
+      if (txEfetiva !== null) {
+        row["Tx.Efet"] = Number(txEfetiva.toFixed(6));
+      }
     });
   });
 
@@ -762,11 +772,20 @@ const smartKey = (row) =>
 const secInfoKey = smartKey;
 
 const entidadeDctoKey = (entidade, dcto) =>
-  `${normalizarChaveTexto(entidade)}__${limpaChave(dcto)}`;
+  `${normalizarChaveEntidade(entidade)}__${normalizeDctoKey(dcto)}`;
 
 const clienteDctoKey = (row) => entidadeDctoKey(row?.Cliente, row?.Dcto);
 
 const sacadoDctoKey = (row) => entidadeDctoKey(row?.Sacado, row?.Dcto);
+
+const entidadeDctoVctoKey = (entidade, dcto, vcto) =>
+  `${normalizarChaveEntidade(entidade)}__${normalizeDctoKey(dcto)}__${limpaChave(vcto)}`;
+
+const clienteDctoVctoKey = (row) =>
+  entidadeDctoVctoKey(row?.Cliente, row?.Dcto, row?.Vcto);
+
+const sacadoDctoVctoKey = (row) =>
+  entidadeDctoVctoKey(row?.Sacado, row?.Dcto, row?.Vcto);
 
 const withoutSmartCodRed = (row) => {
   const copy = { ...row };
@@ -830,6 +849,9 @@ const dctoNormalizedBorderoKey = (row) =>
 
 const dctoVctoKey = (row) =>
   `${limpaChave(row?.Dcto)}__${limpaChave(row?.Vcto)}`;
+
+const dctoNormalizadoVctoKey = (row) =>
+  `${normalizeDctoKey(row?.Dcto)}__${limpaChave(row?.Vcto)}`;
 
 const normalizeDctoKey = (value) => {
   const normalized = normalizarChaveTexto(value);
@@ -1369,7 +1391,7 @@ export default function UploadData({ hideValues = false }) {
         const to = from + SMART_BATCH_SIZE - 1;
         const { data, error: existingError } = await supabase
           .from(SMART_TABLE)
-          .select('id,Cliente,Sacado,Dcto,"Borderô",Vcto,Entrada')
+          .select('id,Cliente,Sacado,Dcto,"Borderô",Vcto,Entrada,Desagio,"Tx.Efet"')
           .order("id", { ascending: true })
           .range(from, to);
 
@@ -1403,7 +1425,27 @@ export default function UploadData({ hideValues = false }) {
       smartRows.forEach((row) => {
         const existingRow = existingMap[smartKey(row)];
         if (existingRow?.id) {
-          rowsToUpdate.push({ id: existingRow.id, row });
+          const updateRow = { ...row };
+          const existingDesagio = cleanNumber(existingRow.Desagio);
+          const incomingDesagio = cleanNumber(updateRow.Desagio);
+          const existingTxEfet = cleanNumber(existingRow["Tx.Efet"]);
+          const incomingTxEfet = cleanNumber(updateRow["Tx.Efet"]);
+
+          if (
+            updateRow.Desagio === null ||
+            updateRow.Desagio === undefined ||
+            (incomingDesagio === 0 && existingDesagio > 0)
+          ) {
+            updateRow.Desagio = existingRow.Desagio;
+          }
+          if (
+            updateRow["Tx.Efet"] === null ||
+            updateRow["Tx.Efet"] === undefined ||
+            (incomingTxEfet === 0 && existingTxEfet > 0)
+          ) {
+            updateRow["Tx.Efet"] = existingRow["Tx.Efet"];
+          }
+          rowsToUpdate.push({ id: existingRow.id, row: updateRow });
         } else {
           rowsToInsert.push(row);
         }
@@ -2272,7 +2314,7 @@ auditoria.finalRows = finalRows.map((item) => ({ ...item }));
           const chunk = values.slice(i, i + BATCH_SIZE);
           const { data, error } = await supabase
             .from("secInfo")
-            .select('id,Cliente,Sacado,Dcto,"Borderô",Vcto,"Cód.Red",Desagio,"Tx.Efet",Status')
+            .select('id,Cliente,Sacado,Dcto,"Borderô",Vcto,Pgto,"Cód.Red",Desagio,"Tx.Efet",Status')
             .in(field, chunk);
 
           if (error) throw new Error(`Erro ao checar banco por ${label}: ${error.message}`);
@@ -2289,11 +2331,29 @@ auditoria.finalRows = finalRows.map((item) => ({ ...item }));
       const existingMap = {};
       const existingBaixadoByClienteDcto = {};
       const existingBaixadoBySacadoDcto = {};
+      const existingAbertoByClienteDctoVcto = {};
+      const existingAbertoBySacadoDctoVcto = {};
+      const existingAbertoByDctoVcto = {};
+      const existingAbertoByDctoNormalizadoVcto = {};
+      const addUniqueExistingOpen = (map, key, row) => {
+        if (!key.replace(/_/g, "")) return;
+        if (Object.prototype.hasOwnProperty.call(map, key)) {
+          map[key] = null;
+        } else {
+          map[key] = row;
+        }
+      };
       (existingData || []).forEach((r) => {
         existingMap[secInfoKey(r)] = r;
         if (isStatusBaixado(r)) {
           existingBaixadoByClienteDcto[clienteDctoKey(r)] = r;
           existingBaixadoBySacadoDcto[sacadoDctoKey(r)] = r;
+        }
+        if (isStatusAberto(r) || (!hasRowPgto(r) && !isStatusBaixado(r))) {
+          existingAbertoByClienteDctoVcto[clienteDctoVctoKey(r)] = r;
+          existingAbertoBySacadoDctoVcto[sacadoDctoVctoKey(r)] = r;
+          addUniqueExistingOpen(existingAbertoByDctoVcto, dctoVctoKey(r), r);
+          addUniqueExistingOpen(existingAbertoByDctoNormalizadoVcto, dctoNormalizadoVctoKey(r), r);
         }
       });
 
@@ -2301,17 +2361,30 @@ auditoria.finalRows = finalRows.map((item) => ({ ...item }));
       const rowsToUpdate = [];
 
       finalRows.forEach((row) => {
+        const canMatchOpenWithoutBordero =
+          !limpaChave(row["Borderô"]) &&
+          (isStatusBaixado(row) || hasRowPgto(row));
+
         const existingRow =
           existingMap[secInfoKey(row)] ||
           (isStatusAberto(row)
             ? existingBaixadoByClienteDcto[clienteDctoKey(row)] ||
               existingBaixadoBySacadoDcto[sacadoDctoKey(row)]
+            : null) ||
+          (canMatchOpenWithoutBordero
+            ? existingAbertoByClienteDctoVcto[clienteDctoVctoKey(row)] ||
+              existingAbertoBySacadoDctoVcto[sacadoDctoVctoKey(row)] ||
+              existingAbertoByDctoVcto[dctoVctoKey(row)] ||
+              existingAbertoByDctoNormalizadoVcto[dctoNormalizadoVctoKey(row)]
             : null);
 
         if (existingRow?.id) {
           const updateRow = { ...row };
           if (isStatusRecomprado(existingRow.Status)) {
             updateRow.Status = existingRow.Status;
+          }
+          if (!limpaChave(updateRow["Borderô"]) && limpaChave(existingRow["Borderô"])) {
+            updateRow["Borderô"] = existingRow["Borderô"];
           }
           updateRow["Cód.Red"] = existingRow["Cód.Red"];
           if (updateRow.Desagio === null || updateRow.Desagio === undefined) {
