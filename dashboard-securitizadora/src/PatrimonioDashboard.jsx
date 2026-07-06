@@ -1136,22 +1136,19 @@ const handleChartRangeSelect = useCallback(({ start, end, source }) => {
                   <thead>
                     <tr style={{ background: "#f9fafb" }}>
                       <th style={thStyle}>Data</th>
-                      <th style={thStyle}>Recebíveis</th>
-                      <th style={thStyle}>Dinheiro Banco</th>
-                      <th style={thStyle}>Compra Debêntures</th>
                       <th style={thStyle}>PL</th>
                       <th style={thStyle}>Variação</th>
                       <th style={thStyle}>Retorno Mês</th>
                       <th style={thStyle}>Retorno Acum. TWR</th>
+                      <th style={thStyle}>Recebíveis</th>
+                      <th style={thStyle}>Dinheiro Banco</th>
+                      <th style={thStyle}>Compra Debêntures</th>
                     </tr>
                   </thead>
                   <tbody>
                     {[...seriesDiaria].reverse().map((r) => (
                       <tr key={r.data} style={{ borderTop: "1px solid #f1f5f9" }}>
                         <td style={tdStyle}>{formatarDataLabel(r.data)}</td>
-                        <td style={tdStyle}>{formatarMoeda(r.recebiveis, hideValues)}</td>
-                        <td style={tdStyle}>{formatarMoeda(r.dinheiroBanco, hideValues)}</td>
-                        <td style={tdStyle}>{formatarMoeda(r.compraDebentures, hideValues)}</td>
                         <td style={{ ...tdStyle, fontWeight: 700 }}>{formatarMoeda(r.pl, hideValues)}</td>
                         <td
                           style={{
@@ -1178,6 +1175,9 @@ const handleChartRangeSelect = useCallback(({ start, end, source }) => {
                             : "-"}
                         </td>
                         <td style={{ ...tdStyle, fontWeight: 700 }}>{formatarPct(r.retornoAcumuladoPct, hideValues)}</td>
+                        <td style={tdStyle}>{formatarMoeda(r.recebiveis, hideValues)}</td>
+                        <td style={tdStyle}>{formatarMoeda(r.dinheiroBanco, hideValues)}</td>
+                        <td style={tdStyle}>{formatarMoeda(r.compraDebentures, hideValues)}</td>
                       </tr>
                     ))}
                   </tbody>
