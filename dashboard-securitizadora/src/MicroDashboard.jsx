@@ -489,6 +489,7 @@ function clientePertenceAoGrupoEconomico(cliente, grupo) {
 }
 
 const BOTH_DATA_SOURCE = "ambos";
+const ENCARGO_MINIMO_PARA_PRAZO_REAL = 1;
 const MICRO_DATA_SOURCE_OPTIONS = [
   { table: "secInfo", label: "WBA" },
   { table: "secInfoSmart", label: "Smart" },
@@ -529,6 +530,9 @@ const getScopedTitleKey = (row, index, fallbackDataSourceTable = "secInfo") =>
 
 const filterMatchesSource = (row, filter, fallbackDataSourceTable = "secInfo") =>
   !filter?.sourceTable || getRowSourceTable(row, fallbackDataSourceTable) === filter.sourceTable;
+
+const deveUsarPrazoRealEncargo = (encargo) =>
+  Number.isFinite(Number(encargo)) && Number(encargo) >= ENCARGO_MINIMO_PARA_PRAZO_REAL;
 
 function findKeyAcrossRows(rows, matcher) {
   for (const row of rows || []) {
@@ -2056,12 +2060,15 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
     const borderoKey = findKeyAcrossRows(rows, k => normalizarChave(k).includes("border"));
     const rateKey = findKeyAcrossRows(rows, k => k.toLowerCase() === 'tx.efet' || k.toLowerCase().includes('tx.efet') || k.toLowerCase().includes('tx efet'));
 
-    const getPrazoComEncargos = (row, encargo = 0) => getPrazoEfetivoComD2(
-      emisKey ? row[emisKey] : null,
-      vctoKey ? row[vctoKey] : null,
-      pgtoKey ? row[pgtoKey] : null,
-      Number(encargo) > 0
-    );
+    const getPrazoComEncargos = (row, encargo = 0) => {
+      const usaPrazoReal = deveUsarPrazoRealEncargo(encargo);
+      return getPrazoEfetivoComD2(
+        emisKey ? row[emisKey] : null,
+        vctoKey ? row[vctoKey] : null,
+        usaPrazoReal && pgtoKey ? row[pgtoKey] : null,
+        usaPrazoReal
+      );
+    };
 
     const rowsComEncargo = rows.map(r => {
       const val = valKey ? (Number(r[valKey]) || 0) : 0;
@@ -3117,11 +3124,12 @@ const kpiData = useMemo(() => {
         const encargoTitulo = jurosMulta > 0 ? jurosMulta : 0;
         const valorDescontado = val - desagioVal;
         const desagioEncargosTitulo = desagioVal + encargoTitulo;
+        const usaPrazoReal = deveUsarPrazoRealEncargo(encargoTitulo);
         const prazoEncargos = getPrazoEfetivoComD2(
           emisKey ? r[emisKey] : null,
           vctoKey ? r[vctoKey] : null,
-          pgtoKey ? r[pgtoKey] : null,
-          encargoTitulo > 0
+          usaPrazoReal && pgtoKey ? r[pgtoKey] : null,
+          usaPrazoReal
         );
 
         if (valorDescontado > 0 && prazoEncargos) {

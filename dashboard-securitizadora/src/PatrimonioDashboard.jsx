@@ -660,11 +660,14 @@ export default function PatrimonioDashboard({ hideValues, setHideValues }) {
 
     return filteredRows.map((r, idx) => {
       let periodReturn = 0;
+      let variacao = 0;
 
       if (idx === 0 || prevPL === null || prevPL <= 0) {
         periodReturn = 0;
+        variacao = 0;
       } else {
-        periodReturn = (r.pl - (r.compraDebentures || 0)) / prevPL - 1;
+        variacao = r.pl - (r.compraDebentures || 0) - prevPL;
+        periodReturn = variacao / prevPL;
       }
 
       twrIndex *= 1 + periodReturn;
@@ -675,6 +678,7 @@ export default function PatrimonioDashboard({ hideValues, setHideValues }) {
 
       return {
         ...r,
+        variacao,
         periodReturn,
         retornoAcumuladoPct,
       };
@@ -710,6 +714,7 @@ export default function PatrimonioDashboard({ hideValues, setHideValues }) {
       return {
         plAtual: 0,
         retornoPct: 0,
+        variacaoAtual: 0,
         recebiveisAtual: 0,
         caixaAtual: 0,
       };
@@ -719,6 +724,7 @@ export default function PatrimonioDashboard({ hideValues, setHideValues }) {
     return {
       plAtual: last.pl,
       retornoPct: last.retornoAcumuladoPct,
+      variacaoAtual: last.variacao,
       recebiveisAtual: last.recebiveis,
       caixaAtual: last.dinheiroBanco,
     };
@@ -906,6 +912,18 @@ const handleChartRangeSelect = useCallback(({ start, end, source }) => {
               <div style={miniLabelStyle}>PL Atual</div>
               <div style={{ ...miniValueStyle, fontSize: isMobile ? 18 : 20 }}>
                 {formatarMoeda(resumo.plAtual, hideValues)}
+              </div>
+            </div>
+            <div style={miniCardStyle}>
+              <div style={miniLabelStyle}>Variação</div>
+              <div
+                style={{
+                  ...miniValueStyle,
+                  fontSize: isMobile ? 15 : 16,
+                  color: resumo.variacaoAtual < 0 ? "#dc2626" : "#16a34a",
+                }}
+              >
+                {formatarMoeda(resumo.variacaoAtual, hideValues)}
               </div>
             </div>
             <div style={miniCardStyle}>
@@ -1114,7 +1132,7 @@ const handleChartRangeSelect = useCallback(({ start, end, source }) => {
               </h3>
 
               <div style={{ overflowX: "auto", width: "100%" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 920 }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1040 }}>
                   <thead>
                     <tr style={{ background: "#f9fafb" }}>
                       <th style={thStyle}>Data</th>
@@ -1122,6 +1140,7 @@ const handleChartRangeSelect = useCallback(({ start, end, source }) => {
                       <th style={thStyle}>Dinheiro Banco</th>
                       <th style={thStyle}>Compra Debêntures</th>
                       <th style={thStyle}>PL</th>
+                      <th style={thStyle}>Variação</th>
                       <th style={thStyle}>Retorno Mês</th>
                       <th style={thStyle}>Retorno Acum. TWR</th>
                     </tr>
@@ -1134,6 +1153,15 @@ const handleChartRangeSelect = useCallback(({ start, end, source }) => {
                         <td style={tdStyle}>{formatarMoeda(r.dinheiroBanco, hideValues)}</td>
                         <td style={tdStyle}>{formatarMoeda(r.compraDebentures, hideValues)}</td>
                         <td style={{ ...tdStyle, fontWeight: 700 }}>{formatarMoeda(r.pl, hideValues)}</td>
+                        <td
+                          style={{
+                            ...tdStyle,
+                            fontWeight: 700,
+                            color: r.variacao < 0 ? "#dc2626" : "#16a34a",
+                          }}
+                        >
+                          {formatarMoeda(r.variacao, hideValues)}
+                        </td>
                         <td
                           style={{
                             ...tdStyle,
