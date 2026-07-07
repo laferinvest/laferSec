@@ -393,6 +393,30 @@ function getTodayLocalDate() {
   return today;
 }
 
+function calcularDiasAtrasoTitulo(row, vctoKey, pgtoKey, today = getTodayLocalDate()) {
+  if (!row || !vctoKey) return 0;
+
+  const vencimento = parseIsoDateLocal(row[vctoKey]);
+  if (!vencimento) return 0;
+
+  const vencimentoAjustado = adjustToNextBusinessDay(vencimento);
+  const status = row._status;
+  let dataReferencia = null;
+
+  if (status === "liquidadoAtraso") {
+    dataReferencia = pgtoKey ? parseIsoDateLocal(row[pgtoKey]) : null;
+  } else if (status === "atraso") {
+    dataReferencia = today;
+  } else if (status === "recompra") {
+    dataReferencia = pgtoKey ? parseIsoDateLocal(row[pgtoKey]) : null;
+    if (!dataReferencia) dataReferencia = today;
+  }
+
+  if (!dataReferencia) return 0;
+
+  return Math.max(0, diffCalendarDays(vencimentoAjustado, dataReferencia));
+}
+
 function getPrazoEfetivoComD2(emissaoValor, vencimentoValor, pagamentoValor = null, usarDataAtualSemPagamento = false) {
   const dataBase = parseIsoDateLocal(emissaoValor);
   const vencimento = parseIsoDateLocal(vencimentoValor);
@@ -617,6 +641,7 @@ function EvolutionCharts({ rows, dateFilter, setDateFilter, setBorderoFilter, se
   const [hoveredIndex4, setHoveredIndex4] = useState(null);
   const [hoveredIndex5, setHoveredIndex5] = useState(null);
   const [hoveredIndex6, setHoveredIndex6] = useState(null);
+  const [hoveredIndex7, setHoveredIndex7] = useState(null);
 
   const [dragState, setDragState] = useState({ isDragging: false, startIndex: null, currentIndex: null, type: null });
 
@@ -625,6 +650,10 @@ function EvolutionCharts({ rows, dateFilter, setDateFilter, setBorderoFilter, se
     const groupedRate = {};
     const groupedDesagio = {};
     const groupedPrazo = {};
+    const ensureGroupedMonth = (ym) => {
+      if (!grouped[ym]) grouped[ym] = { val: 0, numAtraso: 0, numTotalFin: 0, delayDaysTotal: 0, delayCount: 0 };
+      return grouped[ym];
+    };
     const today = getTodayLocalDate();
     const dueBuckets = PAYMENT_DUE_BUCKETS.map(bucket => {
       const startDate = new Date(today);
@@ -646,6 +675,7 @@ function EvolutionCharts({ rows, dateFilter, setDateFilter, setBorderoFilter, se
 
     const emisKey = findKeyAcrossRows(rows, k => k.toLowerCase().includes('emis'));
     const vctoKey = findKeyAcrossRows(rows, k => k.toLowerCase() === 'vcto' || (k.toLowerCase().includes('vcto') && !k.toLowerCase().includes('vl')));
+    const pgtoKey = findKeyAcrossRows(rows, k => k.toLowerCase() === 'pgto' || (k.toLowerCase().includes('pgto') && !k.toLowerCase().includes('vl')));
     const valKey = findKeyAcrossRows(rows, k => k.toLowerCase() === 'entrada' || (k.toLowerCase().includes('valor') && !k.toLowerCase().includes('pgto')));
     const borderoKey = findKeyAcrossRows(rows, k => k.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes("border"));
     const rateKey = findKeyAcrossRows(rows, k => k.toLowerCase() === 'tx.efet' || k.toLowerCase().includes('tx.efet') || k.toLowerCase().includes('tx efet'));
@@ -660,8 +690,7 @@ function EvolutionCharts({ rows, dateFilter, setDateFilter, setBorderoFilter, se
         const emisStr = String(r[emisKey]).split("T")[0];
         if (emisStr.length >= 7) {
           const ym = emisStr.substring(0, 7); 
-          if (!grouped[ym]) grouped[ym] = { val: 0, numAtraso: 0, numTotalFin: 0 };
-          grouped[ym].val += val;
+          ensureGroupedMonth(ym).val += val;
 
           if (!groupedRate[ym]) groupedRate[ym] = new Map();
           const rawRate = rateKey ? r[rateKey] : null;
@@ -703,12 +732,17 @@ function EvolutionCharts({ rows, dateFilter, setDateFilter, setBorderoFilter, se
         const vctoStr = String(r[vctoKey]).split("T")[0];
         if (vctoStr.length >= 7) {
           const ym = vctoStr.substring(0, 7);
-          if (!grouped[ym]) grouped[ym] = { val: 0, numAtraso: 0, numTotalFin: 0 };
+          const groupedMonth = ensureGroupedMonth(ym);
           const s = r._status;
           if (s !== 'invalido' && s !== 'aVencer') {
-            grouped[ym].numTotalFin += 1;
+            groupedMonth.numTotalFin += 1;
             if (s === 'liquidadoAtraso' || s === 'atraso' || s === 'recompra') {
-              grouped[ym].numAtraso += 1;
+              groupedMonth.numAtraso += 1;
+              const delayDays = calcularDiasAtrasoTitulo(r, vctoKey, pgtoKey, today);
+              if (delayDays > 0) {
+                groupedMonth.delayDaysTotal += delayDays;
+                groupedMonth.delayCount += 1;
+              }
             }
           }
         }
@@ -733,7 +767,14 @@ function EvolutionCharts({ rows, dateFilter, setDateFilter, setBorderoFilter, se
 
     const cData = sortedMonths.map(ym => {
       const obj = grouped[ym];
-      return { ym, label: formatarMesAno(ym), value: obj.val, pctAtraso: obj.numTotalFin > 0 ? (obj.numAtraso / obj.numTotalFin) * 100 : 0 };
+      return {
+        ym,
+        label: formatarMesAno(ym),
+        value: obj.val,
+        pctAtraso: obj.numTotalFin > 0 ? (obj.numAtraso / obj.numTotalFin) * 100 : 0,
+        avgDelayDays: obj.delayCount > 0 ? obj.delayDaysTotal / obj.delayCount : 0,
+        delayCount: obj.delayCount
+      };
     });
 
     const cDataRate = sortedMonths.map(ym => {
@@ -840,6 +881,15 @@ function EvolutionCharts({ rows, dateFilter, setDateFilter, setBorderoFilter, se
   });
   const pathD2 = points2.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
   const areaD2 = points2.length > 1 ? `${pathD2} L ${points2[points2.length - 1].x} ${svgHeight - paddingBottom} L ${points2[0].x} ${svgHeight - paddingBottom} Z` : "";
+
+  const maxVal7 = Math.max(...chartData.map(d => d.avgDelayDays), 5);
+  const points7 = chartData.map((d, i) => {
+    const x = chartData.length > 1 ? paddingX + (i / (chartData.length - 1)) * chartWidth : paddingX + chartWidth / 2;
+    const y = svgHeight - paddingBottom - (d.avgDelayDays / maxVal7) * chartHeight;
+    return { ...d, x, y };
+  });
+  const pathD7 = points7.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+  const areaD7 = points7.length > 1 ? `${pathD7} L ${points7[points7.length - 1].x} ${svgHeight - paddingBottom} L ${points7[0].x} ${svgHeight - paddingBottom} Z` : "";
 
   const maxVal3 = Math.max(...chartDataRate.map(d => d.avgRate), 1); 
   const points3 = chartDataRate.map((d, i) => {
@@ -1076,7 +1126,7 @@ return (
           </div>
 
           <div style={{ display: "flex", flexWrap: "wrap", gap: "24px", marginBottom: "24px" }}>
-            <div style={chartBoxStyle}>
+            <div style={{ ...chartBoxStyle, order: 1 }}>
               <h3 style={{ margin: "0 0 16px 0", color: "#111827", fontSize: "16px", fontWeight: "600" }}>
                 Evolução da Taxa Média <span style={{fontSize: "12px", color:"#9ca3af", fontWeight: "400"}}>(Emissão)</span>
               </h3>
@@ -1122,7 +1172,7 @@ return (
               </div>
             </div>
 
-            <div style={chartBoxStyle}>
+            <div style={{ ...chartBoxStyle, order: 3 }}>
               <h3 style={{ margin: "0 0 16px 0", color: "#111827", fontSize: "16px", fontWeight: "600" }}>
                 Percentual de Atraso <span style={{fontSize: "12px", color:"#9ca3af", fontWeight: "400"}}>(Vencimento)</span>
               </h3>
@@ -1168,12 +1218,58 @@ return (
               </div>
             </div>
 
+            <div style={{ ...chartBoxStyle, order: 4 }}>
+              <h3 style={{ margin: "0 0 16px 0", color: "#111827", fontSize: "16px", fontWeight: "600" }}>
+                Evolução de Atraso Médio <span style={{fontSize: "12px", color:"#9ca3af", fontWeight: "400"}}>(Vencimento)</span>
+              </h3>
+              <div style={{ position: "relative", width: "100%", height: "auto" }}>
+                <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} style={{ width: "100%", height: "auto", overflow: "visible" }}>
+                  <defs><linearGradient id="gradientArea7" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#ea580c" stopOpacity="0.32" /><stop offset="100%" stopColor="#ea580c" stopOpacity="0.0" /></linearGradient></defs>
+                  {renderHighlight(points7, 'vcto', '234, 88, 12')}
+                  <line x1={paddingX} y1={paddingTop} x2={svgWidth - paddingRight} y2={paddingTop} stroke="#f3f4f6" strokeWidth="1" />
+                  <line x1={paddingX} y1={paddingTop + chartHeight / 2} x2={svgWidth - paddingRight} y2={paddingTop + chartHeight / 2} stroke="#f3f4f6" strokeWidth="1" />
+                  <line x1={paddingX} y1={svgHeight - paddingBottom} x2={svgWidth - paddingRight} y2={svgHeight - paddingBottom} stroke="#e5e7eb" strokeWidth="1" />
+                  <text x={paddingX - 8} y={paddingTop + 4} fill="#9ca3af" fontSize="11px" fontWeight="500" textAnchor="end">{formatAxisDays(maxVal7)}</text>
+                  <text x={paddingX - 8} y={paddingTop + chartHeight / 2 + 4} fill="#9ca3af" fontSize="11px" fontWeight="500" textAnchor="end">{formatAxisDays(maxVal7 / 2)}</text>
+                  <text x={paddingX - 8} y={svgHeight - paddingBottom + 4} fill="#9ca3af" fontSize="11px" fontWeight="500" textAnchor="end">0d</text>
+                  {points7.length > 1 && <path d={areaD7} fill="url(#gradientArea7)" />}
+                  <path d={pathD7} fill="none" stroke="#ea580c" strokeWidth="3" strokeLinejoin="round" />
 
+                  {points7.map((p, i) => {
+                    const isSelected = isPointSelected(p, i, 'vcto');
+                    return isSelected ? <circle key={`sel7-${i}`} cx={p.x} cy={p.y} r="5" fill="#ea580c" stroke="#fff" strokeWidth="2" /> : null;
+                  })}
+                  {points7.map((p, i) => {
+                    if (i % step !== 0 && i !== points7.length - 1) return null;
+                    const isSelected = isPointSelected(p, i, 'vcto');
+                    return <text key={`lab7-${i}`} x={p.x} y={svgHeight - paddingBottom + 16} fill={isSelected ? "#ea580c" : "#6b7280"} fontSize="11px" fontWeight={isSelected ? "700" : "400"} textAnchor="end" transform={`rotate(-45, ${p.x}, ${svgHeight - paddingBottom + 16})`}>{p.label}</text>;
+                  })}
+                  {hoveredIndex7 !== null && points7[hoveredIndex7] && (
+                    <g>
+                      <line x1={points7[hoveredIndex7].x} y1={paddingTop} x2={points7[hoveredIndex7].x} y2={svgHeight - paddingBottom} stroke="#9ca3af" strokeWidth="1" strokeDasharray="4 4" />
+                      <circle cx={points7[hoveredIndex7].x} cy={points7[hoveredIndex7].y} r="5" fill="#fff" stroke="#ea580c" strokeWidth="2" />
+                      <rect x={Math.max(paddingX, Math.min(svgWidth - paddingRight - 150, points7[hoveredIndex7].x - 75))} y={Math.max(8, points7[hoveredIndex7].y - 48)} width="150" height="36" rx="6" fill="#111827" opacity="0.94" />
+                      <text x={Math.max(paddingX + 75, Math.min(svgWidth - paddingRight - 75, points7[hoveredIndex7].x))} y={Math.max(25, points7[hoveredIndex7].y - 27)} fill="#fff" fontSize="12px" fontWeight="700" textAnchor="middle">
+                        {points7[hoveredIndex7].avgDelayDays.toFixed(1).replace('.', ',')} dias
+                      </text>
+                      <text x={Math.max(paddingX + 75, Math.min(svgWidth - paddingRight - 75, points7[hoveredIndex7].x))} y={Math.max(39, points7[hoveredIndex7].y - 13)} fill="#d1d5db" fontSize="10px" fontWeight="500" textAnchor="middle">
+                        {points7[hoveredIndex7].delayCount} títulos - {points7[hoveredIndex7].label}
+                      </text>
+                    </g>
+                  )}
+                  {points7.map((p, i) => (
+                    <rect key={`interact7-${i}`} x={p.x - segmentWidth / 2} y={paddingTop} width={segmentWidth} height={chartHeight} fill="transparent"
+                      onMouseDown={(e) => { e.preventDefault(); setDragState({ isDragging: true, startIndex: i, currentIndex: i, type: 'vcto' }); }}
+                      onMouseEnter={() => { setHoveredIndex7(i); if (dragState.isDragging && dragState.type === 'vcto') setDragState(prev => ({...prev, currentIndex: i})); }}
+                      onMouseLeave={() => setHoveredIndex7(null)}
+                      style={{ cursor: "crosshair" }}
+                    />
+                  ))}
+                </svg>
+              </div>
+            </div>
 
-          </div>
-
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "24px" }}>
-            <div style={chartBoxStyle}>
+            <div style={{ ...chartBoxStyle, order: 2 }}>
               <h3 style={{ margin: "0 0 16px 0", color: "#111827", fontSize: "16px", fontWeight: "600" }}>
                 Evolução do Deságio <span style={{fontSize: "12px", color:"#9ca3af", fontWeight: "400"}}>(Emissão)</span>
               </h3>
@@ -1219,7 +1315,7 @@ return (
               </div>
             </div>
 
-            <div style={chartBoxStyle}>
+            <div style={{ ...chartBoxStyle, order: 5 }}>
               <h3 style={{ margin: "0 0 16px 0", color: "#111827", fontSize: "16px", fontWeight: "600" }}>
                 Pagamentos a Cair <span style={{fontSize: "12px", color:"#9ca3af", fontWeight: "400"}}>(Vencimento)</span>
               </h3>
