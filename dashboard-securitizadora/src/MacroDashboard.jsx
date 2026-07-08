@@ -52,6 +52,11 @@ function formatarNomeCedente(nome, hideValues) {
   return hideValues ? "Cedente oculto" : formatarNomeEntidade(nome);
 }
 
+function formatarNomeSacado(nome, hideValues) {
+  if (!nome) return "";
+  return hideValues ? "Sacado oculto" : formatarNomeEntidade(nome);
+}
+
 function normalizarValor(valor) {
   const raw = String(valor || "");
   const cached = genericNormalizeCache.get(raw);
@@ -432,7 +437,7 @@ function MacroDetailedTable({ rows, focus, setFocus, setSelectedSlice, hideValue
                       valor = !isNaN(valNum) && valor ? `${valNum.toFixed(2).replace('.', ',')}%` : escapeText(valor);
                     }
                     if (c === "Cliente") valor = formatarNomeCedente(valorOriginal, hideValues);
-                    if (c === "Sacado") valor = formatarNomeEntidade(valorOriginal);
+                    if (c === "Sacado") valor = formatarNomeSacado(valorOriginal, hideValues);
 
                     // Cross-Navigation Otimizado (Sem JavaScript Inline Styles)
                     if (c === "Cliente" && focus === 'sacado') {
@@ -535,13 +540,15 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
     const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
     monthStart.setHours(0, 0, 0, 0);
 
+    const prevMonthStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    prevMonthStart.setHours(0, 0, 0, 0);
+
+    const twoMonthsAgoStart = new Date(today.getFullYear(), today.getMonth() - 2, 1);
+    twoMonthsAgoStart.setHours(0, 0, 0, 0);
+
     const thirtyDaysAgo = new Date(today);
     thirtyDaysAgo.setDate(today.getDate() - 30);
     thirtyDaysAgo.setHours(0, 0, 0, 0);
-
-    const sixtyDaysAgo = new Date(today);
-    sixtyDaysAgo.setDate(today.getDate() - 60);
-    sixtyDaysAgo.setHours(0, 0, 0, 0);
 
     const yearStart = new Date(today.getFullYear(), 0, 1);
     yearStart.setHours(0, 0, 0, 0);
@@ -627,12 +634,18 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
       }
 
       if (entityKey && emisDate) {
-        if (emisDate >= thirtyDaysAgo && emisDate <= today) {
-          const vol = ensureMacroEntityBucket(monthlyVolume, entityKey, entity, { lm: 0, plm: 0 });
-          vol.lm += val;
-        } else if (emisDate >= sixtyDaysAgo && emisDate < thirtyDaysAgo) {
-          const vol = ensureMacroEntityBucket(monthlyVolume, entityKey, entity, { lm: 0, plm: 0 });
-          vol.plm += val;
+        const vol = ensureMacroEntityBucket(monthlyVolume, entityKey, entity, {
+          currentMonth: 0,
+          previousMonth: 0,
+          twoMonthsAgo: 0
+        });
+
+        if (emisDate >= monthStart && emisDate <= today) {
+          vol.currentMonth += val;
+        } else if (emisDate >= prevMonthStart && emisDate < monthStart) {
+          vol.previousMonth += val;
+        } else if (emisDate >= twoMonthsAgoStart && emisDate < prevMonthStart) {
+          vol.twoMonthsAgo += val;
         }
 
         const negotiationDate = volumeDateBase === 'vencimento' ? effectiveVctoDate : emisDate;
@@ -687,17 +700,7 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
 
     const sorted = Object.keys(grouped).map(k => {
       const bucket = grouped[k];
-      const vol = monthlyVolume[k] || { lm: 0, plm: 0 };
-      let varPct = 0;
-      let hasVar = false;
-
-      if (vol.plm > 0) {
-        varPct = ((vol.lm - vol.plm) / vol.plm) * 100;
-        hasVar = true;
-      } else if (vol.lm > 0) {
-        varPct = 100; 
-        hasVar = true;
-      }
+      const vol = monthlyVolume[k] || { currentMonth: 0, previousMonth: 0, twoMonthsAgo: 0 };
 
       return {
         entityKey: k,
@@ -705,8 +708,9 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
         val: bucket.val,
         count: bucket.count,
         percent: patrimonioReferencia > 0 ? bucket.val / patrimonioReferencia : 0,
-        varPct,
-        hasVar
+        volumeCurrentMonth: vol.currentMonth,
+        volumePreviousMonth: vol.previousMonth,
+        volumeTwoMonthsAgo: vol.twoMonthsAgo
       };
     }).sort((a, b) => b.val - a.val).map((item, idx) => ({ ...item, rank: idx + 1 }));
 
@@ -1353,7 +1357,7 @@ const negotiationDesEncTop5Percent = currentNegotiationStats.sorted.length
                         >
                           <div style={{ padding: "16px 20px", display: "flex", alignItems: "center", gap: "12px", minWidth: 0 }}>
                             <span style={{ width: "12px", height: "12px", borderRadius: "999px", background: color, flexShrink: 0 }} />
-                            <span style={{ fontSize: "16px", fontWeight: "700", color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={focus === 'cedente' ? formatarNomeCedente(slice.name, hideValues) : formatarNomeEntidade(slice.name)}>{focus === 'cedente' ? formatarNomeCedente(slice.name, hideValues) : formatarNomeEntidade(slice.name)}</span>
+                            <span style={{ fontSize: "16px", fontWeight: "700", color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={focus === 'cedente' ? formatarNomeCedente(slice.name, hideValues) : formatarNomeSacado(slice.name, hideValues)}>{focus === 'cedente' ? formatarNomeCedente(slice.name, hideValues) : formatarNomeSacado(slice.name, hideValues)}</span>
                           </div>
                           <div style={{ padding: "16px 20px", textAlign: "right", color: "#0f172a" }}>
                             <div style={{ fontSize: "16px", fontWeight: "800" }}>{fmtM(slice.val)}</div>
@@ -1495,7 +1499,7 @@ const negotiationDesEncTop5Percent = currentNegotiationStats.sorted.length
                     >
                       <div style={{ padding: "16px 20px", display: "flex", alignItems: "center", gap: "12px", minWidth: 0 }}>
                         <span style={{ width: "12px", height: "12px", borderRadius: "999px", background: color, flexShrink: 0 }} />
-                        <span style={{ fontSize: "16px", fontWeight: "700", color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={focus === 'cedente' ? formatarNomeCedente(slice.name, hideValues) : formatarNomeEntidade(slice.name)}>{focus === 'cedente' ? formatarNomeCedente(slice.name, hideValues) : formatarNomeEntidade(slice.name)}</span>
+                        <span style={{ fontSize: "16px", fontWeight: "700", color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={focus === 'cedente' ? formatarNomeCedente(slice.name, hideValues) : formatarNomeSacado(slice.name, hideValues)}>{focus === 'cedente' ? formatarNomeCedente(slice.name, hideValues) : formatarNomeSacado(slice.name, hideValues)}</span>
                       </div>
                       <div style={{ padding: "16px 20px", textAlign: "right", fontSize: "16px", fontWeight: "800", color: "#0f172a" }}>{fmtM(slice.val)}</div>
                       <div style={{ padding: "16px 20px", textAlign: "right", fontSize: "16px", fontWeight: "800", color: "#475569" }}>{(slice.percent * 100).toFixed(2).replace('.', ',')}%</div>
@@ -1697,7 +1701,7 @@ const negotiationDesEncTop5Percent = currentNegotiationStats.sorted.length
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
                 <div>
                   <h3 style={{ margin: "0 0 4px 0", color: "#111827", fontSize: "18px" }}>
-                    Títulos em Aberto de: <span style={{ color: "#4f46e5" }}>{focus === 'cedente' ? formatarNomeCedente(selectedSlice, hideValues) : formatarNomeEntidade(selectedSlice)}</span>
+                    Títulos em Aberto de: <span style={{ color: "#4f46e5" }}>{focus === 'cedente' ? formatarNomeCedente(selectedSlice, hideValues) : formatarNomeSacado(selectedSlice, hideValues)}</span>
                   </h3>
                   <div style={{ fontSize: "13px", color: "#6b7280" }}>
                     <strong>{detailedRows.length}</strong> registo(s) encontrado(s) totalizando <strong>{fmtM(detailedRows.reduce((acc, row) => { const vk = Object.keys(row).find(k => k.toLowerCase() === 'entrada' || k.toLowerCase().includes('valor')); return acc + (vk ? Number(row[vk]) || 0 : 0) }, 0))}</strong>
@@ -1728,10 +1732,12 @@ const negotiationDesEncTop5Percent = currentNegotiationStats.sorted.length
                     <tr style={{ background: "#f9fafb", color: "#374151" }}>
                       <th style={{ padding: "14px 16px", borderBottom: "2px solid #e5e7eb" }}>Rank Global</th>
                       <th style={{ padding: "14px 16px", borderBottom: "2px solid #e5e7eb" }}>Nome</th>
-                      <th style={{ padding: "14px 16px", borderBottom: "2px solid #e5e7eb" }}>Var. Vol. (Últ. 30d)</th>
-                      <th style={{ padding: "14px 16px", borderBottom: "2px solid #e5e7eb" }}>Qtd. Títulos</th>
+                      <th style={{ padding: "14px 16px", borderBottom: "2px solid #e5e7eb" }}>Vol. (Mês Atual)</th>
+                      <th style={{ padding: "14px 16px", borderBottom: "2px solid #e5e7eb" }}>Vol. (Mês anterior)</th>
+                      <th style={{ padding: "14px 16px", borderBottom: "2px solid #e5e7eb" }}>Vol. (2 meses atrás)</th>
                       <th style={{ padding: "14px 16px", borderBottom: "2px solid #e5e7eb" }}>Capital Alocado</th>
                       <th style={{ padding: "14px 16px", borderBottom: "2px solid #e5e7eb" }}>% do PL</th>
+                      <th style={{ padding: "14px 16px", borderBottom: "2px solid #e5e7eb" }}>Qtd. Títulos</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1743,13 +1749,13 @@ const negotiationDesEncTop5Percent = currentNegotiationStats.sorted.length
                         title="Clique para ver os títulos detalhados"
                       >
                         <td style={{ padding: "14px 16px", fontWeight: "600", color: "#6b7280" }}>{item.rank}º</td>
-                        <td style={{ padding: "14px 16px", fontWeight: "600", color: "#4f46e5" }}>{focus === 'cedente' ? formatarNomeCedente(item.name, hideValues) : formatarNomeEntidade(item.name)}</td>
-                        <td style={{ padding: "14px 16px", fontWeight: "600", color: item.hasVar ? (item.varPct > 0 ? "#10b981" : item.varPct < 0 ? "#ef4444" : "#6b7280") : "#9ca3af" }}>
-                          {item.hasVar ? `${item.varPct > 0 ? '+' : ''}${item.varPct.toFixed(1).replace('.', ',')}%` : '-'}
-                        </td>
-                        <td style={{ padding: "14px 16px", color: "#4b5563" }}>{item.count}</td>
+                        <td style={{ padding: "14px 16px", fontWeight: "600", color: "#4f46e5" }}>{focus === 'cedente' ? formatarNomeCedente(item.name, hideValues) : formatarNomeSacado(item.name, hideValues)}</td>
+                        <td style={{ padding: "14px 16px", fontWeight: "700", color: "#059669" }}>{fmtM(item.volumeCurrentMonth)}</td>
+                        <td style={{ padding: "14px 16px", fontWeight: "700", color: "#374151" }}>{fmtM(item.volumePreviousMonth)}</td>
+                        <td style={{ padding: "14px 16px", fontWeight: "700", color: "#374151" }}>{fmtM(item.volumeTwoMonthsAgo)}</td>
                         <td style={{ padding: "14px 16px", fontWeight: "700", color: "#059669" }}>{fmtM(item.val)}</td>
                         <td style={{ padding: "14px 16px", fontWeight: "600", color: "#3b82f6" }}>{(item.percent * 100).toFixed(2)}%</td>
+                        <td style={{ padding: "14px 16px", color: "#4b5563" }}>{item.count}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1763,7 +1769,7 @@ const negotiationDesEncTop5Percent = currentNegotiationStats.sorted.length
       {/* Tooltip do Gráfico de Pizza */}
       {tooltip.show && (
         <div style={{ position: 'fixed', top: tooltip.y + 15, left: tooltip.x + 15, background: 'rgba(17, 24, 39, 0.96)', color: '#fff', padding: '12px 16px', borderRadius: '10px', pointerEvents: 'none', zIndex: 9999, boxShadow: '0 10px 15px -3px rgba(0,0,0,0.3)' }}>
-          <div style={{ fontWeight: 700, fontSize: "14px", color: '#f3f4f6', marginBottom: "4px" }}>{focus === 'cedente' ? formatarNomeCedente(tooltip.label, hideValues) : formatarNomeEntidade(tooltip.label)}</div>
+          <div style={{ fontWeight: 700, fontSize: "14px", color: '#f3f4f6', marginBottom: "4px" }}>{focus === 'cedente' ? formatarNomeCedente(tooltip.label, hideValues) : formatarNomeSacado(tooltip.label, hideValues)}</div>
           <div style={{ fontSize: '18px', fontWeight: 700, color: '#10b981' }}>{fmtM(tooltip.value)}</div>
           <div style={{ marginTop: '2px', fontSize: '13px', color: '#9ca3af' }}>
             {tooltip.context === 'volume_negociado'

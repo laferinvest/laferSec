@@ -89,6 +89,11 @@ function formatarNomeCedente(nome, hideValues) {
   return hideValues ? "Cedente oculto" : formatarNomeEntidade(nome);
 }
 
+function formatarNomeSacado(nome, hideValues) {
+  if (!nome) return "";
+  return hideValues ? "Sacado oculto" : formatarNomeEntidade(nome);
+}
+
 function normalizarChave(campo) {
   const raw = String(campo || "");
   const cached = genericNormalizeCache.get(raw);
@@ -1538,11 +1543,14 @@ function DashboardInsights({ processedRows, insightFilter, setInsightFilter, set
 
   const capitalQuitado = stats.values.liquidado + stats.values.liquidadoAtraso + stats.values.recompra;
   const capitalAberto = stats.values.aVencer + stats.values.atraso;
+  const titulosQuitados = stats.counts.liquidado + stats.counts.liquidadoAtraso + stats.counts.recompra;
+  const titulosAbertos = stats.counts.aVencer + stats.counts.atraso;
 
-  const renderCard = (key, corPura, titulo, contagem, valorReal, mediaAtraso = null, desagioVal = 0, prazoMedio = null, prazoLabel = "Prazo Médio", capitalBase = stats.values.total, capitalBaseLabel = "do Capital Total") => {
+  const renderCard = (key, corPura, titulo, contagem, valorReal, mediaAtraso = null, desagioVal = 0, prazoMedio = null, prazoLabel = "Prazo Médio", capitalBase = stats.values.total, capitalBaseLabel = "do Capital Total", countBase = stats.counts.total) => {
     const isZero = contagem === 0;
     const isActive = insightFilter === key;
     const isDimmed = insightFilter && !isActive;
+    const countPercent = countBase > 0 ? ((contagem / countBase) * 100).toFixed(1) : 0;
 
     return (
       <div onClick={() => !isZero && toggleFilter(key)}
@@ -1555,7 +1563,7 @@ function DashboardInsights({ processedRows, insightFilter, setInsightFilter, set
         <div>
           <div style={{ display: "flex", alignItems: "baseline", gap: "6px" }}>
             <div style={{ fontSize: "22px", fontWeight: "700", color: "#111827", lineHeight: "1" }}>{contagem}</div>
-            <div style={{ fontSize: "12px", color: "#6b7280", fontWeight: "600" }}>({stats.counts.total > 0 ? ((contagem / stats.counts.total) * 100).toFixed(1) : 0}%)</div>
+            <div style={{ fontSize: "12px", color: "#6b7280", fontWeight: "600" }}>({countPercent}%)</div>
           </div>
           <div style={{ fontSize: "11px", color: "#9ca3af", marginTop: "4px" }}>Qtd. de Títulos</div>
         </div>
@@ -1642,14 +1650,14 @@ return (
             </div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: "16px", flex: 1, alignItems: "stretch" }}>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "16px", flex: "3 1 560px" }}>
-                {renderCard('liquidado', "#22c55e", "Liquidado em dia", stats.counts.liquidado, stats.values.liquidado, null, stats.desagioValues.liquidado, null, "Prazo Médio", capitalQuitado, "do capital quitado")}
-                {renderCard('liquidadoAtraso', "#f59e0b", "Liquidado c/ atraso", stats.counts.liquidadoAtraso, stats.values.liquidadoAtraso, stats.avgDelays.liquidadoAtraso, stats.desagioValues.liquidadoAtraso, null, "Prazo Médio", capitalQuitado, "do capital quitado")}
-                {renderCard('recompra', "#8b5cf6", "Recompra", stats.counts.recompra, stats.values.recompra, stats.avgDelays.recompra, stats.desagioValues.recompra, null, "Prazo Médio", capitalQuitado, "do capital quitado")}
+                {renderCard('liquidado', "#22c55e", "Liquidado em dia", stats.counts.liquidado, stats.values.liquidado, null, stats.desagioValues.liquidado, null, "Prazo Médio", capitalQuitado, "do capital quitado", titulosQuitados)}
+                {renderCard('liquidadoAtraso', "#f59e0b", "Liquidado c/ atraso", stats.counts.liquidadoAtraso, stats.values.liquidadoAtraso, stats.avgDelays.liquidadoAtraso, stats.desagioValues.liquidadoAtraso, null, "Prazo Médio", capitalQuitado, "do capital quitado", titulosQuitados)}
+                {renderCard('recompra', "#8b5cf6", "Recompra", stats.counts.recompra, stats.values.recompra, stats.avgDelays.recompra, stats.desagioValues.recompra, null, "Prazo Médio", capitalQuitado, "do capital quitado", titulosQuitados)}
               </div>
               <div style={{ width: "3px", minWidth: "3px", alignSelf: "stretch", background: "linear-gradient(180deg, transparent 0%, #94a3b8 12%, #64748b 50%, #94a3b8 88%, transparent 100%)", borderRadius: "999px", boxShadow: "0 0 0 1px rgba(100,116,139,0.12), 0 8px 18px rgba(15,23,42,0.16)", minHeight: "160px", margin: "0 6px" }} />
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "16px", flex: "2 1 360px" }}>
-                {renderCard('aVencer', "#94a3b8", "A vencer", stats.counts.aVencer, stats.values.aVencer, null, stats.desagioValues.aVencer, stats.prazoMedioAVencer, "Dias p/ Vencer", capitalAberto, "do capital em aberto")}
-                {renderCard('atraso', "#ef4444", "Em atraso", stats.counts.atraso, stats.values.atraso, stats.avgDelays.atraso, stats.desagioValues.atraso, null, "Prazo Médio", capitalAberto, "do capital em aberto")}
+                {renderCard('aVencer', "#94a3b8", "A vencer", stats.counts.aVencer, stats.values.aVencer, null, stats.desagioValues.aVencer, stats.prazoMedioAVencer, "Dias p/ Vencer", capitalAberto, "do capital em aberto", titulosAbertos)}
+                {renderCard('atraso', "#ef4444", "Em atraso", stats.counts.atraso, stats.values.atraso, stats.avgDelays.atraso, stats.desagioValues.atraso, null, "Prazo Médio", capitalAberto, "do capital em aberto", titulosAbertos)}
               </div>
             </div>
           </div>
@@ -1985,9 +1993,9 @@ function SacadoConcentrationCard({
                                   overflow: "hidden",
                                   textOverflow: "ellipsis"
                                 }}
-                                title={formatarNomeEntidade(item.sacado)}
+                                title={formatarNomeSacado(item.sacado, hideValues)}
                               >
-                                {formatarNomeEntidade(item.sacado)}
+                                {formatarNomeSacado(item.sacado, hideValues)}
                               </span>
                             </div>
                             <div style={{ textAlign: "right", color: "#111827", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
@@ -2025,7 +2033,7 @@ function SacadoConcentrationCard({
             maxWidth: 260
           }}
         >
-          <div style={{ fontWeight: 800, marginBottom: 4 }}>{formatarNomeEntidade(tooltip.label)}</div>
+          <div style={{ fontWeight: 800, marginBottom: 4 }}>{formatarNomeSacado(tooltip.label, hideValues)}</div>
           <div style={{ color: "#cbd5e1", marginBottom: 4 }}>{formatarNomeCedente(tooltip.cedente, hideValues)}</div>
           <div>{fmtM(tooltip.value)}</div>
           <div>{hideValues ? "-" : `${tooltip.pct.toFixed(2).replace(".", ",")}%`}</div>
@@ -2424,7 +2432,7 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
                           valor = !isNaN(valNum) && valor ? `${valNum.toFixed(2).replace('.', ',')}%` : escapeText(valor);
                         }
                         if (c === "Cliente") valor = formatarNomeCedente(valorOriginal, hideValues);
-                        if (c === "Sacado") valor = formatarNomeEntidade(valorOriginal);
+                        if (c === "Sacado") valor = formatarNomeSacado(valorOriginal, hideValues);
                         if (c === "__encargo__" && !(Number(valorOriginal) > 0)) valor = "—";
                         if (c === "__tx_encargos__" && !(Number(valorOriginal) > 0)) valor = "—";
 
@@ -3670,7 +3678,7 @@ return (
           </div>
           <div>
             <label style={{ display: "block", marginBottom: 6, fontSize: "13px", fontWeight: "600", color: "#374151" }}>Sacado</label>
-            <CustomDropdown value={sacadoSelecionado} onChange={setSacadoSelecionado} options={sacadosDisponiveis} placeholder="Selecione o Sacado..." formatOption={formatarNomeEntidade} />
+            <CustomDropdown value={sacadoSelecionado} onChange={setSacadoSelecionado} options={sacadosDisponiveis} placeholder="Selecione o Sacado..." formatOption={(opt) => formatarNomeSacado(opt, hideValues)} />
           </div>
           <button onClick={limparFiltroEntidades} disabled={!hasEntityFilter} style={{ padding: "10px", borderRadius: "8px", border: "1px solid #d1d5db", background: (!hasEntityFilter) ? "#f9fafb" : "#fff", color: (!hasEntityFilter) ? "#9ca3af" : "#ef4444", fontWeight: "600", fontSize: "13px", cursor: (!hasEntityFilter) ? "not-allowed" : "pointer", transition: "all 0.2s" }}>
             Limpar Nomes

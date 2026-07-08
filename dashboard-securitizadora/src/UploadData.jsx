@@ -55,6 +55,16 @@ const formatarMoeda = (valor, hideValues = false) => {
   }).format(numero);
 };
 
+const formatarNomeCedente = (valor, hideValues = false) => {
+  if (!valor) return "";
+  return hideValues ? "Cedente oculto" : String(valor);
+};
+
+const formatarNomeSacado = (valor, hideValues = false) => {
+  if (!valor) return "";
+  return hideValues ? "Sacado oculto" : String(valor);
+};
+
 const formatDateBR = (val) => {
   if (!val) return "";
   const s = String(val).split("T")[0];
@@ -1700,8 +1710,8 @@ const exportarCreditoEmAberto = async () => {
         const excluido = isInadimplente(r);
 
         return {
-          Cedente: cedente,
-          Sacado: r["Sacado"] || "",
+          Cedente: formatarNomeCedente(cedente, hideValues),
+          Sacado: formatarNomeSacado(r["Sacado"], hideValues),
           "Data de Emissão": formatDateBR(emisKey ? r[emisKey] : ""),
           "Data de Vencimento": formatDateBR(vctoOriginal),
           "Valor de Face": valorFace,
@@ -1806,7 +1816,7 @@ const exportarCreditoEmAberto = async () => {
         detalhes.forEach((det, idx) => {
           excluidosParaExportar.push({
             Cedente: `→ DETALHE ${idx + 1}`,
-            Sacado: det["Sacado"] || "",
+            Sacado: formatarNomeSacado(det["Sacado"], hideValues),
             "Data de Emissão": formatDateBR(det["Dt.Emis"] || ""),
             "Data de Vencimento": formatDateBR(det["Vcto"] || ""),
             "Valor de Face": Number(det["Entrada"] || 0),
@@ -2627,8 +2637,8 @@ auditoria.finalRows = finalRows.map((item) => ({ ...item }));
                   {smartDeletedRows.map((row) => (
                     <tr key={row.id}>
                       <td style={{ padding: "8px 10px", borderBottom: "1px solid #fee2e2" }}>{row.id}</td>
-                      <td style={{ padding: "8px 10px", borderBottom: "1px solid #fee2e2" }}>{row.Cliente}</td>
-                      <td style={{ padding: "8px 10px", borderBottom: "1px solid #fee2e2" }}>{row.Sacado}</td>
+                      <td style={{ padding: "8px 10px", borderBottom: "1px solid #fee2e2" }}>{formatarNomeCedente(row.Cliente, hideValues)}</td>
+                      <td style={{ padding: "8px 10px", borderBottom: "1px solid #fee2e2" }}>{formatarNomeSacado(row.Sacado, hideValues)}</td>
                       <td style={{ padding: "8px 10px", borderBottom: "1px solid #fee2e2" }}>{row.Dcto}</td>
                       <td style={{ padding: "8px 10px", borderBottom: "1px solid #fee2e2" }}>{row.Bordero}</td>
                       <td style={{ padding: "8px 10px", borderBottom: "1px solid #fee2e2" }}>{row.Vcto}</td>
