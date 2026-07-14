@@ -431,7 +431,7 @@ function MorningTable({ rows, hideValues, onNavigateToMicro }) {
   );
 }
 
-function CedenteGroupedMorningTables({ groups, hideValues, onNavigateToMicro, color = "#4f46e5" }) {
+function CedenteGroupedMorningTables({ groups, hideValues, onNavigateToMicro, color = "#4f46e5", showWeightedRate = false }) {
   if (!groups.length) {
     return <MorningTable rows={[]} hideValues={hideValues} onNavigateToMicro={onNavigateToMicro} />;
   }
@@ -449,8 +449,25 @@ function CedenteGroupedMorningTables({ groups, hideValues, onNavigateToMicro, co
                 {group.rows.length} título(s)
               </p>
             </div>
-            <div style={{ color, fontSize: "18px", lineHeight: 1, fontWeight: 800 }}>
-              {formatMoney(group.total, hideValues)}
+            <div style={{ display: "flex", alignItems: "flex-end", gap: "18px", flexWrap: "wrap", justifyContent: "flex-end" }}>
+              {showWeightedRate && (
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ color: "#6b7280", fontSize: "10px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "5px" }}>
+                    Taxa média ponderada
+                  </div>
+                  <div style={{ color: "#0ea5e9", fontSize: "18px", lineHeight: 1, fontWeight: 800 }}>
+                    {formatRate(group.taxaMediaPonderada) || "0,00%"}
+                  </div>
+                </div>
+              )}
+              <div style={{ textAlign: "right" }}>
+                <div style={{ color: "#6b7280", fontSize: "10px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "5px" }}>
+                  Valor total
+                </div>
+                <div style={{ color, fontSize: "18px", lineHeight: 1, fontWeight: 800 }}>
+                  {formatMoney(group.total, hideValues)}
+                </div>
+              </div>
             </div>
           </div>
           <div style={{ padding: "14px" }}>
@@ -504,6 +521,11 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
   const resumoPeriod = useMemo(() => getResumoPeriod(selectedDateIso), [selectedDateIso]);
   const todayDueDateIso = useMemo(() => shiftVencimentoToBusinessDay(todayIso), [todayIso]);
   const monthStartIso = useMemo(() => `${todayIso.slice(0, 8)}01`, [todayIso]);
+  const previousMonthStartIso = useMemo(() => {
+    const date = parseIsoDate(monthStartIso);
+    date.setMonth(date.getMonth() - 1);
+    return formatIsoDate(date);
+  }, [monthStartIso]);
 
   useEffect(() => {
     let ignore = false;
@@ -566,10 +588,10 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
     ));
     const operacoesOntem = validRows.filter((row) => row["Dt.Emis"] === resumoPeriod.operacaoDateIso);
     const vencemHoje = validRows.filter((row) => getVctoOperacional(row) === todayDueDateIso && isOpen(row));
-    const inadimplentesMes = validRows.filter((row) => {
+    const inadimplentesMesAtualEAnterior = validRows.filter((row) => {
       const vctoOperacional = getVctoOperacional(row);
       return (
-        vctoOperacional >= monthStartIso &&
+        vctoOperacional >= previousMonthStartIso &&
         vctoOperacional < todayIso &&
         isOpen(row) &&
         !isRefinanciadoStatus(row.Status)
@@ -582,7 +604,7 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
     const totalQuitadosOntem = quitadosOntem.reduce((acc, row) => acc + row.Entrada, 0);
     const totalQuitadosEmAtraso = quitadosEmAtraso.reduce((acc, row) => acc + row.Entrada, 0);
     const totalVencemHoje = vencemHoje.reduce((acc, row) => acc + row.Entrada, 0);
-    const totalInadimplentesMes = inadimplentesMes.reduce((acc, row) => acc + row.Entrada, 0);
+    const totalInadimplentesMesAtualEAnterior = inadimplentesMesAtualEAnterior.reduce((acc, row) => acc + row.Entrada, 0);
     const taxaMediaPonderada = volumeOperado > 0
       ? operacoesOntem.reduce((acc, row) => acc + row["Tx.Efet"] * row.Entrada, 0) / volumeOperado
       : 0;
@@ -602,14 +624,22 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
           key,
           label: formatEntityName(key) || "Sem cedente",
           total: 0,
+          taxaPonderadaTotal: 0,
+          taxaMediaPonderada: 0,
           rows: [],
         };
 
         existingGroup.total += row.Entrada;
+        existingGroup.taxaPonderadaTotal += row["Tx.Efet"] * row.Entrada;
         existingGroup.rows.push(row);
         acc.set(key, existingGroup);
         return acc;
-      }, new Map()).values()).sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
+      }, new Map()).values())
+        .map((group) => ({
+          ...group,
+          taxaMediaPonderada: group.total > 0 ? group.taxaPonderadaTotal / group.total : 0,
+        }))
+        .sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
 
       return { rows: orderedRows, groups };
     };
@@ -619,7 +649,7 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
     const quitadosEmAtrasoAgrupados = buildCedenteGroups(quitadosEmAtraso);
     const operacoesOntemAgrupadas = buildCedenteGroups(operacoesOntem);
     const vencemHojeAgrupados = buildCedenteGroups(vencemHoje);
-    const inadimplentesMesAgrupados = buildCedenteGroups(inadimplentesMes);
+    const inadimplentesMesAtualEAnteriorAgrupados = buildCedenteGroups(inadimplentesMesAtualEAnterior);
 
     return {
       inadimplenciaOntem: inadimplenciaOntemAgrupada.rows,
@@ -627,23 +657,23 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
       quitadosEmAtraso: quitadosEmAtrasoAgrupados.rows,
       operacoesOntem: operacoesOntemAgrupadas.rows,
       vencemHoje: vencemHojeAgrupados.rows,
-      inadimplentesMes: inadimplentesMesAgrupados.rows,
+      inadimplentesMesAtualEAnterior: inadimplentesMesAtualEAnteriorAgrupados.rows,
       gruposInadimplenciaOntem: inadimplenciaOntemAgrupada.groups,
       gruposQuitadosOntem: quitadosOntemAgrupados.groups,
       gruposQuitadosEmAtraso: quitadosEmAtrasoAgrupados.groups,
       gruposOperacoesOntem: operacoesOntemAgrupadas.groups,
       gruposVencemHoje: vencemHojeAgrupados.groups,
-      gruposInadimplentesMes: inadimplentesMesAgrupados.groups,
+      gruposInadimplentesMesAtualEAnterior: inadimplentesMesAtualEAnteriorAgrupados.groups,
       volumeOperado,
       desagioOperado,
       totalInadimplenciaOntem,
       totalQuitadosOntem,
       totalQuitadosEmAtraso,
       totalVencemHoje,
-      totalInadimplentesMes,
+      totalInadimplentesMesAtualEAnterior,
       taxaMediaPonderada,
     };
-  }, [rows, resumoPeriod, todayDueDateIso, monthStartIso, todayIso]);
+  }, [rows, resumoPeriod, todayDueDateIso, previousMonthStartIso, todayIso]);
 
   if (loading) {
     return (
@@ -680,13 +710,14 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
   const vencemHojeSubtitle = todayDueDateIso === todayIso
     ? "Títulos em aberto com vencimento operacional hoje."
     : `Títulos em aberto com vencimento operacional em ${formatDate(todayDueDateIso)} por ajuste de fim de semana ou feriado.`;
-  const inadimplentesMesSubtitle = `Títulos em aberto com vencimento operacional vencido no mês corrente, desde ${formatDate(monthStartIso)}.`;
-  const renderCedenteGroups = (groups, color) => (
+  const inadimplentesMesAtualEAnteriorSubtitle = `Títulos em aberto com vencimento operacional entre ${formatDate(previousMonthStartIso)} e ${formatDate(addDays(todayIso, -1))}.`;
+  const renderCedenteGroups = (groups, color, showWeightedRate = false) => (
     <CedenteGroupedMorningTables
       groups={groups}
       hideValues={hideValues}
       onNavigateToMicro={onNavigateToMicro}
       color={color}
+      showWeightedRate={showWeightedRate}
     />
   );
 
@@ -783,7 +814,7 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
         accent="#4f46e5"
         order={1}
         onNavigateToMicro={onNavigateToMicro}
-        tableContent={renderCedenteGroups(resumo.gruposOperacoesOntem, "#4f46e5")}
+        tableContent={renderCedenteGroups(resumo.gruposOperacoesOntem, "#4f46e5", true)}
       >
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px" }}>
           <SummaryMetric
@@ -828,20 +859,20 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
       </MorningSection>
 
       <MorningSection
-        title="Inadimplentes do Mês"
-        subtitle={inadimplentesMesSubtitle}
-        rows={resumo.inadimplentesMes}
+        title="Inadimplentes do Mês Atual e Anterior"
+        subtitle={inadimplentesMesAtualEAnteriorSubtitle}
+        rows={resumo.inadimplentesMesAtualEAnterior}
         hideValues={hideValues}
         accent="#b91c1c"
         order={6}
         onNavigateToMicro={onNavigateToMicro}
-        tableContent={renderCedenteGroups(resumo.gruposInadimplentesMes, "#b91c1c")}
+        tableContent={renderCedenteGroups(resumo.gruposInadimplentesMesAtualEAnterior, "#b91c1c")}
       >
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px" }}>
           <SummaryMetric
             label="Total Inadimplente"
-            value={formatMoney(resumo.totalInadimplentesMes, hideValues)}
-            sublabel={`${resumo.inadimplentesMes.length} título(s) em aberto`}
+            value={formatMoney(resumo.totalInadimplentesMesAtualEAnterior, hideValues)}
+            sublabel={`${resumo.inadimplentesMesAtualEAnterior.length} título(s) em aberto`}
             color="#b91c1c"
           />
         </div>
