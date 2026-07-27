@@ -1750,7 +1750,16 @@ const negotiationDesEncTop5Percent = currentNegotiationStats.sorted.length
                       >
                         <td style={{ padding: "14px 16px", fontWeight: "600", color: "#6b7280" }}>{item.rank}º</td>
                         <td style={{ padding: "14px 16px", fontWeight: "600", color: "#4f46e5" }}>{focus === 'cedente' ? formatarNomeCedente(item.name, hideValues) : formatarNomeSacado(item.name, hideValues)}</td>
-                        <td style={{ padding: "14px 16px", fontWeight: "700", color: "#059669" }}>{fmtM(item.volumeCurrentMonth)}</td>
+                        <td
+                          style={{
+                            padding: "14px 16px",
+                            fontWeight: "700",
+                            color: item.volumeCurrentMonth >= item.volumePreviousMonth ? "#047857" : "#b45353",
+                            backgroundColor: item.volumeCurrentMonth >= item.volumePreviousMonth ? "#ecfdf5" : "#fef2f2"
+                          }}
+                        >
+                          {fmtM(item.volumeCurrentMonth)}
+                        </td>
                         <td style={{ padding: "14px 16px", fontWeight: "700", color: "#374151" }}>{fmtM(item.volumePreviousMonth)}</td>
                         <td style={{ padding: "14px 16px", fontWeight: "700", color: "#374151" }}>{fmtM(item.volumeTwoMonthsAgo)}</td>
                         <td style={{ padding: "14px 16px", fontWeight: "700", color: "#059669" }}>{fmtM(item.val)}</td>
