@@ -466,7 +466,7 @@ const getInitDateStr = () => {
   return { start: formatToLocalISO(start), end: formatToLocalISO(end) };
 };
 
-const GRUPOS_ECONOMICOS = [
+const GRUPOS_ECONOMICOS_FALLBACK = [
   {
     label: "BDP Broadcast",
     prefixos: ["BDP Broadcast"]
@@ -485,6 +485,33 @@ const GRUPOS_ECONOMICOS = [
     ]
   }
 ];
+
+const GRUPOS_ECONOMICOS_TABLE = "grupos_economicos";
+const GRUPOS_ECONOMICOS_PAGE_SIZE = 1000;
+
+function normalizarGrupoEconomico(row) {
+  return {
+    id: row?.id || null,
+    label: String(row?.nome || "").trim(),
+    prefixos: Array.isArray(row?.prefixos)
+      ? row.prefixos.map((prefixo) => String(prefixo || "").trim()).filter(Boolean)
+      : [],
+    ativo: row?.ativo !== false
+  };
+}
+
+function mensagemErroGrupoEconomico(error) {
+  if (error?.code === "42P01") {
+    return "A tabela de grupos econômicos ainda não foi criada no Supabase.";
+  }
+  if (error?.code === "23505") {
+    return "Já existe um grupo econômico com esse nome.";
+  }
+  if (error?.code === "42501") {
+    return "Seu usuário não tem permissão para alterar grupos econômicos.";
+  }
+  return error?.message || "Não foi possível concluir a operação.";
+}
 
 function normalizarPrefixoGrupo(valor) {
   return normalizarChave(formatarNomeEntidade(valor))
@@ -533,6 +560,25 @@ const getDataSourceTables = (dataSourceTable, filterSourceTable = null) => {
   if (filterSourceTable && selectedTables.includes(filterSourceTable)) return [filterSourceTable];
   return selectedTables;
 };
+
+async function fetchExistingClientes(tableName) {
+  const clientes = [];
+
+  for (let from = 0; ; from += GRUPOS_ECONOMICOS_PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from(tableName)
+      .select("Cliente")
+      .not("Cliente", "is", null)
+      .order("id", { ascending: false })
+      .range(from, from + GRUPOS_ECONOMICOS_PAGE_SIZE - 1);
+
+    if (error) throw error;
+    clientes.push(...(data || []).map((row) => row?.Cliente).filter(Boolean));
+    if (!data || data.length < GRUPOS_ECONOMICOS_PAGE_SIZE) break;
+  }
+
+  return clientes;
+}
 
 const tagSourceRow = (row, sourceTable, index) => {
   const tagged = Object.assign(Object.create(null), row);
@@ -2582,6 +2628,548 @@ function CustomDropdown({ value, options, onChange, placeholder, formatOption = 
   );
 }
 
+function EconomicGroupDropdown({
+  value,
+  groups,
+  onChange,
+  onCreate,
+  onEdit,
+  onDelete,
+  cedenteOptions,
+  loading
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const wrapperRef = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
+        setIsOpen(false);
+        setSearchTerm("");
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const selectedGroup = groups.find((group) => group.label === value);
+  const normalizedSearch = normalizarChave(searchTerm);
+  const filteredGroups = groups.filter((group) =>
+    !normalizedSearch || normalizarChave(group.label).includes(normalizedSearch)
+  );
+
+  const closeAndRun = (callback) => {
+    setIsOpen(false);
+    setSearchTerm("");
+    callback();
+  };
+
+  return (
+    <div ref={wrapperRef} style={{ position: "relative", width: "100%" }}>
+      <input
+        type="text"
+        readOnly
+        value={loading ? "Carregando grupos..." : selectedGroup?.label || ""}
+        placeholder="Selecione o Grupo..."
+        onClick={() => setIsOpen((open) => !open)}
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
+        style={{
+          width: "100%",
+          padding: "11px",
+          paddingRight: "32px",
+          borderRadius: "6px",
+          border: "1px solid #d1d5db",
+          background: "#fff",
+          color: "#111827",
+          fontSize: "14px",
+          outline: "none",
+          boxSizing: "border-box",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap"
+        }}
+      />
+
+      <div aria-hidden="true" style={{ position: "absolute", right: "12px", top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: "#6b7280", fontSize: "12px" }}>▼</div>
+
+      {isOpen && (
+        <div
+          style={{
+            position: "absolute",
+            top: "100%",
+            left: 0,
+            right: 0,
+            marginTop: "6px",
+            background: "#fff",
+            border: "1px solid #e5e7eb",
+            borderRadius: "10px",
+            boxShadow: "0 12px 28px rgba(15, 23, 42, 0.16)",
+            zIndex: 80,
+            overflow: "hidden"
+          }}
+        >
+          <div style={{ padding: "10px", borderBottom: "1px solid #eef2f7", background: "#f8fafc" }}>
+            <div style={{ position: "relative" }}>
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                aria-hidden="true"
+                style={{ position: "absolute", left: "10px", top: "10px", color: "#94a3b8" }}
+              >
+                <circle cx="11" cy="11" r="7" />
+                <line x1="16.5" y1="16.5" x2="21" y2="21" />
+              </svg>
+              <input
+                autoFocus
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder="Buscar grupo..."
+                style={{
+                  width: "100%",
+                  padding: "8px 10px 8px 34px",
+                  border: "1px solid #dbe3ee",
+                  borderRadius: "7px",
+                  background: "#fff",
+                  color: "#111827",
+                  fontSize: "13px",
+                  outline: "none",
+                  boxSizing: "border-box"
+                }}
+              />
+            </div>
+          </div>
+
+          <div role="listbox" style={{ maxHeight: "230px", overflowY: "auto", padding: "4px 0" }}>
+            {value && (
+              <div
+                role="option"
+                onClick={() => closeAndRun(() => onChange(""))}
+                style={{ padding: "9px 12px", color: "#dc2626", fontSize: "13px", cursor: "pointer", borderBottom: "1px solid #f1f5f9" }}
+              >
+                Limpar seleção
+              </div>
+            )}
+
+            {!loading && filteredGroups.map((group) => {
+              const isSelected = group.label === value;
+              const memberCount = cedenteOptions.length > 0
+                ? cedenteOptions.filter((cedente) =>
+                    clientePertenceAoGrupoEconomico(cedente, group)
+                  ).length
+                : group.prefixos.length;
+              return (
+                <div
+                  key={group.id || group.label}
+                  role="option"
+                  aria-selected={isSelected}
+                  onClick={() => closeAndRun(() => onChange(group.label))}
+                  className="economic-group-option"
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "minmax(0, 1fr) auto",
+                    gap: "8px",
+                    alignItems: "center",
+                    padding: "9px 8px 9px 12px",
+                    background: isSelected ? "#eef2ff" : "#fff",
+                    cursor: "pointer"
+                  }}
+                >
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ color: isSelected ? "#4338ca" : "#334155", fontSize: "13px", fontWeight: isSelected ? 700 : 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {group.label}
+                    </div>
+                    <div style={{ marginTop: "2px", color: "#94a3b8", fontSize: "11px" }}>
+                      {memberCount} {memberCount === 1 ? "cedente" : "cedentes"}
+                    </div>
+                  </div>
+
+                  <div style={{ display: "flex", gap: "3px" }}>
+                    <button
+                      type="button"
+                      title={`Editar ${group.label}`}
+                      aria-label={`Editar ${group.label}`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        closeAndRun(() => onEdit(group));
+                      }}
+                      className="economic-group-icon-button"
+                    >
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="M12 20h9" />
+                        <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z" />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      title={`Excluir ${group.label}`}
+                      aria-label={`Excluir ${group.label}`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        closeAndRun(() => onDelete(group));
+                      }}
+                      className="economic-group-icon-button economic-group-delete-button"
+                    >
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <polyline points="3 6 5 6 21 6" />
+                        <path d="M19 6l-1 14H6L5 6m3 0V4h8v2m-6 4v6m4-6v6" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+
+            {!loading && filteredGroups.length === 0 && (
+              <div style={{ padding: "18px 12px", textAlign: "center", color: "#64748b", fontSize: "13px" }}>
+                Nenhum grupo encontrado
+              </div>
+            )}
+
+            {loading && (
+              <div style={{ padding: "18px 12px", textAlign: "center", color: "#64748b", fontSize: "13px" }}>
+                Carregando...
+              </div>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => closeAndRun(onCreate)}
+            style={{
+              width: "100%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "7px",
+              padding: "11px 12px",
+              border: 0,
+              borderTop: "1px solid #e5e7eb",
+              background: "#f8fafc",
+              color: "#4f46e5",
+              fontSize: "13px",
+              fontWeight: 700,
+              cursor: "pointer"
+            }}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" aria-hidden="true">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            Criar novo grupo
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EconomicGroupModal({
+  group,
+  cedenteOptions,
+  loadingCedentes,
+  saving,
+  error,
+  onClose,
+  onSave
+}) {
+  const [nome, setNome] = useState(() => group?.label || "");
+  const [selectedMembers, setSelectedMembers] = useState(() =>
+    group
+      ? cedenteOptions.filter((cedente) =>
+          clientePertenceAoGrupoEconomico(cedente, { prefixos: group.prefixos || [] })
+        )
+      : []
+  );
+  const [searchTerm, setSearchTerm] = useState("");
+  const [validationError, setValidationError] = useState("");
+
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const handleEscape = (event) => {
+      if (event.key === "Escape" && !saving) onClose();
+    };
+    document.addEventListener("keydown", handleEscape);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [onClose, saving]);
+
+  const normalizedSearch = normalizarChave(searchTerm);
+  const filteredCedentes = cedenteOptions.filter((cedente) =>
+    !normalizedSearch || normalizarChave(formatarNomeCedente(cedente, false)).includes(normalizedSearch)
+  );
+  const selectedSet = new Set(selectedMembers);
+
+  const toggleMember = (cedente) => {
+    setSelectedMembers((current) =>
+      current.includes(cedente)
+        ? current.filter((item) => item !== cedente)
+        : [...current, cedente]
+    );
+    setValidationError("");
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    const trimmedName = nome.trim();
+
+    if (!trimmedName) {
+      setValidationError("Informe o nome do grupo econômico.");
+      return;
+    }
+    if (selectedMembers.length === 0) {
+      setValidationError("Selecione pelo menos um cedente.");
+      return;
+    }
+
+    setValidationError("");
+    await onSave({ nome: trimmedName, prefixos: selectedMembers });
+  };
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="economic-group-modal-title"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget && !saving) onClose();
+      }}
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 12000,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "20px",
+        background: "rgba(15, 23, 42, 0.55)",
+        backdropFilter: "blur(3px)"
+      }}
+    >
+      <form
+        onSubmit={handleSubmit}
+        style={{
+          width: "min(680px, 100%)",
+          maxHeight: "min(780px, calc(100vh - 40px))",
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+          background: "#fff",
+          border: "1px solid rgba(226, 232, 240, 0.9)",
+          borderRadius: "16px",
+          boxShadow: "0 24px 70px rgba(15, 23, 42, 0.28)"
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "20px", padding: "22px 24px 18px", borderBottom: "1px solid #e5e7eb" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <div style={{ width: "36px", height: "36px", borderRadius: "10px", display: "grid", placeItems: "center", background: "#eef2ff", color: "#4f46e5" }}>
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="9" cy="7" r="4" />
+                <path d="M3 21v-2a6 6 0 0 1 12 0v2" />
+                <path d="M16 3.2a4 4 0 0 1 0 7.6M21 21v-2a6 6 0 0 0-4.5-5.8" />
+              </svg>
+            </div>
+            <div>
+              <h2 id="economic-group-modal-title" style={{ margin: 0, color: "#0f172a", fontSize: "19px", fontWeight: 800 }}>
+                {group ? "Editar grupo econômico" : "Novo grupo econômico"}
+              </h2>
+              <p style={{ margin: "4px 0 0", color: "#64748b", fontSize: "13px" }}>
+                Defina o nome e os cedentes que fazem parte do grupo.
+              </p>
+            </div>
+          </div>
+          <button type="button" onClick={onClose} disabled={saving} className="economic-group-modal-close" aria-label="Fechar">
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
+
+        <div style={{ padding: "20px 24px", overflowY: "auto" }}>
+          <label htmlFor="economic-group-name" style={{ display: "block", marginBottom: "7px", color: "#334155", fontSize: "13px", fontWeight: 700 }}>
+            Nome do grupo
+          </label>
+          <input
+            id="economic-group-name"
+            autoFocus
+            value={nome}
+            onChange={(event) => {
+              setNome(event.target.value);
+              setValidationError("");
+            }}
+            placeholder="Ex.: Grupo MG Packing"
+            maxLength={120}
+            disabled={saving}
+            style={{
+              width: "100%",
+              padding: "11px 12px",
+              border: "1px solid #cbd5e1",
+              borderRadius: "8px",
+              color: "#0f172a",
+              fontSize: "14px",
+              outline: "none",
+              boxSizing: "border-box"
+            }}
+          />
+
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", marginTop: "20px", marginBottom: "7px" }}>
+            <label htmlFor="economic-group-member-search" style={{ color: "#334155", fontSize: "13px", fontWeight: 700 }}>
+              Cedentes do grupo
+            </label>
+            <span style={{ padding: "3px 8px", borderRadius: "999px", background: selectedMembers.length ? "#eef2ff" : "#f1f5f9", color: selectedMembers.length ? "#4f46e5" : "#64748b", fontSize: "11px", fontWeight: 700 }}>
+              {selectedMembers.length} selecionado{selectedMembers.length === 1 ? "" : "s"}
+            </span>
+          </div>
+
+          <div style={{ position: "relative", marginBottom: "10px" }}>
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true" style={{ position: "absolute", left: "11px", top: "11px", color: "#94a3b8" }}>
+              <circle cx="11" cy="11" r="7" />
+              <line x1="16.5" y1="16.5" x2="21" y2="21" />
+            </svg>
+            <input
+              id="economic-group-member-search"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder="Buscar cedente existente..."
+              disabled={saving || loadingCedentes}
+              style={{
+                width: "100%",
+                padding: "10px 12px 10px 36px",
+                border: "1px solid #cbd5e1",
+                borderRadius: "8px",
+                color: "#0f172a",
+                fontSize: "13px",
+                outline: "none",
+                boxSizing: "border-box",
+                background: loadingCedentes ? "#f8fafc" : "#fff"
+              }}
+            />
+          </div>
+
+          <div style={{ minHeight: "210px", maxHeight: "330px", overflowY: "auto", border: "1px solid #e2e8f0", borderRadius: "10px", background: "#fff" }}>
+            {loadingCedentes ? (
+              <div style={{ minHeight: "210px", display: "grid", placeItems: "center", color: "#64748b", fontSize: "13px" }}>
+                Carregando cedentes existentes...
+              </div>
+            ) : filteredCedentes.length === 0 ? (
+              <div style={{ minHeight: "210px", display: "grid", placeItems: "center", padding: "20px", color: "#64748b", fontSize: "13px", textAlign: "center" }}>
+                Nenhum cedente encontrado.
+              </div>
+            ) : (
+              filteredCedentes.map((cedente) => {
+                const checked = selectedSet.has(cedente);
+                return (
+                  <label
+                    key={cedente}
+                    className="economic-group-member-row"
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "11px",
+                      padding: "10px 12px",
+                      borderBottom: "1px solid #f1f5f9",
+                      background: checked ? "#f5f7ff" : "#fff",
+                      cursor: saving ? "not-allowed" : "pointer"
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggleMember(cedente)}
+                      disabled={saving}
+                      style={{ width: "16px", height: "16px", accentColor: "#4f46e5", flex: "0 0 auto" }}
+                    />
+                    <span style={{ minWidth: 0, color: checked ? "#3730a3" : "#334155", fontSize: "13px", fontWeight: checked ? 650 : 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {formatarNomeCedente(cedente, false)}
+                    </span>
+                  </label>
+                );
+              })
+            )}
+          </div>
+
+          {(validationError || error) && (
+            <div role="alert" style={{ marginTop: "12px", padding: "10px 12px", border: "1px solid #fecaca", borderRadius: "8px", background: "#fef2f2", color: "#b91c1c", fontSize: "12px", lineHeight: 1.45 }}>
+              {validationError || error}
+            </div>
+          )}
+        </div>
+
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", padding: "16px 24px", borderTop: "1px solid #e5e7eb", background: "#f8fafc" }}>
+          <button type="button" onClick={onClose} disabled={saving} className="economic-group-secondary-button">
+            Cancelar
+          </button>
+          <button type="submit" disabled={saving || loadingCedentes} className="economic-group-primary-button">
+            {saving ? "Salvando..." : group ? "Salvar alterações" : "Criar grupo"}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function EconomicGroupDeleteDialog({ group, deleting, error, onClose, onConfirm }) {
+  useEffect(() => {
+    const handleEscape = (event) => {
+      if (event.key === "Escape" && !deleting) onClose();
+    };
+    document.addEventListener("keydown", handleEscape);
+    return () => document.removeEventListener("keydown", handleEscape);
+  }, [deleting, onClose]);
+
+  return (
+    <div
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="delete-economic-group-title"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget && !deleting) onClose();
+      }}
+      style={{ position: "fixed", inset: 0, zIndex: 12000, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px", background: "rgba(15, 23, 42, 0.55)", backdropFilter: "blur(3px)" }}
+    >
+      <div style={{ width: "min(440px, 100%)", padding: "24px", borderRadius: "16px", background: "#fff", border: "1px solid #e5e7eb", boxShadow: "0 24px 70px rgba(15, 23, 42, 0.28)" }}>
+        <div style={{ width: "42px", height: "42px", display: "grid", placeItems: "center", borderRadius: "12px", background: "#fef2f2", color: "#dc2626", marginBottom: "16px" }}>
+          <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <polyline points="3 6 5 6 21 6" />
+            <path d="M19 6l-1 14H6L5 6m3 0V4h8v2m-6 4v6m4-6v6" />
+          </svg>
+        </div>
+        <h2 id="delete-economic-group-title" style={{ margin: 0, color: "#0f172a", fontSize: "19px", fontWeight: 800 }}>
+          Excluir grupo econômico?
+        </h2>
+        <p style={{ margin: "8px 0 0", color: "#64748b", fontSize: "14px", lineHeight: 1.55 }}>
+          O grupo <strong style={{ color: "#334155" }}>{group.label}</strong> será removido. Os dados dos cedentes não serão alterados.
+        </p>
+        {error && (
+          <div role="alert" style={{ marginTop: "14px", padding: "10px 12px", border: "1px solid #fecaca", borderRadius: "8px", background: "#fef2f2", color: "#b91c1c", fontSize: "12px" }}>
+            {error}
+          </div>
+        )}
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "22px" }}>
+          <button type="button" onClick={onClose} disabled={deleting} className="economic-group-secondary-button">
+            Cancelar
+          </button>
+          <button type="button" onClick={onConfirm} disabled={deleting} className="economic-group-danger-button">
+            {deleting ? "Excluindo..." : "Excluir grupo"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // --- EXPORTAÇÃO DO MICRODASHBOARD ---
 export default function MicroDashboard({ session, onSidebarToggle, hideValues, setHideValues, initialFilter = null }) {
   const hasInitialFilter = Boolean(initialFilter?.type);
@@ -2616,6 +3204,17 @@ export default function MicroDashboard({ session, onSidebarToggle, hideValues, s
   const [grupoSelecionado, setGrupoSelecionado] = useState("");
   const [sacadoSelecionado, setSacadoSelecionado] = useState(() => initialFilter?.type === "sacado" ? initialFilter.value || "" : "");
   const [rowsConcentracaoSacado, setRowsConcentracaoSacado] = useState([]);
+  const [gruposEconomicos, setGruposEconomicos] = useState([]);
+  const [gruposEconomicosLoading, setGruposEconomicosLoading] = useState(true);
+  const [cedentesParaGrupos, setCedentesParaGrupos] = useState([]);
+  const [cedentesParaGruposLoading, setCedentesParaGruposLoading] = useState(false);
+  const [grupoModal, setGrupoModal] = useState(null);
+  const [grupoParaExcluir, setGrupoParaExcluir] = useState(null);
+  const [salvandoGrupo, setSalvandoGrupo] = useState(false);
+  const [excluindoGrupo, setExcluindoGrupo] = useState(false);
+  const [grupoFormError, setGrupoFormError] = useState("");
+  const [grupoDeleteError, setGrupoDeleteError] = useState("");
+  const [grupoFeedback, setGrupoFeedback] = useState(null);
 
   // ESTADOS DE CONTROLO DA SIDEBAR
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -2679,6 +3278,13 @@ export default function MicroDashboard({ session, onSidebarToggle, hideValues, s
   const appliedInitialFilterToken = useRef(initialFilter?.token ?? null);
 
   const relacionamentoIndex = useMemo(() => criarIndiceRelacionamentos(relacionamentos), [relacionamentos]);
+  const cedentesDisponiveisParaContagem = useMemo(
+    () => criarOpcoesEntidadesAgrupadas([
+      ...relacionamentoIndex.clienteOptions,
+      ...cedentesParaGrupos
+    ]),
+    [relacionamentoIndex, cedentesParaGrupos]
+  );
   const clienteSelecionadoKey = useMemo(() => chaveEntidadePrefixo(clienteSelecionado), [clienteSelecionado]);
   const sacadoSelecionadoKey = useMemo(() => chaveEntidadePrefixo(sacadoSelecionado), [sacadoSelecionado]);
   const clienteSelecionadoAliases = useMemo(
@@ -2689,6 +3295,162 @@ export default function MicroDashboard({ session, onSidebarToggle, hideValues, s
     () => getEntityAliases(relacionamentoIndex.sacados, sacadoSelecionado),
     [relacionamentoIndex, sacadoSelecionado]
   );
+
+  useEffect(() => {
+    if (!session?.user?.id) return;
+    let cancelled = false;
+
+    async function carregarGruposEconomicos() {
+      setGruposEconomicosLoading(true);
+      const { data, error } = await supabase
+        .from(GRUPOS_ECONOMICOS_TABLE)
+        .select("id, nome, prefixos, ativo")
+        .eq("ativo", true)
+        .order("nome", { ascending: true });
+
+      if (cancelled) return;
+
+      if (error) {
+        console.error("Erro ao buscar grupos econômicos:", error);
+        setGruposEconomicos(
+          GRUPOS_ECONOMICOS_FALLBACK.map((group) => ({
+            ...group,
+            id: null,
+            ativo: true
+          }))
+        );
+        setGrupoFeedback({ type: "error", message: mensagemErroGrupoEconomico(error) });
+      } else {
+        setGruposEconomicos((data || []).map(normalizarGrupoEconomico).filter((group) => group.label));
+      }
+      setGruposEconomicosLoading(false);
+    }
+
+    carregarGruposEconomicos();
+    return () => { cancelled = true; };
+  }, [session?.user?.id]);
+
+  useEffect(() => {
+    if (!grupoFeedback) return;
+    const timeout = setTimeout(() => setGrupoFeedback(null), 4500);
+    return () => clearTimeout(timeout);
+  }, [grupoFeedback]);
+
+  const carregarCedentesParaGrupos = async () => {
+    if (cedentesParaGrupos.length > 0 || cedentesParaGruposLoading) return;
+
+    setCedentesParaGruposLoading(true);
+    setGrupoFormError("");
+    try {
+      const clientesPorFonte = await Promise.all([
+        fetchExistingClientes("secInfo"),
+        fetchExistingClientes("secInfoSmart")
+      ]);
+      setCedentesParaGrupos(criarOpcoesEntidadesAgrupadas(clientesPorFonte.flat()));
+    } catch (error) {
+      console.error("Erro ao buscar cedentes para grupos econômicos:", error);
+      setGrupoFormError("Não foi possível carregar a lista de cedentes existentes.");
+    } finally {
+      setCedentesParaGruposLoading(false);
+    }
+  };
+
+  const abrirCriacaoGrupo = () => {
+    setGrupoFormError("");
+    setGrupoModal({ group: null });
+    carregarCedentesParaGrupos();
+  };
+
+  const abrirEdicaoGrupo = (group) => {
+    setGrupoFormError("");
+    setGrupoModal({ group });
+    carregarCedentesParaGrupos();
+  };
+
+  const abrirExclusaoGrupo = (group) => {
+    if (!group.id) {
+      setGrupoFeedback({
+        type: "error",
+        message: "Aplique a migração do Supabase antes de alterar os grupos cadastrados no código."
+      });
+      return;
+    }
+    setGrupoDeleteError("");
+    setGrupoParaExcluir(group);
+  };
+
+  const salvarGrupoEconomico = async (payload) => {
+    const currentGroup = grupoModal?.group;
+    setSalvandoGrupo(true);
+    setGrupoFormError("");
+
+    try {
+      const query = currentGroup?.id
+        ? supabase
+            .from(GRUPOS_ECONOMICOS_TABLE)
+            .update(payload)
+            .eq("id", currentGroup.id)
+        : supabase
+            .from(GRUPOS_ECONOMICOS_TABLE)
+            .insert(payload);
+
+      const { data, error } = await query
+        .select("id, nome, prefixos, ativo")
+        .single();
+
+      if (error) throw error;
+
+      const savedGroup = normalizarGrupoEconomico(data);
+      setGruposEconomicos((current) => {
+        const next = currentGroup?.id
+          ? current.map((group) => group.id === currentGroup.id ? savedGroup : group)
+          : [...current.filter((group) => group.id), savedGroup];
+        return next.sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
+      });
+
+      if (!currentGroup || grupoSelecionado === currentGroup.label) {
+        setGrupoSelecionado(savedGroup.label);
+        setClienteSelecionado("");
+        setSacadoSelecionado("");
+      }
+
+      setGrupoModal(null);
+      setGrupoFeedback({
+        type: "success",
+        message: currentGroup ? "Grupo econômico atualizado." : "Grupo econômico criado."
+      });
+    } catch (error) {
+      console.error("Erro ao salvar grupo econômico:", error);
+      setGrupoFormError(mensagemErroGrupoEconomico(error));
+    } finally {
+      setSalvandoGrupo(false);
+    }
+  };
+
+  const excluirGrupoEconomico = async () => {
+    if (!grupoParaExcluir?.id) return;
+
+    setExcluindoGrupo(true);
+    setGrupoDeleteError("");
+    try {
+      const { error } = await supabase
+        .from(GRUPOS_ECONOMICOS_TABLE)
+        .delete()
+        .eq("id", grupoParaExcluir.id);
+
+      if (error) throw error;
+
+      setGruposEconomicos((current) => current.filter((group) => group.id !== grupoParaExcluir.id));
+      if (grupoSelecionado === grupoParaExcluir.label) setGrupoSelecionado("");
+      setGrupoParaExcluir(null);
+      setGrupoFeedback({ type: "success", message: "Grupo econômico excluído." });
+    } catch (error) {
+      console.error("Erro ao excluir grupo econômico:", error);
+      setGrupoDeleteError(mensagemErroGrupoEconomico(error));
+    } finally {
+      setExcluindoGrupo(false);
+    }
+  };
 
   useEffect(() => {
     latestDateFilter.current = dateFilter;
@@ -3507,7 +4269,7 @@ return {
           filtered = filtered.filter((r) => getEntityKeyFromRow(r, "Sacado") === sacadoSelecionadoKey);
         }
         if (grupoSelecionado && !clienteSelecionado) {
-          const grupo = GRUPOS_ECONOMICOS.find(g => g.label === grupoSelecionado);
+          const grupo = gruposEconomicos.find(g => g.label === grupoSelecionado);
           if (grupo) {
             filtered = filtered.filter(r => clientePertenceAoGrupoEconomico(r.Cliente, grupo));
           }
@@ -3521,7 +4283,7 @@ return {
       }
     }, 80);
     return () => clearTimeout(delayDebounceFn);
-  }, [clienteSelecionado, clienteSelecionadoKey, clienteSelecionadoAliases, sacadoSelecionado, sacadoSelecionadoKey, sacadoSelecionadoAliases, grupoSelecionado, session?.user?.id, dataSourceTable, borderoFilter, dctoFilter]);
+  }, [clienteSelecionado, clienteSelecionadoKey, clienteSelecionadoAliases, sacadoSelecionado, sacadoSelecionadoKey, sacadoSelecionadoAliases, grupoSelecionado, gruposEconomicos, session?.user?.id, dataSourceTable, borderoFilter, dctoFilter]);
 
   const limparFiltroEntidades = () => {
     setClienteSelecionado(""); 
@@ -3583,6 +4345,58 @@ return (
           .table-row-default:hover { background: #f9fafb; }
           .clickable-entity { cursor: pointer; font-weight: 600; color: #374151; transition: color 0.2s; }
           .clickable-entity:hover { color: #4f46e5; }
+          .economic-group-option:hover { background: #f8fafc !important; }
+          .economic-group-icon-button {
+            width: 30px;
+            height: 30px;
+            display: inline-grid;
+            place-items: center;
+            padding: 0;
+            border: 0;
+            border-radius: 7px;
+            background: transparent;
+            color: #64748b;
+            cursor: pointer;
+            transition: background 0.18s, color 0.18s;
+          }
+          .economic-group-icon-button:hover { background: #e0e7ff; color: #4f46e5; }
+          .economic-group-delete-button:hover { background: #fee2e2; color: #dc2626; }
+          .economic-group-modal-close {
+            width: 34px;
+            height: 34px;
+            display: inline-grid;
+            place-items: center;
+            flex: 0 0 auto;
+            padding: 0;
+            border: 1px solid #e2e8f0;
+            border-radius: 9px;
+            background: #fff;
+            color: #64748b;
+            cursor: pointer;
+            transition: background 0.18s, color 0.18s;
+          }
+          .economic-group-modal-close:hover { background: #f1f5f9; color: #0f172a; }
+          .economic-group-member-row:hover { background: #f8fafc !important; }
+          .economic-group-secondary-button,
+          .economic-group-primary-button,
+          .economic-group-danger-button {
+            padding: 10px 16px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: background 0.18s, border-color 0.18s, opacity 0.18s;
+          }
+          .economic-group-secondary-button { border: 1px solid #cbd5e1; background: #fff; color: #475569; }
+          .economic-group-secondary-button:hover { background: #f8fafc; border-color: #94a3b8; }
+          .economic-group-primary-button { border: 1px solid #4f46e5; background: #4f46e5; color: #fff; box-shadow: 0 2px 5px rgba(79, 70, 229, 0.2); }
+          .economic-group-primary-button:hover { background: #4338ca; border-color: #4338ca; }
+          .economic-group-danger-button { border: 1px solid #dc2626; background: #dc2626; color: #fff; }
+          .economic-group-danger-button:hover { background: #b91c1c; border-color: #b91c1c; }
+          .economic-group-secondary-button:disabled,
+          .economic-group-primary-button:disabled,
+          .economic-group-danger-button:disabled,
+          .economic-group-modal-close:disabled { opacity: 0.55; cursor: not-allowed; }
           .kpi-grid { grid-template-columns: repeat(3, minmax(260px, 1fr)); }
           @media (max-width: 900px) {
             .kpi-grid { grid-template-columns: repeat(2, minmax(240px, 1fr)); }
@@ -3592,6 +4406,76 @@ return (
           }
         `}
       </style>
+
+      {grupoModal && (
+        <EconomicGroupModal
+          key={`${grupoModal.group?.id || "new"}-${cedentesParaGrupos.length}`}
+          group={grupoModal.group}
+          cedenteOptions={cedentesParaGrupos}
+          loadingCedentes={cedentesParaGruposLoading}
+          saving={salvandoGrupo}
+          error={grupoFormError}
+          onClose={() => {
+            if (!salvandoGrupo) {
+              setGrupoModal(null);
+              setGrupoFormError("");
+            }
+          }}
+          onSave={salvarGrupoEconomico}
+        />
+      )}
+
+      {grupoParaExcluir && (
+        <EconomicGroupDeleteDialog
+          group={grupoParaExcluir}
+          deleting={excluindoGrupo}
+          error={grupoDeleteError}
+          onClose={() => {
+            if (!excluindoGrupo) {
+              setGrupoParaExcluir(null);
+              setGrupoDeleteError("");
+            }
+          }}
+          onConfirm={excluirGrupoEconomico}
+        />
+      )}
+
+      {grupoFeedback && (
+        <div
+          role="status"
+          style={{
+            position: "fixed",
+            top: "20px",
+            right: "20px",
+            zIndex: 13000,
+            display: "flex",
+            alignItems: "center",
+            gap: "9px",
+            maxWidth: "380px",
+            padding: "12px 15px",
+            border: `1px solid ${grupoFeedback.type === "success" ? "#a7f3d0" : "#fecaca"}`,
+            borderRadius: "10px",
+            background: grupoFeedback.type === "success" ? "#ecfdf5" : "#fef2f2",
+            color: grupoFeedback.type === "success" ? "#047857" : "#b91c1c",
+            fontSize: "13px",
+            fontWeight: 650,
+            boxShadow: "0 12px 28px rgba(15, 23, 42, 0.14)"
+          }}
+        >
+          {grupoFeedback.type === "success" ? (
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M20 6 9 17l-5-5" />
+            </svg>
+          ) : (
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="9" />
+              <line x1="12" y1="8" x2="12" y2="13" />
+              <line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
+          )}
+          {grupoFeedback.message}
+        </div>
+      )}
 
       {/* OVERLAY MOBILE: Fecha o menu se clicado fora */}
       {isMobile && isSidebarOpen && (
@@ -3669,11 +4553,15 @@ return (
           </div>
           <div>
             <label style={{ display: "block", marginBottom: 6, fontSize: "13px", fontWeight: "600", color: "#374151" }}>Grupo Econômico</label>
-            <CustomDropdown
+            <EconomicGroupDropdown
               value={grupoSelecionado}
               onChange={(v) => { setGrupoSelecionado(v); if (v) { setClienteSelecionado(""); setSacadoSelecionado(""); } }}
-              options={GRUPOS_ECONOMICOS.map(g => g.label)}
-              placeholder="Selecione o Grupo..."
+              groups={gruposEconomicos}
+              cedenteOptions={cedentesDisponiveisParaContagem}
+              loading={gruposEconomicosLoading}
+              onCreate={abrirCriacaoGrupo}
+              onEdit={abrirEdicaoGrupo}
+              onDelete={abrirExclusaoGrupo}
             />
           </div>
           <div>
