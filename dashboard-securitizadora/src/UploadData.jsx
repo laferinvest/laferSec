@@ -781,6 +781,80 @@ const smartKey = (row) =>
 
 const secInfoKey = smartKey;
 
+const SMART_RENEWAL_PREVIOUS_KEY = "__smartRenewalPreviousKey";
+
+const smartRenewalIdentityKey = (row) => {
+  const dcto = limpaChave(row?.Dcto);
+  const cliente = normalizarChaveEntidade(row?.Cliente);
+  const sacado = normalizarChaveEntidade(row?.Sacado);
+
+  if (!dcto || !cliente || !sacado) return "";
+  return `${dcto}__${cliente}__${sacado}`;
+};
+
+const smartVctoTimestamp = (row) => {
+  const vcto = limpaChave(row?.Vcto);
+  if (!vcto) return null;
+
+  const timestamp = Date.parse(`${vcto.split("T")[0]}T00:00:00`);
+  return Number.isNaN(timestamp) ? null : timestamp;
+};
+
+const reconcileSmartRenewalRows = (rows) => {
+  const groups = new Map();
+
+  rows.forEach((row, index) => {
+    const identityKey = smartRenewalIdentityKey(row);
+    if (!identityKey) return;
+    if (!groups.has(identityKey)) groups.set(identityKey, []);
+    groups.get(identityKey).push({ row, index });
+  });
+
+  const indexesToRemove = new Set();
+  const replacementsByIndex = new Map();
+
+  groups.forEach((entries) => {
+    if (entries.length !== 2) return;
+
+    const entriesWithOp = entries.filter(({ row }) => Number.isFinite(row["Borderô"]));
+    const entriesWithoutOp = entries.filter(({ row }) => !Number.isFinite(row["Borderô"]));
+    if (entriesWithOp.length !== 1 || entriesWithoutOp.length !== 1) return;
+
+    const [firstEntry, secondEntry] = entries;
+    const firstVcto = smartVctoTimestamp(firstEntry.row);
+    const secondVcto = smartVctoTimestamp(secondEntry.row);
+    if (firstVcto === null || secondVcto === null || firstVcto === secondVcto) return;
+
+    const latestEntry = firstVcto > secondVcto ? firstEntry : secondEntry;
+    const olderEntry = latestEntry === firstEntry ? secondEntry : firstEntry;
+    const previousRow = entriesWithOp[0].row;
+    const latestValue = cleanNumber(latestEntry.row.Entrada);
+    const previousValue = cleanNumber(previousRow.Entrada);
+    const faceValueDifference =
+      latestValue !== null && previousValue !== null
+        ? Number(Math.abs(latestValue - previousValue).toFixed(2))
+        : 0;
+    const resolvedRow = {
+      ...latestEntry.row,
+      "Borderô": previousRow["Borderô"],
+      [SMART_RENEWAL_PREVIOUS_KEY]: smartKey(previousRow),
+    };
+
+    if (faceValueDifference > 0) {
+      const currentDesagio = cleanNumber(latestEntry.row.Desagio) || 0;
+      resolvedRow.Desagio = Number((currentDesagio + faceValueDifference).toFixed(2));
+    }
+
+    replacementsByIndex.set(latestEntry.index, resolvedRow);
+    indexesToRemove.add(olderEntry.index);
+  });
+
+  return rows.flatMap((row, index) => {
+    if (indexesToRemove.has(index)) return [];
+    return [replacementsByIndex.get(index) || row];
+  });
+};
+
 const entidadeDctoKey = (entidade, dcto) =>
   `${normalizarChaveEntidade(entidade)}__${normalizeDctoKey(dcto)}`;
 
@@ -797,8 +871,14 @@ const clienteDctoVctoKey = (row) =>
 const sacadoDctoVctoKey = (row) =>
   entidadeDctoVctoKey(row?.Sacado, row?.Dcto, row?.Vcto);
 
-const withoutSmartCodRed = (row) => {
+const toSmartDatabaseRow = (row) => {
   const copy = { ...row };
+  delete copy[SMART_RENEWAL_PREVIOUS_KEY];
+  return copy;
+};
+
+const withoutSmartCodRed = (row) => {
+  const copy = toSmartDatabaseRow(row);
   delete copy["Cód.Red"];
   return copy;
 };
@@ -1335,9 +1415,10 @@ export default function UploadData({ hideValues = false }) {
       .slice(headerIndex + 1)
       .map((row) => buildSmartSourceRow(headers, row))
       .map(mapSmartRow);
+    const reconciledSmartRows = reconcileSmartRenewalRows(mappedRows);
 
     return {
-      smartRows: mappedRows.filter(isUsefulSmartRow),
+      smartRows: reconciledSmartRows.filter(isUsefulSmartRow),
       secInfoInadimplenciaRows: mappedRows.filter((row) =>
         hasInadimplenciaValue(row) &&
         limpaChave(row.Dcto) &&
@@ -1421,20 +1502,16 @@ export default function UploadData({ hideValues = false }) {
       const rowsToInsert = [];
       const rowsToUpdate = [];
       const smartKeysInFile = new Set(smartRows.map((row) => smartKey(row)));
-      const rowsToDelete = existingRows.filter((row) => row.id && !smartKeysInFile.has(smartKey(row)));
-      const deletedRowsSummary = rowsToDelete.map((row) => ({
-        id: row.id,
-        Cliente: row.Cliente || "",
-        Sacado: row.Sacado || "",
-        Dcto: row.Dcto || "",
-        Bordero: row["Borderô"] || "",
-        Vcto: row.Vcto || "",
-        Entrada: row.Entrada || 0,
-      }));
+      const matchedExistingIds = new Set();
 
       smartRows.forEach((row) => {
-        const existingRow = existingMap[smartKey(row)];
+        const renewalPreviousKey = row[SMART_RENEWAL_PREVIOUS_KEY];
+        const existingRow =
+          existingMap[smartKey(row)] ||
+          (renewalPreviousKey ? existingMap[renewalPreviousKey] : null);
+
         if (existingRow?.id) {
+          matchedExistingIds.add(existingRow.id);
           const updateRow = { ...row };
           const existingDesagio = cleanNumber(existingRow.Desagio);
           const incomingDesagio = cleanNumber(updateRow.Desagio);
@@ -1460,6 +1537,21 @@ export default function UploadData({ hideValues = false }) {
           rowsToInsert.push(row);
         }
       });
+
+      const rowsToDelete = existingRows.filter((row) =>
+        row.id &&
+        !smartKeysInFile.has(smartKey(row)) &&
+        !matchedExistingIds.has(row.id)
+      );
+      const deletedRowsSummary = rowsToDelete.map((row) => ({
+        id: row.id,
+        Cliente: row.Cliente || "",
+        Sacado: row.Sacado || "",
+        Dcto: row.Dcto || "",
+        Bordero: row["Borderô"] || "",
+        Vcto: row.Vcto || "",
+        Entrada: row.Entrada || 0,
+      }));
 
       for (let i = 0; i < rowsToDelete.length; i += SMART_BATCH_SIZE) {
         const batch = rowsToDelete.slice(i, i + SMART_BATCH_SIZE);
@@ -1498,7 +1590,7 @@ export default function UploadData({ hideValues = false }) {
 
         const lastCodRed = cleanNumber(lastCodRedRows?.[0]?.["Cód.Red"]) || 0;
         rowsToInsertWithCodRed = rowsToInsert.map((row, index) => ({
-          ...row,
+          ...toSmartDatabaseRow(row),
           "Cód.Red": lastCodRed + index + 1,
         }));
       }
