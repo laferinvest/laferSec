@@ -118,6 +118,127 @@ function getEntityKeyFromRow(row, field) {
   return chaveEntidadePrefixo(row[field]);
 }
 
+function entidadesParecidasPorInicio(a, b) {
+  const na = normalizarEntidadeParaComparacao(a);
+  const nb = normalizarEntidadeParaComparacao(b);
+  if (!na || !nb) return false;
+  if (na === nb) return true;
+
+  const menor = na.length <= nb.length ? na : nb;
+  const maior = na.length > nb.length ? na : nb;
+
+  if (menor.length < ENTITY_PREFIX_MIN_CHARS) return false;
+  return maior.startsWith(menor) || chaveEntidadePrefixo(na) === chaveEntidadePrefixo(nb);
+}
+
+const MACRO_GRUPOS_ECONOMICOS_TABLE = "grupos_economicos";
+const MACRO_GRUPOS_ECONOMICOS_FALLBACK = [
+  {
+    id: null,
+    label: "BDP Broadcast",
+    prefixos: ["BDP Broadcast"],
+    ativo: true,
+  },
+  {
+    id: null,
+    label: "JL & D Confecções",
+    prefixos: ["JL & D Confecções"],
+    ativo: true,
+  },
+  {
+    id: null,
+    label: "MG Packing",
+    prefixos: [
+      "Mg Embalagem e Separadores",
+      "Mg Embalagem e Separadores Industria e Comercio LTDA",
+      "MG Packing",
+      "MG Packing Indústria, Com, Imp e Export de Embalagens LTDA",
+    ],
+    ativo: true,
+  },
+];
+
+function normalizarGrupoEconomicoMacro(row) {
+  return {
+    id: row?.id || null,
+    label: String(row?.nome || row?.label || "").trim(),
+    prefixos: Array.isArray(row?.prefixos)
+      ? row.prefixos.map((prefixo) => String(prefixo || "").trim()).filter(Boolean)
+      : [],
+    ativo: row?.ativo !== false,
+  };
+}
+
+function getGrupoEconomicoMatchScore(cliente, grupo) {
+  const clienteRaw = String(cliente || "").trim();
+  if (!clienteRaw || !grupo?.ativo) return -1;
+
+  const clienteNormalizado = normalizarEntidadeParaComparacao(clienteRaw);
+  let bestScore = -1;
+
+  (grupo.prefixos || []).forEach((prefixoRaw) => {
+    const prefixo = String(prefixoRaw || "").trim();
+    if (!prefixo) return;
+
+    const prefixoNormalizado = normalizarEntidadeParaComparacao(prefixo);
+    const matches =
+      normalizarValor(clienteRaw).startsWith(normalizarValor(prefixo)) ||
+      (prefixoNormalizado && clienteNormalizado.startsWith(prefixoNormalizado)) ||
+      entidadesParecidasPorInicio(clienteRaw, prefixo);
+
+    if (matches) bestScore = Math.max(bestScore, prefixoNormalizado.length);
+  });
+
+  return bestScore;
+}
+
+function encontrarGrupoEconomicoMacro(cliente, gruposEconomicos) {
+  let bestGroup = null;
+  let bestScore = -1;
+
+  (gruposEconomicos || []).forEach((grupo) => {
+    const score = getGrupoEconomicoMatchScore(cliente, grupo);
+    if (score > bestScore) {
+      bestGroup = grupo;
+      bestScore = score;
+    }
+  });
+
+  return bestGroup;
+}
+
+function aplicarGrupoEconomicoMacro(row, gruposEconomicos) {
+  const grupo = encontrarGrupoEconomicoMacro(row?.Cliente, gruposEconomicos);
+  if (!grupo) {
+    return {
+      ...row,
+      _macroCedenteKey: getEntityKeyFromRow(row, "Cliente"),
+      _macroCedenteLabel: row?.Cliente || "",
+      _macroGrupoEconomicoId: null,
+    };
+  }
+
+  const groupIdentity = grupo.id || chaveEntidadePrefixo(grupo.label);
+  return {
+    ...row,
+    _macroCedenteKey: `grupo-economico:${groupIdentity}`,
+    _macroCedenteLabel: grupo.label,
+    _macroGrupoEconomicoId: grupo.id,
+  };
+}
+
+function getMacroEntityKey(row, focus) {
+  return focus === "cedente"
+    ? row?._macroCedenteKey || getEntityKeyFromRow(row, "Cliente")
+    : getEntityKeyFromRow(row, "Sacado");
+}
+
+function getMacroEntityLabel(row, focus) {
+  return focus === "cedente"
+    ? row?._macroCedenteLabel || row?.Cliente
+    : row?.Sacado;
+}
+
 function escolherNomeEntidadeMaisCompleto(atual, novo) {
   const atualStr = String(atual || "").trim();
   const novoStr = String(novo || "").trim();
@@ -270,6 +391,23 @@ async function fetchAllMacroRows(tableName, pageSize = MACRO_PAGE_SIZE, selectCl
   return allRows;
 }
 
+async function fetchMacroGruposEconomicos() {
+  const { data, error } = await supabase
+    .from(MACRO_GRUPOS_ECONOMICOS_TABLE)
+    .select("id, nome, prefixos, ativo")
+    .eq("ativo", true)
+    .order("nome", { ascending: true });
+
+  if (error) {
+    console.error("Erro ao buscar grupos econômicos no MacroDashboard:", error);
+    return MACRO_GRUPOS_ECONOMICOS_FALLBACK.map(normalizarGrupoEconomicoMacro);
+  }
+
+  return (data || [])
+    .map(normalizarGrupoEconomicoMacro)
+    .filter((grupo) => grupo.label && grupo.ativo);
+}
+
 async function loadMacroDashboardData() {
   const now = Date.now();
   if (macroDashboardCache.data && now - macroDashboardCache.updatedAt < MACRO_CACHE_TTL_MS) {
@@ -329,7 +467,7 @@ function MacroDetailedTable({ rows, focus, setFocus, setSelectedSlice, hideValue
 
   useEffect(() => { setCurrentPage(1); }, [rows, focus, sortConfig]);
 
-  const colunasOcultas = ["id", "created_at", "Cód.Red", "UF", "Banco", "Rec.", "Estado", "_status", "_sourceTable", "_rowKey", "_clienteEntityKey", "_sacadoEntityKey", "Qtd Linhas Agrupadas", "Detalhes Agrupamento", "inadimplencia", "Inadimplencia", "Inadimplência"];
+  const colunasOcultas = ["id", "created_at", "Cód.Red", "UF", "Banco", "Rec.", "Estado", "_status", "_sourceTable", "_rowKey", "_clienteEntityKey", "_sacadoEntityKey", "_macroCedenteKey", "_macroCedenteLabel", "_macroGrupoEconomicoId", "Qtd Linhas Agrupadas", "Detalhes Agrupamento", "inadimplencia", "Inadimplencia", "Inadimplência"];
 
   const columns = useMemo(() => {
     if (!rows.length) return [];
@@ -443,7 +581,7 @@ function MacroDetailedTable({ rows, focus, setFocus, setSelectedSlice, hideValue
                     if (c === "Cliente" && focus === 'sacado') {
                       return (
                         <td key={c} style={{ padding: "12px 16px", color: "#374151" }}>
-                          <span onClick={() => { setFocus('cedente'); setSelectedSlice(valorOriginal); }} className="cross-nav-cedente">
+                          <span onClick={() => { setFocus('cedente'); setSelectedSlice(r._macroCedenteLabel || valorOriginal); }} className="cross-nav-cedente">
                             {escapeText(valor)}
                           </span>
                         </td>
@@ -486,6 +624,9 @@ function MacroDetailedTable({ rows, focus, setFocus, setSelectedSlice, hideValue
 // --- DASHBOARD MACRO PRINCIPAL ---
 export default function MacroDashboard({ session, hideValues, setHideValues }) {
   const [rows, setRows] = useState([]);
+  const [gruposEconomicos, setGruposEconomicos] = useState(
+    MACRO_GRUPOS_ECONOMICOS_FALLBACK.map(normalizarGrupoEconomicoMacro)
+  );
   const [loading, setLoading] = useState(true);
   const [latestPatrimonio, setLatestPatrimonio] = useState(0);
   const [focus, setFocus] = useState('cedente'); 
@@ -512,11 +653,12 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
       setLoading(true);
     }
 
-    loadMacroDashboardData()
-      .then((result) => {
+    Promise.all([loadMacroDashboardData(), fetchMacroGruposEconomicos()])
+      .then(([result, grupos]) => {
         if (cancelled) return;
         setRows(result.rows);
         setLatestPatrimonio(result.latestPatrimonio);
+        setGruposEconomicos(grupos);
         console.log("Macro fontes carregadas", result.counts);
       })
       .catch((error) => {
@@ -527,12 +669,17 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
       });
 
     return () => { cancelled = true; };
-  }, []);
+  }, [session?.user?.id]);
+
+  const rowsComGruposEconomicos = useMemo(
+    () => rows.map((row) => aplicarGrupoEconomicoMacro(row, gruposEconomicos)),
+    [rows, gruposEconomicos]
+  );
 
   // 1. Processa os registos em aberto e o volume negociado por período
   const { openRows, stats, negotiationStats } = useMemo(() => {
     const emptyChart = { totalVal: 0, totalDesEnc: 0, sorted: [], pieData: [], pieDataDesEnc: [] };
-    if (rows.length === 0) return { openRows: [], stats: emptyChart, negotiationStats: { mes_atual: emptyChart, ult_30_dias: emptyChart, ytd: emptyChart } };
+    if (rowsComGruposEconomicos.length === 0) return { openRows: [], stats: emptyChart, negotiationStats: { mes_atual: emptyChart, ult_30_dias: emptyChart, ytd: emptyChart } };
 
     const today = new Date();
     today.setHours(23, 59, 59, 999);
@@ -563,7 +710,7 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
     };
     let totalVal = 0;
 
-    const firstRow = rows[0];
+    const firstRow = rowsComGruposEconomicos[0];
     const vctoKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'vcto' || (k.toLowerCase().includes('vcto') && !k.toLowerCase().includes('vl')));
     const pgtoKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'pgto' || (k.toLowerCase().includes('pgto') && !k.toLowerCase().includes('vl')));
     const statusKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'status' || k.toLowerCase() === 'estado');
@@ -585,7 +732,7 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
       ytd: new Map()
     };
 
-    rows.forEach((r, idx) => {
+    rowsComGruposEconomicos.forEach((r, idx) => {
       let status = 'invalido';
       
       const vctoVal = vctoKey ? r[vctoKey] : null;
@@ -602,8 +749,8 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
       const encargoPossivel = temPgto && vlPgto > 0 && val > 0 && vlPgto !== val;
       const encargo = encargoPossivel && vlPgto <= val * 1.4 ? Math.max(0, vlPgto - val) : 0;
 
-      const entity = focus === 'cedente' ? r.Cliente : r.Sacado;
-      const entityKey = focus === 'cedente' ? getEntityKeyFromRow(r, "Cliente") : getEntityKeyFromRow(r, "Sacado");
+      const entity = getMacroEntityLabel(r, focus);
+      const entityKey = getMacroEntityKey(r, focus);
 
       if (statusVal === "REC" || statusVal.includes("REC")) {
         status = 'recompra';
@@ -798,17 +945,21 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
         ytd: buildNegotiationChart(negotiationGrouped.ytd)
       }
     };
-  }, [rows, focus, volumeDateBase, latestPatrimonio]);
+  }, [rowsComGruposEconomicos, focus, volumeDateBase, latestPatrimonio]);
 
   // 2. Extrai os detalhes da entidade selecionada
   const detailedRows = useMemo(() => {
     if (!selectedSlice || selectedSlice.startsWith('Restante')) return null;
-    const selectedKey = chaveEntidadePrefixo(selectedSlice);
+    const selectedStatsItem = stats.sorted.find((item) => item.name === selectedSlice);
+    const selectedRow = openRows.find((row) => getMacroEntityLabel(row, focus) === selectedSlice);
+    const selectedKey =
+      selectedStatsItem?.entityKey ||
+      (selectedRow ? getMacroEntityKey(selectedRow, focus) : chaveEntidadePrefixo(selectedSlice));
+
     return openRows.filter(r => {
-      const entityKey = focus === 'cedente' ? getEntityKeyFromRow(r, "Cliente") : getEntityKeyFromRow(r, "Sacado");
-      return entityKey === selectedKey;
+      return getMacroEntityKey(r, focus) === selectedKey;
     });
-  }, [openRows, selectedSlice, focus]);
+  }, [openRows, selectedSlice, focus, stats.sorted]);
 
   // 3. Calcula os KPIs com base na visualização atual (Global ou Específica)
   const riscoAtual = useMemo(() => {
@@ -958,7 +1109,8 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
   const tableData = useMemo(() => {
     if (!selectedSlice) return stats.sorted;
     if (selectedSlice.startsWith('Restante')) return stats.sorted.slice(9);
-    const selectedKey = chaveEntidadePrefixo(selectedSlice);
+    const selectedItem = stats.sorted.find((item) => item.name === selectedSlice);
+    const selectedKey = selectedItem?.entityKey || chaveEntidadePrefixo(selectedSlice);
     return stats.sorted.filter(item => (item.entityKey || chaveEntidadePrefixo(item.name)) === selectedKey);
   }, [stats.sorted, selectedSlice]);
 
