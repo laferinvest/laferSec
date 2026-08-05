@@ -2748,7 +2748,7 @@ auditoria.finalRows = finalRows.map((item) => ({ ...item }));
         <div style={{ marginBottom: "20px" }}>
           <h2 style={{ margin: 0, color: "#111827", fontSize: "20px" }}>Criar Snapshot da Securitizadora</h2>
           <p style={{ color: "#6b7280", fontSize: "14px", margin: "8px 0 0 0" }}>
-            Salva a foto do dia com recebíveis, dinheiro em banco e compra de debêntures.
+            Salva a foto do dia com recebíveis, dinheiro em banco e o fluxo desde o snapshot anterior.
           </p>
         </div>
 
@@ -2777,7 +2777,7 @@ auditoria.finalRows = finalRows.map((item) => ({ ...item }));
           </div>
 
           <div>
-            <label style={{ display: "block", marginBottom: "6px", fontSize: "14px", fontWeight: 600, color: "#374151" }}>Debentures Adquiridas no Mês em R$</label>
+            <label style={{ display: "block", marginBottom: "6px", fontSize: "14px", fontWeight: 600, color: "#374151" }}>Fluxo de Debêntures desde o Snapshot Anterior em R$</label>
             <input
               type="text"
               value={compraDebentures}
@@ -2785,6 +2785,9 @@ auditoria.finalRows = finalRows.map((item) => ({ ...item }));
               placeholder="0"
               style={inputStyle}
             />
+            <div style={{ marginTop: "6px", color: "#6b7280", fontSize: "12px", lineHeight: 1.4 }}>
+              Informe somente o fluxo ocorrido desde o snapshot anterior: valor positivo para aquisição/aporte e negativo para retirada.
+            </div>
           </div>
         </div>
 
@@ -2819,7 +2822,7 @@ auditoria.finalRows = finalRows.map((item) => ({ ...item }));
                   <th style={{ textAlign: "left", padding: "12px", fontSize: "13px", color: "#374151", borderBottom: "1px solid #e5e7eb" }}>Data</th>
                   <th style={{ textAlign: "right", padding: "12px", fontSize: "13px", color: "#374151", borderBottom: "1px solid #e5e7eb" }}>Recebíveis</th>
                   <th style={{ textAlign: "right", padding: "12px", fontSize: "13px", color: "#374151", borderBottom: "1px solid #e5e7eb" }}>Dinheiro no Banco</th>
-                  <th style={{ textAlign: "right", padding: "12px", fontSize: "13px", color: "#374151", borderBottom: "1px solid #e5e7eb" }}>Deb. Adq. Mês</th>
+                  <th style={{ textAlign: "right", padding: "12px", fontSize: "13px", color: "#374151", borderBottom: "1px solid #e5e7eb" }}>Fluxo Debêntures</th>
                 </tr>
               </thead>
               <tbody>

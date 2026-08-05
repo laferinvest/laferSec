@@ -301,6 +301,115 @@ function cleanNumberMacro(valor) {
   return Number.isFinite(n) ? n : null;
 }
 
+function parseMacroDate(valor) {
+  if (!valor) return null;
+  const raw = String(valor).trim().split("T")[0];
+  const parts = raw.includes("-") ? raw.split("-").map(Number) : raw.split("/").map(Number);
+  if (parts.length !== 3) return null;
+
+  let year;
+  let month;
+  let day;
+  if (raw.includes("-") || parts[0] > 31) [year, month, day] = parts;
+  else [day, month, year] = parts;
+  if (year > 0 && year < 100) year += 2000;
+
+  const parsed = new Date(year, month - 1, day);
+  if (
+    !year || !month || !day ||
+    parsed.getFullYear() !== year ||
+    parsed.getMonth() !== month - 1 ||
+    parsed.getDate() !== day
+  ) return null;
+  return parsed;
+}
+
+function adjustMacroBusinessDay(date) {
+  const adjusted = new Date(date);
+  if (adjusted.getDay() === 6) adjusted.setDate(adjusted.getDate() + 2);
+  else if (adjusted.getDay() === 0) adjusted.setDate(adjusted.getDate() + 1);
+  return adjusted;
+}
+
+function addMacroBusinessDays(date, daysToAdd) {
+  const result = new Date(date);
+  let added = 0;
+  while (added < daysToAdd) {
+    result.setDate(result.getDate() + 1);
+    if (result.getDay() !== 0 && result.getDay() !== 6) added += 1;
+  }
+  return result;
+}
+
+function getMacroEffectiveTerm(emissao, vencimento, pagamento = null, usarHojeSemPagamento = false) {
+  const dataEmissao = parseMacroDate(emissao);
+  const dataVencimento = parseMacroDate(vencimento);
+  if (!dataEmissao || !dataVencimento) return null;
+
+  const vencimentoAjustado = adjustMacroBusinessDay(dataVencimento);
+  const pagamentoData = parseMacroDate(pagamento);
+  const pagamentoAjustado = pagamentoData ? adjustMacroBusinessDay(pagamentoData) : null;
+  const hojeAjustado = usarHojeSemPagamento && !pagamentoAjustado
+    ? adjustMacroBusinessDay(new Date())
+    : null;
+  const dataBaseD2 = [vencimentoAjustado, pagamentoAjustado, hojeAjustado]
+    .filter(Boolean)
+    .reduce((latest, date) => (date > latest ? date : latest), vencimentoAjustado);
+  const dataFinal = addMacroBusinessDays(dataBaseD2, 2);
+  const prazo = Math.round((Date.UTC(dataFinal.getFullYear(), dataFinal.getMonth(), dataFinal.getDate()) - Date.UTC(dataEmissao.getFullYear(), dataEmissao.getMonth(), dataEmissao.getDate())) / 86400000);
+  return prazo > 0 ? prazo : null;
+}
+
+function createMonthlyRankingPeriod() {
+  return { volume: 0, borderos: new Map() };
+}
+
+function summarizeMonthlyRankingPeriod(period) {
+  if (!period) return { volume: 0, taxaFinal: null, taxaEncargos: null };
+
+  let baseTaxa = 0;
+  let somaTaxaFinal = 0;
+  let somaTaxaEncargos = 0;
+
+  period.borderos.forEach((bordero) => {
+    if (!bordero.hasRate || bordero.totalValue <= 0) return;
+    baseTaxa += bordero.totalValue;
+    somaTaxaFinal += bordero.rate * bordero.totalValue;
+
+    const prazoMedio = bordero.totalDescontado > 0
+      ? bordero.weightedPrazo / bordero.totalDescontado
+      : null;
+    const taxaComEncargos = bordero.sourceTable === "secInfoSmart" && prazoMedio > 0
+      ? (Math.pow(1 + bordero.totalDesagioEncargos / bordero.totalDescontado, 30 / prazoMedio) - 1) * 100
+      : bordero.rate;
+    somaTaxaEncargos += (Number.isFinite(taxaComEncargos) ? taxaComEncargos : bordero.rate) * bordero.totalValue;
+  });
+
+  return {
+    volume: period.volume,
+    taxaFinal: baseTaxa > 0 ? somaTaxaFinal / baseTaxa : null,
+    taxaEncargos: baseTaxa > 0 ? somaTaxaEncargos / baseTaxa : null,
+  };
+}
+
+function formatRankingRate(value) {
+  return value === null || value === undefined || !Number.isFinite(value)
+    ? "—"
+    : `${value.toFixed(2).replace(".", ",")}% a.m.`;
+}
+
+function getRankingTrendMeta(value, comparisonValue) {
+  if (!Number.isFinite(value) || !Number.isFinite(comparisonValue)) {
+    return { symbol: "", color: "#94a3b8", label: "Sem comparação disponível" };
+  }
+  if (value === comparisonValue) {
+    return { symbol: "→", color: "#047857", label: "Estável em relação ao mês anterior" };
+  }
+  return value > comparisonValue
+    ? { symbol: "↑", color: "#047857", label: "Alta em relação ao mês anterior" }
+    : { symbol: "↓", color: "#b45353", label: "Queda em relação ao mês anterior" };
+}
+
 function getValorPorAliases(row, aliases) {
   if (!row) return undefined;
 
@@ -323,6 +432,7 @@ function normalizarRegistroMacro(row, sourceTable, index) {
   const entrada = cleanNumberMacro(getValorPorAliases(row, ["Entrada", "Valor", "Valor(R$)", "VALOR(R$)", "Total", "TOTAL", "TOTAL(R$)"]));
   const vlPgto = cleanNumberMacro(getValorPorAliases(row, ["Vl Pgto", "Vl.Pgto", "Vl Pgto.", "Liquidado", "LIQUIDADO(R$)", "Valor Pgto", "Valor Pago"]));
   const desagio = cleanNumberMacro(getValorPorAliases(row, ["Desagio", "Deságio", "DESÁGIO"]));
+  const jurosMulta = cleanNumberMacro(getValorPorAliases(row, ["Juros e Multa", "Encargos", "Juros", "Multa"]));
   const txEfet = cleanNumberMacro(getValorPorAliases(row, ["Tx.Efet", "TX.EFET", "Tx Efet", "Taxa Efetiva"]));
   const bordero = getValorPorAliases(row, ["Borderô", "Bordero", "OP"]);
 
@@ -338,6 +448,7 @@ function normalizarRegistroMacro(row, sourceTable, index) {
     "Borderô": bordero ?? row?.["Borderô"] ?? null,
     Entrada: entrada,
     Desagio: desagio,
+    "Juros e Multa": jurosMulta,
     "Tx.Efet": txEfet,
     Status: getValorPorAliases(row, ["Status", "Situação", "SITUAÇÃO", "Estado"]) ?? row?.Status ?? row?.Estado ?? "",
     inadimplencia: row?.inadimplencia ?? row?.Inadimplencia ?? row?.["Inadimplência"] ?? null,
@@ -348,7 +459,7 @@ function normalizarRegistroMacro(row, sourceTable, index) {
   };
 }
 
-const MACRO_SELECT_COLUMNS = 'id,Cliente,Sacado,"Dt.Emis",Vcto,Pgto,"Vl Pgto",Dcto,"Borderô",Entrada,Desagio,"Tx.Efet",Status,inadimplencia,Inadimplencia,"Inadimplência"';
+const MACRO_SELECT_COLUMNS = 'id,Cliente,Sacado,"Dt.Emis",Vcto,Pgto,"Vl Pgto",Dcto,"Borderô",Entrada,Desagio,"Juros e Multa","Tx.Efet",Status,inadimplencia,Inadimplencia,"Inadimplência"';
 const MACRO_PAGE_SIZE = 5000;
 const MACRO_CACHE_TTL_MS = 5 * 60 * 1000;
 const macroDashboardCache = { data: null, promise: null, updatedAt: 0 };
@@ -631,6 +742,7 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
   const [latestPatrimonio, setLatestPatrimonio] = useState(0);
   const [focus, setFocus] = useState('cedente'); 
   const fmtM = (valor) => hideValues ? "R$ -" : formatarMoeda(valor);
+  const showRankingKpis = false;
   
   const [hoveredSlice, setHoveredSlice] = useState(null);
   const [hoveredNegotiationSlice, setHoveredNegotiationSlice] = useState(null);
@@ -638,6 +750,8 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
   const [selectedSlice, setSelectedSlice] = useState(null); 
   const [volumePeriod, setVolumePeriod] = useState('mes_atual');
   const [volumeDateBase, setVolumeDateBase] = useState('emissao');
+  const [rankingCriterion, setRankingCriterion] = useState('volume');
+  const [rankingSort, setRankingSort] = useState({ key: 'currentMonth', direction: 'desc' });
   const [negotiationPage, setNegotiationPage] = useState(1);
   const [capitalPage, setCapitalPage] = useState(1);
   const [tooltip, setTooltip] = useState({ show: false, x: 0, y: 0, label: '', value: 0, percent: 0, context: 'capital_aberto' });
@@ -702,7 +816,7 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
     
     const abertos = [];
     const grouped = {};
-    const monthlyVolume = {};
+    const monthlyRanking = {};
     const negotiationGrouped = {
       mes_atual: {},
       ult_30_dias: {},
@@ -769,9 +883,7 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
         }
       }
 
-      const emisDate = emisKey && r[emisKey]
-        ? new Date(String(r[emisKey]).split("T")[0] + "T00:00:00")
-        : null;
+      const emisDate = emisKey ? parseMacroDate(r[emisKey]) : null;
 
       let effectiveVctoDate = null;
       if (vctoVal) {
@@ -781,18 +893,65 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
       }
 
       if (entityKey && emisDate) {
-        const vol = ensureMacroEntityBucket(monthlyVolume, entityKey, entity, {
-          currentMonth: 0,
-          previousMonth: 0,
-          twoMonthsAgo: 0
-        });
+        if (!monthlyRanking[entityKey]) {
+          monthlyRanking[entityKey] = {
+            label: entity,
+            currentMonth: createMonthlyRankingPeriod(),
+            previousMonth: createMonthlyRankingPeriod(),
+            twoMonthsAgo: createMonthlyRankingPeriod(),
+          };
+        }
 
+        let rankingPeriod = null;
         if (emisDate >= monthStart && emisDate <= today) {
-          vol.currentMonth += val;
+          rankingPeriod = monthlyRanking[entityKey].currentMonth;
         } else if (emisDate >= prevMonthStart && emisDate < monthStart) {
-          vol.previousMonth += val;
+          rankingPeriod = monthlyRanking[entityKey].previousMonth;
         } else if (emisDate >= twoMonthsAgoStart && emisDate < prevMonthStart) {
-          vol.twoMonthsAgo += val;
+          rankingPeriod = monthlyRanking[entityKey].twoMonthsAgo;
+        }
+
+        if (rankingPeriod) {
+          rankingPeriod.volume += val;
+          if (!rankingPeriod.borderos.has(borderoNum)) {
+            rankingPeriod.borderos.set(borderoNum, {
+              sourceTable: origemTabela,
+              totalValue: 0,
+              rate: 0,
+              hasRate: false,
+              totalDescontado: 0,
+              totalDesagioEncargos: 0,
+              weightedPrazo: 0,
+            });
+          }
+
+          const rankingBordero = rankingPeriod.borderos.get(borderoNum);
+          rankingBordero.totalValue += val;
+          const rawRate = r["Tx.Efet"];
+          const hasRate = rawRate !== null && rawRate !== undefined && String(rawRate).trim() !== "";
+          if (!rankingBordero.hasRate && hasRate) {
+            rankingBordero.rate = cleanNumberMacro(rawRate) || 0;
+            rankingBordero.hasRate = true;
+          }
+
+          if (origemTabela === "secInfoSmart") {
+            const jurosMulta = Number(r["Juros e Multa"]) || 0;
+            const valorDescontado = val - desagioVal;
+            const encargoTitulo = jurosMulta > 0 ? jurosMulta : 0;
+            const usaPrazoReal = encargoTitulo >= 1;
+            const prazoEncargos = getMacroEffectiveTerm(
+              r["Dt.Emis"],
+              r.Vcto,
+              usaPrazoReal ? r.Pgto : null,
+              usaPrazoReal
+            );
+
+            if (valorDescontado > 0 && prazoEncargos) {
+              rankingBordero.totalDescontado += valorDescontado;
+              rankingBordero.totalDesagioEncargos += desagioVal + encargoTitulo;
+              rankingBordero.weightedPrazo += valorDescontado * prazoEncargos;
+            }
+          }
         }
 
         const negotiationDate = volumeDateBase === 'vencimento' ? effectiveVctoDate : emisDate;
@@ -847,7 +1006,10 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
 
     const sorted = Object.keys(grouped).map(k => {
       const bucket = grouped[k];
-      const vol = monthlyVolume[k] || { currentMonth: 0, previousMonth: 0, twoMonthsAgo: 0 };
+      const monthly = monthlyRanking[k];
+      const currentMonth = summarizeMonthlyRankingPeriod(monthly?.currentMonth);
+      const previousMonth = summarizeMonthlyRankingPeriod(monthly?.previousMonth);
+      const twoMonthsAgo = summarizeMonthlyRankingPeriod(monthly?.twoMonthsAgo);
 
       return {
         entityKey: k,
@@ -855,9 +1017,15 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
         val: bucket.val,
         count: bucket.count,
         percent: patrimonioReferencia > 0 ? bucket.val / patrimonioReferencia : 0,
-        volumeCurrentMonth: vol.currentMonth,
-        volumePreviousMonth: vol.previousMonth,
-        volumeTwoMonthsAgo: vol.twoMonthsAgo
+        volumeCurrentMonth: currentMonth.volume,
+        volumePreviousMonth: previousMonth.volume,
+        volumeTwoMonthsAgo: twoMonthsAgo.volume,
+        taxaFinalCurrentMonth: currentMonth.taxaFinal,
+        taxaFinalPreviousMonth: previousMonth.taxaFinal,
+        taxaFinalTwoMonthsAgo: twoMonthsAgo.taxaFinal,
+        taxaEncargosCurrentMonth: currentMonth.taxaEncargos,
+        taxaEncargosPreviousMonth: previousMonth.taxaEncargos,
+        taxaEncargosTwoMonthsAgo: twoMonthsAgo.taxaEncargos,
       };
     }).sort((a, b) => b.val - a.val).map((item, idx) => ({ ...item, rank: idx + 1 }));
 
@@ -1107,12 +1275,57 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
 
 
   const tableData = useMemo(() => {
-    if (!selectedSlice) return stats.sorted;
-    if (selectedSlice.startsWith('Restante')) return stats.sorted.slice(9);
-    const selectedItem = stats.sorted.find((item) => item.name === selectedSlice);
-    const selectedKey = selectedItem?.entityKey || chaveEntidadePrefixo(selectedSlice);
-    return stats.sorted.filter(item => (item.entityKey || chaveEntidadePrefixo(item.name)) === selectedKey);
-  }, [stats.sorted, selectedSlice]);
+    let items = stats.sorted;
+    if (selectedSlice?.startsWith('Restante')) {
+      items = stats.sorted.slice(9);
+    } else if (selectedSlice) {
+      const selectedItem = stats.sorted.find((item) => item.name === selectedSlice);
+      const selectedKey = selectedItem?.entityKey || chaveEntidadePrefixo(selectedSlice);
+      items = stats.sorted.filter(item => (item.entityKey || chaveEntidadePrefixo(item.name)) === selectedKey);
+    }
+
+    const getSortMetric = (item) => {
+      if (rankingSort.key === 'capital') return item.val;
+      if (rankingSort.key === 'previousMonth') {
+        return rankingCriterion === 'taxa' ? item.taxaFinalPreviousMonth : item.volumePreviousMonth;
+      }
+      if (rankingSort.key === 'twoMonthsAgo') {
+        return rankingCriterion === 'taxa' ? item.taxaFinalTwoMonthsAgo : item.volumeTwoMonthsAgo;
+      }
+      return rankingCriterion === 'taxa' ? item.taxaFinalCurrentMonth : item.volumeCurrentMonth;
+    };
+
+    return [...items]
+      .sort((a, b) => {
+        const metricA = getSortMetric(a);
+        const metricB = getSortMetric(b);
+        const missingA = !Number.isFinite(metricA);
+        const missingB = !Number.isFinite(metricB);
+        if (missingA !== missingB) return missingA ? 1 : -1;
+        if (!missingA && metricA !== metricB) {
+          return rankingSort.direction === 'asc' ? metricA - metricB : metricB - metricA;
+        }
+        return b.val - a.val;
+      })
+      .map((item, index) => ({ ...item, rank: index + 1 }));
+  }, [stats.sorted, selectedSlice, rankingCriterion, rankingSort]);
+
+  const handleRankingSort = (key) => {
+    setRankingSort((previous) => ({
+      key,
+      direction: previous.key === key && previous.direction === 'desc' ? 'asc' : 'desc',
+    }));
+  };
+
+  const getRankingSortArrow = (key) => {
+    if (rankingSort.key !== key) return '↕';
+    return rankingSort.direction === 'desc' ? '↓' : '↑';
+  };
+
+  const getRankingAriaSort = (key) => {
+    if (rankingSort.key !== key) return 'none';
+    return rankingSort.direction === 'desc' ? 'descending' : 'ascending';
+  };
 
   const currentNegotiationStats = negotiationStats[volumePeriod] || { totalVal: 0, totalDesEnc: 0, sorted: [], pieData: [], pieDataDesEnc: [] };
 
@@ -1332,7 +1545,7 @@ const negotiationDesEncTop5Percent = currentNegotiationStats.sorted.length
       {/* Cabeçalho Macro */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "32px", flexWrap: "wrap", gap: "16px" }}>
         <div>
-          <h2 style={{ margin: "0 0 8px 0", color: "#111827", fontSize: "22px" }}>Visão Macroscópica de Risco</h2>
+          <h2 style={{ margin: "0 0 8px 0", color: "#111827", fontSize: "22px" }}>Carteira e Concentração</h2>
           <p style={{ margin: 0, color: "#6b7280", fontSize: "15px" }}>Concentração de Capital em títulos <strong>Em Aberto</strong> (A Vencer e Em Atraso).</p>
         </div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "10px" }}>
@@ -1686,7 +1899,7 @@ const negotiationDesEncTop5Percent = currentNegotiationStats.sorted.length
           </section>
 
           {/* BANNER DE KPIs INTELIGENTE */}
-          {kpiData.baseCalculo > 0 && (
+          {showRankingKpis && kpiData.baseCalculo > 0 && (
             <div style={{
               background: "#d1d5db",
               borderRadius: "12px",
@@ -1867,29 +2080,63 @@ const negotiationDesEncTop5Percent = currentNegotiationStats.sorted.length
             </div>
           ) : (
             <div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-                <h3 style={{ margin: 0, color: "#111827", fontSize: "18px" }}>
-                  Ranking Geral ({focus === 'cedente' ? 'Cedentes' : 'Sacados'})
-                </h3>
-                {selectedSlice && (
-                  <button onClick={() => setSelectedSlice(null)} style={{ padding: "6px 12px", borderRadius: "6px", border: "1px solid #d1d5db", background: "#fff", cursor: "pointer", fontSize: "12px", fontWeight: "600", color: "#ef4444" }}>
-                    Limpar Filtro "Restante"
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: "16px", flexWrap: "wrap", marginBottom: "16px" }}>
+                <div>
+                  <h3 style={{ margin: "0 0 5px", color: "#111827", fontSize: "18px" }}>
+                    Ranking Geral ({focus === 'cedente' ? 'Cedentes' : 'Sacados'})
+                  </h3>
+                  <p style={{ margin: 0, color: "#64748b", fontSize: "13px" }}>
+                    Classificação pelo resultado do mês atual, com comparação dos dois meses anteriores.
+                  </p>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                  <span style={{ color: "#64748b", fontSize: "12px", fontWeight: "700" }}>Classificar por</span>
+                  <button type="button" aria-pressed={rankingCriterion === 'volume'} onClick={() => { setRankingCriterion('volume'); setRankingSort({ key: 'currentMonth', direction: 'desc' }); }} style={getVolumePeriodStyle(rankingCriterion === 'volume')}>
+                    Volume operado
                   </button>
-                )}
+                  <button type="button" aria-pressed={rankingCriterion === 'taxa'} onClick={() => { setRankingCriterion('taxa'); setRankingSort({ key: 'currentMonth', direction: 'desc' }); }} style={getVolumePeriodStyle(rankingCriterion === 'taxa')}>
+                    Taxa média ponderada
+                  </button>
+                  {selectedSlice && (
+                    <button onClick={() => setSelectedSlice(null)} style={{ padding: "8px 12px", borderRadius: "8px", border: "1px solid #fecaca", background: "#fff", cursor: "pointer", fontSize: "12px", fontWeight: "700", color: "#b91c1c" }}>
+                      Limpar filtro
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div style={{ overflowX: "auto", border: "1px solid #e5e7eb", borderRadius: "8px" }}>
                 <table style={{ borderCollapse: "collapse", width: "100%", fontSize: "14px", textAlign: "left", whiteSpace: "nowrap" }}>
                   <thead>
                     <tr style={{ background: "#f9fafb", color: "#374151" }}>
-                      <th style={{ padding: "14px 16px", borderBottom: "2px solid #e5e7eb" }}>Rank Global</th>
-                      <th style={{ padding: "14px 16px", borderBottom: "2px solid #e5e7eb" }}>Nome</th>
-                      <th style={{ padding: "14px 16px", borderBottom: "2px solid #e5e7eb" }}>Vol. (Mês Atual)</th>
-                      <th style={{ padding: "14px 16px", borderBottom: "2px solid #e5e7eb" }}>Vol. (Mês anterior)</th>
-                      <th style={{ padding: "14px 16px", borderBottom: "2px solid #e5e7eb" }}>Vol. (2 meses atrás)</th>
-                      <th style={{ padding: "14px 16px", borderBottom: "2px solid #e5e7eb" }}>Capital Alocado</th>
-                      <th style={{ padding: "14px 16px", borderBottom: "2px solid #e5e7eb" }}>% do PL</th>
-                      <th style={{ padding: "14px 16px", borderBottom: "2px solid #e5e7eb" }}>Qtd. Títulos</th>
+                      <th style={{ padding: "14px 16px", borderBottom: "2px solid #e5e7eb" }}>Posição</th>
+                      <th style={{ padding: "14px 16px", borderBottom: "2px solid #e5e7eb" }}>{focus === 'cedente' ? 'Cedente' : 'Sacado'}</th>
+                      <th aria-sort={getRankingAriaSort('currentMonth')} style={{ padding: 0, borderBottom: "2px solid #e5e7eb", minWidth: rankingCriterion === 'taxa' ? "190px" : "auto" }}>
+                        <button type="button" onClick={() => handleRankingSort('currentMonth')} title="Ordenar pelo mês atual" style={{ width: "100%", padding: "14px 16px", border: 0, background: "transparent", color: "inherit", font: "inherit", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", whiteSpace: "nowrap" }}>
+                          <span>Mês atual</span><span aria-hidden="true" style={{ color: rankingSort.key === 'currentMonth' ? "#4f46e5" : "#94a3b8", fontSize: "15px" }}>{getRankingSortArrow('currentMonth')}</span>
+                        </button>
+                      </th>
+                      <th aria-sort={getRankingAriaSort('previousMonth')} style={{ padding: 0, borderBottom: "2px solid #e5e7eb", minWidth: rankingCriterion === 'taxa' ? "190px" : "auto" }}>
+                        <button type="button" onClick={() => handleRankingSort('previousMonth')} title="Ordenar pelo mês anterior" style={{ width: "100%", padding: "14px 16px", border: 0, background: "transparent", color: "inherit", font: "inherit", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", whiteSpace: "nowrap" }}>
+                          <span>Mês anterior</span><span aria-hidden="true" style={{ color: rankingSort.key === 'previousMonth' ? "#4f46e5" : "#94a3b8", fontSize: "15px" }}>{getRankingSortArrow('previousMonth')}</span>
+                        </button>
+                      </th>
+                      <th aria-sort={getRankingAriaSort('twoMonthsAgo')} style={{ padding: 0, borderBottom: "2px solid #e5e7eb", minWidth: rankingCriterion === 'taxa' ? "190px" : "auto" }}>
+                        <button type="button" onClick={() => handleRankingSort('twoMonthsAgo')} title="Ordenar por dois meses atrás" style={{ width: "100%", padding: "14px 16px", border: 0, background: "transparent", color: "inherit", font: "inherit", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", whiteSpace: "nowrap" }}>
+                          <span>2 meses atrás</span><span aria-hidden="true" style={{ color: rankingSort.key === 'twoMonthsAgo' ? "#4f46e5" : "#94a3b8", fontSize: "15px" }}>{getRankingSortArrow('twoMonthsAgo')}</span>
+                        </button>
+                      </th>
+                      {rankingCriterion === 'volume' && (
+                        <>
+                          <th aria-sort={getRankingAriaSort('capital')} style={{ padding: 0, borderBottom: "2px solid #e5e7eb" }}>
+                            <button type="button" onClick={() => handleRankingSort('capital')} title="Ordenar por capital alocado" style={{ width: "100%", padding: "14px 16px", border: 0, background: "transparent", color: "inherit", font: "inherit", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", whiteSpace: "nowrap" }}>
+                              <span>Capital Alocado</span><span aria-hidden="true" style={{ color: rankingSort.key === 'capital' ? "#4f46e5" : "#94a3b8", fontSize: "15px" }}>{getRankingSortArrow('capital')}</span>
+                            </button>
+                          </th>
+                          <th style={{ padding: "14px 16px", borderBottom: "2px solid #e5e7eb" }}>% do PL</th>
+                          <th style={{ padding: "14px 16px", borderBottom: "2px solid #e5e7eb" }}>Qtd. Títulos</th>
+                        </>
+                      )}
                     </tr>
                   </thead>
                   <tbody>
@@ -1902,21 +2149,92 @@ const negotiationDesEncTop5Percent = currentNegotiationStats.sorted.length
                       >
                         <td style={{ padding: "14px 16px", fontWeight: "600", color: "#6b7280" }}>{item.rank}º</td>
                         <td style={{ padding: "14px 16px", fontWeight: "600", color: "#4f46e5" }}>{focus === 'cedente' ? formatarNomeCedente(item.name, hideValues) : formatarNomeSacado(item.name, hideValues)}</td>
-                        <td
-                          style={{
-                            padding: "14px 16px",
-                            fontWeight: "700",
-                            color: item.volumeCurrentMonth >= item.volumePreviousMonth ? "#047857" : "#b45353",
-                            backgroundColor: item.volumeCurrentMonth >= item.volumePreviousMonth ? "#ecfdf5" : "#fef2f2"
-                          }}
-                        >
-                          {fmtM(item.volumeCurrentMonth)}
-                        </td>
-                        <td style={{ padding: "14px 16px", fontWeight: "700", color: "#374151" }}>{fmtM(item.volumePreviousMonth)}</td>
-                        <td style={{ padding: "14px 16px", fontWeight: "700", color: "#374151" }}>{fmtM(item.volumeTwoMonthsAgo)}</td>
-                        <td style={{ padding: "14px 16px", fontWeight: "700", color: "#059669" }}>{fmtM(item.val)}</td>
-                        <td style={{ padding: "14px 16px", fontWeight: "600", color: "#3b82f6" }}>{(item.percent * 100).toFixed(2)}%</td>
-                        <td style={{ padding: "14px 16px", color: "#4b5563" }}>{item.count}</td>
+                        {rankingCriterion === 'volume' ? (
+                          <>
+                            <td style={{ padding: "14px 16px" }}>
+                              <div style={{ display: "flex", alignItems: "baseline", gap: "7px" }}>
+                                <span style={{ color: "#0f172a", fontWeight: "800" }}>{fmtM(item.volumeCurrentMonth)}</span>
+                                {getRankingTrendMeta(item.volumeCurrentMonth, item.volumePreviousMonth).symbol && (
+                                  <span
+                                    title={getRankingTrendMeta(item.volumeCurrentMonth, item.volumePreviousMonth).label}
+                                    aria-label={getRankingTrendMeta(item.volumeCurrentMonth, item.volumePreviousMonth).label}
+                                    style={{ color: getRankingTrendMeta(item.volumeCurrentMonth, item.volumePreviousMonth).color, fontSize: "14px", fontWeight: "900" }}
+                                  >
+                                    {getRankingTrendMeta(item.volumeCurrentMonth, item.volumePreviousMonth).symbol}
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td style={{ padding: "14px 16px" }}>
+                              <div style={{ display: "flex", alignItems: "baseline", gap: "7px" }}>
+                                <span style={{ color: "#0f172a", fontWeight: "800" }}>{fmtM(item.volumePreviousMonth)}</span>
+                                {getRankingTrendMeta(item.volumePreviousMonth, item.volumeTwoMonthsAgo).symbol && (
+                                  <span
+                                    title={getRankingTrendMeta(item.volumePreviousMonth, item.volumeTwoMonthsAgo).label}
+                                    aria-label={getRankingTrendMeta(item.volumePreviousMonth, item.volumeTwoMonthsAgo).label}
+                                    style={{ color: getRankingTrendMeta(item.volumePreviousMonth, item.volumeTwoMonthsAgo).color, fontSize: "14px", fontWeight: "900" }}
+                                  >
+                                    {getRankingTrendMeta(item.volumePreviousMonth, item.volumeTwoMonthsAgo).symbol}
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td style={{ padding: "14px 16px", fontWeight: "700", color: "#374151" }}>{fmtM(item.volumeTwoMonthsAgo)}</td>
+                          </>
+                        ) : (
+                          <>
+                            {[
+                              {
+                                final: item.taxaFinalCurrentMonth,
+                                encargos: item.taxaEncargosCurrentMonth,
+                                compareFinal: item.taxaFinalPreviousMonth,
+                                compareEncargos: item.taxaEncargosPreviousMonth,
+                              },
+                              {
+                                final: item.taxaFinalPreviousMonth,
+                                encargos: item.taxaEncargosPreviousMonth,
+                                compareFinal: item.taxaFinalTwoMonthsAgo,
+                                compareEncargos: item.taxaEncargosTwoMonthsAgo,
+                              },
+                              {
+                                final: item.taxaFinalTwoMonthsAgo,
+                                encargos: item.taxaEncargosTwoMonthsAgo,
+                                compareFinal: null,
+                                compareEncargos: null,
+                              },
+                            ].map((month, monthIndex) => {
+                              const finalTrend = getRankingTrendMeta(month.final, month.compareFinal);
+                              const encargosTrend = getRankingTrendMeta(month.encargos, month.compareEncargos);
+                              return (
+                                <td key={monthIndex} style={{ padding: "12px 16px", verticalAlign: "middle" }}>
+                                  <div style={{ display: "grid", gap: "8px", minWidth: "170px" }}>
+                                    <div>
+                                      <div style={{ marginBottom: "3px", color: "#64748b", fontSize: "10px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.06em" }}>Taxa final</div>
+                                      <div style={{ display: "flex", alignItems: "baseline", gap: "7px" }}>
+                                        <span style={{ color: "#0f172a", fontSize: "15px", fontWeight: "800" }}>{formatRankingRate(month.final)}</span>
+                                        {finalTrend.symbol && <span title={finalTrend.label} aria-label={finalTrend.label} style={{ color: finalTrend.color, fontSize: "14px", fontWeight: "900" }}>{finalTrend.symbol}</span>}
+                                      </div>
+                                    </div>
+                                    <div style={{ paddingTop: "7px", borderTop: "1px solid #e2e8f0" }}>
+                                      <div style={{ marginBottom: "3px", color: "#94a3b8", fontSize: "10px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.06em" }}>Com encargos</div>
+                                      <div style={{ display: "flex", alignItems: "baseline", gap: "7px" }}>
+                                        <span style={{ color: "#475569", fontSize: "13px", fontWeight: "700" }}>{formatRankingRate(month.encargos)}</span>
+                                        {encargosTrend.symbol && <span title={encargosTrend.label} aria-label={encargosTrend.label} style={{ color: encargosTrend.color, fontSize: "13px", fontWeight: "900" }}>{encargosTrend.symbol}</span>}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </td>
+                              );
+                            })}
+                          </>
+                        )}
+                        {rankingCriterion === 'volume' && (
+                          <>
+                            <td style={{ padding: "14px 16px", fontWeight: "700", color: "#059669" }}>{fmtM(item.val)}</td>
+                            <td style={{ padding: "14px 16px", fontWeight: "600", color: "#3b82f6" }}>{(item.percent * 100).toFixed(2)}%</td>
+                            <td style={{ padding: "14px 16px", color: "#4b5563" }}>{item.count}</td>
+                          </>
+                        )}
                       </tr>
                     ))}
                   </tbody>

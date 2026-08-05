@@ -387,7 +387,7 @@ function MorningTable({ rows, hideValues, onNavigateToMicro }) {
               <tr
                 key={row._rowKey || index}
                 onClick={() => rowFilter && onNavigateToMicro?.(rowFilter)}
-                title="Abrir no Dados Micro"
+                title="Abrir em Operações e Recebíveis"
                 style={{ borderBottom: index === rows.length - 1 ? "0" : "1px solid #e5e7eb", cursor: rowFilter ? "pointer" : "default" }}
               >
                 {tableColumns.map((column) => {

@@ -42,19 +42,31 @@ function normalizeSnapshot(row) {
   };
 }
 
-function agruparPorMesUltimoSnapshot(rows) {
+function agruparSnapshotsPorMes(rows) {
   const mapa = new Map();
 
   for (const row of rows) {
     const ym = String(row.data).slice(0, 7);
-    if (!mapa.has(ym) || row.data > mapa.get(ym).data) {
-      mapa.set(ym, row);
-    }
+    if (!mapa.has(ym)) mapa.set(ym, []);
+    mapa.get(ym).push(row);
   }
 
   return Array.from(mapa.entries())
     .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([, value]) => value);
+    .map(([mes, snapshots]) => {
+      const retornoMesIndex = snapshots.reduce(
+        (acumulado, snapshot) => acumulado * (1 + Number(snapshot.periodReturn || 0)),
+        1
+      );
+      const ultimoSnapshot = snapshots[snapshots.length - 1];
+
+      return {
+        ...ultimoSnapshot,
+        mes,
+        snapshots,
+        retornoMesPct: (retornoMesIndex - 1) * 100,
+      };
+    });
 }
 
 function buildPath(points) {
@@ -605,10 +617,20 @@ export default function PatrimonioDashboard({ hideValues, setHideValues }) {
   const [rows, setRows] = useState([]);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [expandedMonths, setExpandedMonths] = useState(() => new Set());
   const [hoverState, setHoverState] = useState({
     source: null, // "daily" | "monthly" | null
     key: null,
   });
+
+  const toggleMonth = useCallback((monthKey) => {
+    setExpandedMonths((current) => {
+      const next = new Set(current);
+      if (next.has(monthKey)) next.delete(monthKey);
+      else next.add(monthKey);
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     carregar();
@@ -619,12 +641,29 @@ export default function PatrimonioDashboard({ hideValues, setHideValues }) {
     setErro("");
 
     try {
-      const { data, error } = await supabase
-        .from("secSnapshots")
-        .select("*")
-        .order("Data", { ascending: true });
+      let data = null;
+      let lastError = null;
 
-      if (error) throw error;
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          const response = await supabase
+            .from("secSnapshots")
+            .select("*")
+            .order("Data", { ascending: true });
+
+          if (response.error) throw response.error;
+          data = response.data;
+          lastError = null;
+          break;
+        } catch (requestError) {
+          lastError = requestError;
+          const isTransientNetworkError = requestError instanceof TypeError || /failed to fetch|network|load failed/i.test(String(requestError?.message || requestError));
+          if (!isTransientNetworkError || attempt === 1) throw requestError;
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        }
+      }
+
+      if (lastError) throw lastError;
 
       const normalizados = (data || [])
         .map(normalizeSnapshot)
@@ -638,7 +677,11 @@ export default function PatrimonioDashboard({ hideValues, setHideValues }) {
       }
     } catch (err) {
       console.error(err);
-      setErro(`Erro ao carregar snapshots: ${err.message}`);
+      const isNetworkError = err instanceof TypeError || /failed to fetch|network|load failed/i.test(String(err?.message || err));
+      setErro(isNetworkError
+        ? "Não foi possível conectar ao banco de dados. Verifique a conexão e tente recarregar."
+        : `Erro ao carregar snapshots: ${err.message}`
+      );
     } finally {
       setLoading(false);
     }
@@ -686,28 +729,8 @@ export default function PatrimonioDashboard({ hideValues, setHideValues }) {
   }, [filteredRows]);
 
   const seriesMensal = useMemo(() => {
-    const mensal = agruparPorMesUltimoSnapshot(filteredRows);
-    if (!mensal.length) return [];
-
-    let prevPL = null;
-
-    return mensal.map((r, idx) => {
-      let retornoMesPct = 0;
-
-      if (idx === 0 || prevPL === null || prevPL <= 0) {
-        retornoMesPct = 0;
-      } else {
-        retornoMesPct = (((r.pl - (r.compraDebentures || 0)) / prevPL) - 1) * 100;
-      }
-
-      prevPL = r.pl;
-
-      return {
-        ...r,
-        retornoMesPct,
-      };
-    });
-  }, [filteredRows]);
+    return agruparSnapshotsPorMes(seriesDiaria);
+  }, [seriesDiaria]);
 
   const resumo = useMemo(() => {
     if (!seriesDiaria.length) {
@@ -758,33 +781,6 @@ export default function PatrimonioDashboard({ hideValues, setHideValues }) {
     };
   }, [seriesMensal]);
 
-  const retornoMensalMap = useMemo(() => {
-    const map = new Map();
-    for (const r of seriesMensal) {
-      map.set(r.data, r.retornoMesPct);
-    }
-    return map;
-  }, [seriesMensal]);
-
-  const hoveredDataKey = useMemo(() => {
-  if (!hoverState.key) return null;
-
-  if (hoverState.source === "daily") {
-    return hoverState.key;
-  }
-
-  if (hoverState.source === "monthly") {
-    const ym = String(hoverState.key).slice(0, 7);
-    const rowDiaria = [...seriesDiaria]
-      .reverse()
-      .find((r) => String(r.data).slice(0, 7) === ym);
-
-    return rowDiaria ? rowDiaria.data : null;
-  }
-
-  return null;
-}, [hoverState, seriesDiaria]);
-
 const hoveredMonthKey = useMemo(() => {
   if (!hoverState.key) return null;
 
@@ -792,15 +788,8 @@ const hoveredMonthKey = useMemo(() => {
     return hoverState.key;
   }
 
-  if (hoverState.source === "daily") {
-    const ym = String(hoverState.key).slice(0, 7);
-    const rowMensal = seriesMensal.find((r) => String(r.data).slice(0, 7) === ym);
-
-    return rowMensal ? rowMensal.data : null;
-  }
-
   return null;
-}, [hoverState, seriesMensal]);
+}, [hoverState]);
 
 const handleChartRangeSelect = useCallback(({ start, end, source }) => {
   if (!start || !end) return;
@@ -812,7 +801,7 @@ const handleChartRangeSelect = useCallback(({ start, end, source }) => {
     const startMonthRow = seriesMensal.find((r) => r.data === start);
     const endMonthRow = seriesMensal.find((r) => r.data === end);
 
-    if (startMonthRow) nextStart = startMonthRow.data;
+    if (startMonthRow) nextStart = startMonthRow.snapshots[0]?.data || startMonthRow.data;
     if (endMonthRow) nextEnd = endMonthRow.data;
   }
 
@@ -875,7 +864,7 @@ const handleChartRangeSelect = useCallback(({ start, end, source }) => {
                   lineHeight: 1.45,
                 }}
               >
-                PL = Recebíveis + Dinheiro Banco. Retornos percentuais removem o fluxo externo de compra de debêntures.
+                PL = Recebíveis + Dinheiro Banco. Retornos percentuais removem os fluxos externos de debêntures entre snapshots.
               </p>
             </div>
 
@@ -1028,17 +1017,17 @@ const handleChartRangeSelect = useCallback(({ start, end, source }) => {
             >
               <LineChart
                 title="PL monetário"
-                subtitle="Soma de recebíveis e caixa."
-                data={seriesDiaria}
+                subtitle="Soma de recebíveis e caixa no último snapshot de cada mês."
+                data={seriesMensal}
                 valueKey="pl"
                 color="#4f46e5"
                 hideValues={hideValues}
                 isMobile={isMobile}
                 includeZero={false}
-                hoveredKey={hoveredDataKey}
+                hoveredKey={hoveredMonthKey}
                 onHoverChange={setHoverState}
                 hoverKeyField="data"
-                hoverSource="daily"
+                hoverSource="monthly"
                 onRangeSelect={handleChartRangeSelect}
                 selectedStartKey={startDate}
                 selectedEndKey={endDate}
@@ -1054,17 +1043,17 @@ const handleChartRangeSelect = useCallback(({ start, end, source }) => {
 
               <LineChart
                 title="Retorno acumulado"
-                subtitle="TWR acumulado do período."
-                data={seriesDiaria}
+                subtitle="TWR com todos os subperíodos, exibido no fechamento de cada mês."
+                data={seriesMensal}
                 valueKey="retornoAcumuladoPct"
                 color="#10b981"
                 hideValues={hideValues}
                 isMobile={isMobile}
                 hideSummaryBoxes={true}
-                hoveredKey={hoveredDataKey}
+                hoveredKey={hoveredMonthKey}
                 onHoverChange={setHoverState}
                 hoverKeyField="data"
-                hoverSource="daily"
+                hoverSource="monthly"
                 onRangeSelect={handleChartRangeSelect}
                 selectedStartKey={startDate}
                 selectedEndKey={endDate}
@@ -1078,7 +1067,7 @@ const handleChartRangeSelect = useCallback(({ start, end, source }) => {
 
               <LineChart
                 title="Retorno mês a mês"
-                subtitle="Percentual mensal sem efeito do aporte externo."
+                subtitle="TWR mensal composto pelos retornos de todos os snapshots do mês."
                 data={seriesMensal}
                 valueKey="retornoMesPct"
                 color="#f59e0b"
@@ -1128,58 +1117,146 @@ const handleChartRangeSelect = useCallback(({ start, end, source }) => {
                   fontWeight: 700,
                 }}
               >
-                Últimos snapshots
+                Snapshots por mês
               </h3>
 
+              <p style={{ margin: "-8px 0 16px", color: "#6b7280", fontSize: 12 }}>
+                O fechamento mensal fica visível. Clique nos meses com mais registros para ver os snapshots intermediários.
+              </p>
+
               <div style={{ overflowX: "auto", width: "100%" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1040 }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1160 }}>
                   <thead>
                     <tr style={{ background: "#f9fafb" }}>
                       <th style={thStyle}>Data</th>
                       <th style={thStyle}>PL</th>
                       <th style={thStyle}>Variação</th>
+                      <th style={thStyle}>Retorno Período</th>
                       <th style={thStyle}>Retorno Mês</th>
                       <th style={thStyle}>Retorno Acum. TWR</th>
                       <th style={thStyle}>Recebíveis</th>
                       <th style={thStyle}>Dinheiro Banco</th>
-                      <th style={thStyle}>Compra Debêntures</th>
+                      <th style={thStyle}>Fluxo Debêntures</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {[...seriesDiaria].reverse().map((r) => (
-                      <tr key={r.data} style={{ borderTop: "1px solid #f1f5f9" }}>
-                        <td style={tdStyle}>{formatarDataLabel(r.data)}</td>
-                        <td style={{ ...tdStyle, fontWeight: 700 }}>{formatarMoeda(r.pl, hideValues)}</td>
-                        <td
-                          style={{
-                            ...tdStyle,
-                            fontWeight: 700,
-                            color: r.variacao < 0 ? "#dc2626" : "#16a34a",
-                          }}
-                        >
-                          {formatarMoeda(r.variacao, hideValues)}
-                        </td>
-                        <td
-                          style={{
-                            ...tdStyle,
-                            fontWeight: 700,
-                            color: (() => {
-                              const val = retornoMensalMap.get(r.data);
-                              if (val == null) return "#374151";
-                              return val < 3 ? "#dc2626" : "#16a34a"; // vermelho <3%, verde >=3%
-                            })(),
-                          }}
-                        >
-                          {retornoMensalMap.has(r.data)
-                            ? formatarPct(retornoMensalMap.get(r.data), hideValues)
-                            : "-"}
-                        </td>
-                        <td style={{ ...tdStyle, fontWeight: 700 }}>{formatarPct(r.retornoAcumuladoPct, hideValues)}</td>
-                        <td style={tdStyle}>{formatarMoeda(r.recebiveis, hideValues)}</td>
-                        <td style={tdStyle}>{formatarMoeda(r.dinheiroBanco, hideValues)}</td>
-                        <td style={tdStyle}>{formatarMoeda(r.compraDebentures, hideValues)}</td>
-                      </tr>
-                    ))}
+                    {[...seriesMensal].reverse().map((grupo) => {
+                      const hasIntermediarios = grupo.snapshots.length > 1;
+                      const isExpanded = expandedMonths.has(grupo.mes);
+                      const intermediarios = grupo.snapshots.slice(0, -1).reverse();
+
+                      return (
+                        <React.Fragment key={grupo.mes}>
+                          <tr
+                            style={{
+                              borderTop: "1px solid #e5e7eb",
+                              background: isExpanded ? "#f8fafc" : "#fff",
+                              cursor: hasIntermediarios ? "pointer" : "default",
+                            }}
+                            onClick={() => hasIntermediarios && toggleMonth(grupo.mes)}
+                            onKeyDown={(event) => {
+                              if (!hasIntermediarios || (event.key !== "Enter" && event.key !== " ")) return;
+                              event.preventDefault();
+                              toggleMonth(grupo.mes);
+                            }}
+                            tabIndex={hasIntermediarios ? 0 : undefined}
+                            aria-expanded={hasIntermediarios ? isExpanded : undefined}
+                          >
+                            <td style={{ ...tdStyle, fontWeight: 700 }}>
+                              <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                                <span
+                                  aria-hidden="true"
+                                  style={{ width: 12, color: hasIntermediarios ? "#4f46e5" : "transparent" }}
+                                >
+                                  {isExpanded ? "▾" : "▸"}
+                                </span>
+                                {formatarDataLabel(grupo.data)}
+                                {hasIntermediarios && (
+                                  <span
+                                    style={{
+                                      padding: "2px 7px",
+                                      borderRadius: 999,
+                                      background: "#eef2ff",
+                                      color: "#4338ca",
+                                      fontSize: 11,
+                                      fontWeight: 700,
+                                    }}
+                                  >
+                                    {grupo.snapshots.length} snapshots
+                                  </span>
+                                )}
+                              </span>
+                            </td>
+                            <td style={{ ...tdStyle, fontWeight: 700 }}>{formatarMoeda(grupo.pl, hideValues)}</td>
+                            <td
+                              style={{
+                                ...tdStyle,
+                                fontWeight: 700,
+                                color: grupo.variacao < 0 ? "#dc2626" : "#16a34a",
+                              }}
+                            >
+                              {formatarMoeda(grupo.variacao, hideValues)}
+                            </td>
+                            <td
+                              style={{
+                                ...tdStyle,
+                                fontWeight: 700,
+                                color: grupo.periodReturn < 0 ? "#dc2626" : "#16a34a",
+                              }}
+                            >
+                              {formatarPct(grupo.periodReturn * 100, hideValues)}
+                            </td>
+                            <td
+                              style={{
+                                ...tdStyle,
+                                fontWeight: 700,
+                                color: grupo.retornoMesPct < 3 ? "#dc2626" : "#16a34a",
+                              }}
+                            >
+                              {formatarPct(grupo.retornoMesPct, hideValues)}
+                            </td>
+                            <td style={{ ...tdStyle, fontWeight: 700 }}>{formatarPct(grupo.retornoAcumuladoPct, hideValues)}</td>
+                            <td style={tdStyle}>{formatarMoeda(grupo.recebiveis, hideValues)}</td>
+                            <td style={tdStyle}>{formatarMoeda(grupo.dinheiroBanco, hideValues)}</td>
+                            <td style={tdStyle}>{formatarMoeda(grupo.compraDebentures, hideValues)}</td>
+                          </tr>
+
+                          {isExpanded && intermediarios.map((snapshot, index) => (
+                            <tr
+                              key={`${grupo.mes}-${snapshot.data}-${index}`}
+                              style={{ borderTop: "1px solid #f1f5f9", background: "#f8fafc" }}
+                            >
+                              <td style={{ ...tdStyle, paddingLeft: 34, color: "#64748b" }}>
+                                <span style={{ marginRight: 8, color: "#94a3b8" }}>↳</span>
+                                {formatarDataLabel(snapshot.data)}
+                              </td>
+                              <td style={tdStyle}>{formatarMoeda(snapshot.pl, hideValues)}</td>
+                              <td
+                                style={{
+                                  ...tdStyle,
+                                  color: snapshot.variacao < 0 ? "#dc2626" : "#16a34a",
+                                }}
+                              >
+                                {formatarMoeda(snapshot.variacao, hideValues)}
+                              </td>
+                              <td
+                                style={{
+                                  ...tdStyle,
+                                  color: snapshot.periodReturn < 0 ? "#dc2626" : "#16a34a",
+                                }}
+                              >
+                                {formatarPct(snapshot.periodReturn * 100, hideValues)}
+                              </td>
+                              <td style={{ ...tdStyle, color: "#94a3b8" }}>-</td>
+                              <td style={tdStyle}>{formatarPct(snapshot.retornoAcumuladoPct, hideValues)}</td>
+                              <td style={tdStyle}>{formatarMoeda(snapshot.recebiveis, hideValues)}</td>
+                              <td style={tdStyle}>{formatarMoeda(snapshot.dinheiroBanco, hideValues)}</td>
+                              <td style={tdStyle}>{formatarMoeda(snapshot.compraDebentures, hideValues)}</td>
+                            </tr>
+                          ))}
+                        </React.Fragment>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

@@ -13,6 +13,7 @@ export default function App() {
   const [password, setPassword] = useState("");
   const [msg, setMsg] = useState("");
   const [activeTab, setActiveTab] = useState("patrimonio");
+  const [mountedTabs, setMountedTabs] = useState(() => new Set(["patrimonio"]));
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [isTablet, setIsTablet] = useState(false);
@@ -23,7 +24,12 @@ export default function App() {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
     const { data: sub } = supabase.auth.onAuthStateChange((event, newSession) => {
       setSession(newSession);
-      if (event === "SIGNED_OUT") setMsg("");
+      if (event === "SIGNED_OUT") {
+        setMsg("");
+        setActiveTab("patrimonio");
+        setMountedTabs(new Set(["patrimonio"]));
+        setMicroInitialFilter(null);
+      }
     });
     return () => sub.subscription.unsubscribe();
   }, []);
@@ -58,9 +64,23 @@ export default function App() {
     if (tablet !== undefined) setIsTablet(tablet);
   };
 
+  const prepareTab = (tab) => {
+    setMountedTabs((current) => {
+      if (current.has(tab)) return current;
+      const next = new Set(current);
+      next.add(tab);
+      return next;
+    });
+  };
+
+  const activateTab = (tab) => {
+    prepareTab(tab);
+    setActiveTab(tab);
+  };
+
   const handleResumoMatinalFilter = (filter) => {
     setMicroInitialFilter({ ...filter, token: Date.now() });
-    setActiveTab("micro");
+    activateTab("micro");
   };
 
   const shouldShiftLayout = activeTab === "micro" && !isMobile;
@@ -343,7 +363,7 @@ export default function App() {
               >
                 <button
                   onClick={() => {
-                    setActiveTab("patrimonio");
+                    activateTab("patrimonio");
                     setIsSidebarOpen(false);
                   }}
                   style={getTabStyle(activeTab === "patrimonio")}
@@ -353,7 +373,7 @@ export default function App() {
 
                 <button
                   onClick={() => {
-                    setActiveTab("resumoMatinal");
+                    activateTab("resumoMatinal");
                     setIsSidebarOpen(false);
                   }}
                   style={getTabStyle(activeTab === "resumoMatinal")}
@@ -364,26 +384,26 @@ export default function App() {
                 <button
                   onClick={() => {
                     setMicroInitialFilter(null);
-                    setActiveTab("micro");
+                    activateTab("micro");
                   }}
                   style={getTabStyle(activeTab === "micro")}
                 >
-                  Dados Micro (Detalhes de Operações)
+                  Operações e Recebíveis
                 </button>
 
                 <button
                   onClick={() => {
-                    setActiveTab("macro");
+                    activateTab("macro");
                     setIsSidebarOpen(false);
                   }}
                   style={getTabStyle(activeTab === "macro")}
                 >
-                  Dados Macro (Visão de Risco)
+                  Carteira e Concentração
                 </button>
 
                 <button
                   onClick={() => {
-                    setActiveTab("upload");
+                    activateTab("upload");
                     setIsSidebarOpen(false);
                   }}
                   style={getTabStyle(activeTab === "upload")}
@@ -393,7 +413,7 @@ export default function App() {
 
                 <button
                   onClick={() => {
-                    setActiveTab("nfe");
+                    activateTab("nfe");
                     setIsSidebarOpen(false);
                   }}
                   style={getTabStyle(activeTab === "nfe")}
@@ -403,38 +423,54 @@ export default function App() {
               </div>
             </div>
 
-            {activeTab === "micro" && (
-              <MicroDashboard
-                session={session}
-                onSidebarToggle={handleSidebarToggle}
-                hideValues={hideValues}
-                setHideValues={setHideValues}
-                initialFilter={microInitialFilter}
-              />
+            {mountedTabs.has("micro") && (
+              <div role="tabpanel" aria-hidden={activeTab !== "micro"} style={{ display: activeTab === "micro" ? "block" : "none" }}>
+                <MicroDashboard
+                  session={session}
+                  onSidebarToggle={handleSidebarToggle}
+                  hideValues={hideValues}
+                  setHideValues={setHideValues}
+                  initialFilter={microInitialFilter}
+                />
+              </div>
             )}
 
-            {activeTab === "macro" && (
-              <MacroDashboard
-                session={session}
-                hideValues={hideValues}
-                setHideValues={setHideValues}
-              />
+            {mountedTabs.has("macro") && (
+              <div role="tabpanel" aria-hidden={activeTab !== "macro"} style={{ display: activeTab === "macro" ? "block" : "none" }}>
+                <MacroDashboard
+                  session={session}
+                  hideValues={hideValues}
+                  setHideValues={setHideValues}
+                />
+              </div>
             )}
 
-            {activeTab === "resumoMatinal" && (
-              <ResumoMatinal hideValues={hideValues} onNavigateToMicro={handleResumoMatinalFilter} />
+            {mountedTabs.has("resumoMatinal") && (
+              <div role="tabpanel" aria-hidden={activeTab !== "resumoMatinal"} style={{ display: activeTab === "resumoMatinal" ? "block" : "none" }}>
+                <ResumoMatinal hideValues={hideValues} onNavigateToMicro={handleResumoMatinalFilter} />
+              </div>
             )}
 
-            {activeTab === "patrimonio" && (
-              <PatrimonioDashboard
-                hideValues={hideValues}
-                setHideValues={setHideValues}
-              />
+            {mountedTabs.has("patrimonio") && (
+              <div role="tabpanel" aria-hidden={activeTab !== "patrimonio"} style={{ display: activeTab === "patrimonio" ? "block" : "none" }}>
+                <PatrimonioDashboard
+                  hideValues={hideValues}
+                  setHideValues={setHideValues}
+                />
+              </div>
             )}
 
-            {activeTab === "upload" && <UploadData hideValues={hideValues} />}
+            {mountedTabs.has("upload") && (
+              <div role="tabpanel" aria-hidden={activeTab !== "upload"} style={{ display: activeTab === "upload" ? "block" : "none" }}>
+                <UploadData hideValues={hideValues} />
+              </div>
+            )}
 
-            {activeTab === "nfe" && <NFeConverter />}
+            {mountedTabs.has("nfe") && (
+              <div role="tabpanel" aria-hidden={activeTab !== "nfe"} style={{ display: activeTab === "nfe" ? "block" : "none" }}>
+                <NFeConverter />
+              </div>
+            )}
           </div>
         )}
       </div>
