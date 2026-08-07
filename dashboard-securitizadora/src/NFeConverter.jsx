@@ -336,7 +336,7 @@ function montarEmailConfirmacao(d) {
     <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111827;line-height:1.55;">
       <p>À ${escapeHtml(sacado)},<br />A/C de [RESPONSÁVEL].</p>
 
-      <p>Meu nome é Daniel Ferreira, trabalho na Lafer Invest Securitizadora S/A, empresa parceira da ${escapeHtml(cedente)}. Nós estamos fazendo a compra de recebíveis deles e precisamos fazer uma checagem de recebimento de mercadoria.</p>
+      <p>Meu nome é Daniel Ferreira, trabalho na Lafer Invest Securitizadora S/A, empresa parceira da ${escapeHtml(cedente)}. Nós somos responsáveis por emitir os boletos para o pagamento, entretanto, primeiro, precisamos fazer uma checagem de recebimento de mercadoria.</p>
 
       <p>Nós negociamos com eles a NF de número ${escapeHtml(numeroNfe)}:</p>
 
@@ -365,7 +365,7 @@ function montarEmailConfirmacao(d) {
   const plainText = `À ${sacado},
 A/C de [RESPONSÁVEL].
 
-Meu nome é Daniel Ferreira, trabalho na Lafer Invest Securitizadora S/A, empresa parceira da ${cedente}. Nós estamos fazendo a compra de recebíveis deles e precisamos fazer uma checagem de recebimento de mercadoria.
+Meu nome é Daniel Ferreira, trabalho na Lafer Invest Securitizadora S/A, empresa parceira da ${cedente}. Nós somos responsáveis por emitir os boletos para o pagamento, entretanto, primeiro, precisamos fazer uma checagem de recebimento de mercadoria.
 
 Nós negociamos com eles a NF de número ${numeroNfe}:
 
@@ -405,7 +405,7 @@ function montarTextoBoletos(d) {
     <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111827;line-height:1.55;">
       <p>À ${escapeHtml(sacado)},<br />A/C de _______;</p>
 
-      <p>A Lafer Invest Securitizadora S/A vem confirmar por meio desta a cessão (antecipação) das duplicatas elencadas no e-mail anterior.</p>
+      <p>A Lafer Invest Securitizadora S/A vem confirmar por meio desta a cessão (antecipação) das duplicatas elencadas anteriormente.</p>
 
       <p>${fraseBoletos}</p>
 

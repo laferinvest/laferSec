@@ -94,6 +94,15 @@ const addDays = (iso, days) => {
   return formatIsoDate(date);
 };
 
+const getCalendarWeekRange = (iso) => {
+  const date = parseIsoDate(iso);
+  if (!date) return { startIso: "", endIso: "" };
+
+  const daysSinceMonday = (date.getDay() + 6) % 7;
+  const startIso = addDays(iso, -daysSinceMonday);
+  return { startIso, endIso: addDays(startIso, 6) };
+};
+
 const getIsoWeekday = (iso) => {
   const date = parseIsoDate(iso);
   return date ? date.getDay() : null;
@@ -335,6 +344,124 @@ function SummaryMetric({ label, value, sublabel, color = "#4f46e5" }) {
   );
 }
 
+const formatCompactMoney = (value, hideValues = false) => {
+  if (hideValues) return "R$ -";
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(parseNumber(value));
+};
+
+const getNiceAxisMax = (value) => {
+  const safeValue = Math.max(0, parseNumber(value));
+  if (!safeValue) return 1;
+
+  const magnitude = 10 ** Math.floor(Math.log10(safeValue));
+  const normalized = safeValue / magnitude;
+  const factor = normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10;
+  return factor * magnitude;
+};
+
+const truncateChartLabel = (value, maxLength = 22) => {
+  const text = String(value || "Sem cedente");
+  return text.length > maxLength ? `${text.slice(0, maxLength - 1)}…` : text;
+};
+
+const getFirstWord = (value) => String(value || "Sem cedente").trim().split(/\s+/)[0];
+
+function WeeklyDueBarChart({ groups, hideValues, onNavigateToMicro }) {
+  if (!groups.length) {
+    return (
+      <div style={{ padding: "42px 18px", color: "#6b7280", fontSize: "14px", textAlign: "center", border: "1px dashed #d1d5db", borderRadius: "8px", background: "#f9fafb" }}>
+        Sem crédito a vencer nesta semana.
+      </div>
+    );
+  }
+
+  const chartGroups = [...groups].sort((a, b) => b.total - a.total || a.label.localeCompare(b.label, "pt-BR"));
+  const chartHeight = 390;
+  const padding = { top: 42, right: 28, bottom: 118, left: 92 };
+  const plotHeight = chartHeight - padding.top - padding.bottom;
+  const slotWidth = 116;
+  const barWidth = 58;
+  const chartWidth = Math.max(760, padding.left + padding.right + chartGroups.length * slotWidth);
+  const plotBottom = padding.top + plotHeight;
+  const axisMax = getNiceAxisMax(Math.max(...chartGroups.map((group) => group.total)));
+  const tickCount = 4;
+
+  return (
+    <div style={{ overflowX: "auto", paddingBottom: "4px" }}>
+      <svg
+        viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+        width={chartWidth}
+        height={chartHeight}
+        role="img"
+        aria-label="Gráfico de barras do crédito a vencer na semana por cedente"
+        style={{ display: "block", minWidth: "100%" }}
+      >
+        {Array.from({ length: tickCount + 1 }, (_, index) => {
+          const ratio = index / tickCount;
+          const y = padding.top + plotHeight * ratio;
+          const value = axisMax * (1 - ratio);
+
+          return (
+            <g key={index}>
+              <line x1={padding.left} x2={chartWidth - padding.right} y1={y} y2={y} stroke="#e5e7eb" strokeDasharray={index === tickCount ? undefined : "4 4"} />
+              <text x={padding.left - 12} y={y + 4} textAnchor="end" fill="#6b7280" fontSize="11" fontWeight="700">
+                {formatCompactMoney(value, hideValues)}
+              </text>
+            </g>
+          );
+        })}
+
+        <line x1={padding.left} x2={padding.left} y1={padding.top} y2={plotBottom} stroke="#9ca3af" />
+        <line x1={padding.left} x2={chartWidth - padding.right} y1={plotBottom} y2={plotBottom} stroke="#9ca3af" />
+
+        {chartGroups.map((group, index) => {
+          const x = padding.left + index * slotWidth + (slotWidth - barWidth) / 2;
+          const barHeight = Math.max(2, (group.total / axisMax) * plotHeight);
+          const y = plotBottom - barHeight;
+          const displayLabel = hideValues ? `Cedente ${index + 1}` : getFirstWord(group.label);
+
+          return (
+            <g
+              key={group.key}
+              onClick={() => onNavigateToMicro?.({ type: "cliente", value: group.key })}
+              style={{ cursor: onNavigateToMicro ? "pointer" : "default" }}
+            >
+              <title>{`${displayLabel}: ${formatMoney(group.total, hideValues)} (${group.rows.length} título(s))`}</title>
+              <rect x={x} y={y} width={barWidth} height={barHeight} rx="7" fill="#0ea5e9" opacity="0.9" />
+              <text x={x + barWidth / 2} y={Math.max(padding.top - 8, y - 8)} textAnchor="middle" fill="#0369a1" fontSize="11" fontWeight="800">
+                {formatCompactMoney(group.total, hideValues)}
+              </text>
+              <text
+                x={x + barWidth / 2}
+                y={plotBottom + 20}
+                textAnchor="end"
+                transform={`rotate(-38 ${x + barWidth / 2} ${plotBottom + 20})`}
+                fill="#374151"
+                fontSize="12"
+                fontWeight="700"
+              >
+                {truncateChartLabel(displayLabel)}
+              </text>
+            </g>
+          );
+        })}
+
+        <text x="18" y={padding.top + plotHeight / 2} textAnchor="middle" transform={`rotate(-90 18 ${padding.top + plotHeight / 2})`} fill="#6b7280" fontSize="12" fontWeight="800">
+          Valor a vencer
+        </text>
+        <text x={padding.left + (chartWidth - padding.left - padding.right) / 2} y={chartHeight - 8} textAnchor="middle" fill="#6b7280" fontSize="12" fontWeight="800">
+          Cedente
+        </text>
+      </svg>
+    </div>
+  );
+}
+
 const getMicroFilterForCell = (row, columnKey) => {
   if (columnKey === "Cliente" && row.Cliente) {
     return { type: "cliente", value: row.Cliente };
@@ -520,6 +647,7 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
 
   const resumoPeriod = useMemo(() => getResumoPeriod(selectedDateIso), [selectedDateIso]);
   const todayDueDateIso = useMemo(() => shiftVencimentoToBusinessDay(todayIso), [todayIso]);
+  const currentWeek = useMemo(() => getCalendarWeekRange(todayIso), [todayIso]);
   const monthStartIso = useMemo(() => `${todayIso.slice(0, 8)}01`, [todayIso]);
   const previousMonthStartIso = useMemo(() => {
     const date = parseIsoDate(monthStartIso);
@@ -588,6 +716,15 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
     ));
     const operacoesOntem = validRows.filter((row) => row["Dt.Emis"] === resumoPeriod.operacaoDateIso);
     const vencemHoje = validRows.filter((row) => getVctoOperacional(row) === todayDueDateIso && isOpen(row));
+    const vencemNaSemana = validRows.filter((row) => {
+      const vctoOperacional = getVctoOperacional(row);
+      return (
+        vctoOperacional >= currentWeek.startIso &&
+        vctoOperacional >= todayIso &&
+        vctoOperacional <= currentWeek.endIso &&
+        isOpen(row)
+      );
+    });
     const inadimplentesMesAtualEAnterior = validRows.filter((row) => {
       const vctoOperacional = getVctoOperacional(row);
       return (
@@ -604,6 +741,7 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
     const totalQuitadosOntem = quitadosOntem.reduce((acc, row) => acc + row.Entrada, 0);
     const totalQuitadosEmAtraso = quitadosEmAtraso.reduce((acc, row) => acc + row.Entrada, 0);
     const totalVencemHoje = vencemHoje.reduce((acc, row) => acc + row.Entrada, 0);
+    const totalVencemNaSemana = vencemNaSemana.reduce((acc, row) => acc + row.Entrada, 0);
     const totalInadimplentesMesAtualEAnterior = inadimplentesMesAtualEAnterior.reduce((acc, row) => acc + row.Entrada, 0);
     const taxaMediaPonderada = volumeOperado > 0
       ? operacoesOntem.reduce((acc, row) => acc + row["Tx.Efet"] * row.Entrada, 0) / volumeOperado
@@ -649,6 +787,7 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
     const quitadosEmAtrasoAgrupados = buildCedenteGroups(quitadosEmAtraso);
     const operacoesOntemAgrupadas = buildCedenteGroups(operacoesOntem);
     const vencemHojeAgrupados = buildCedenteGroups(vencemHoje);
+    const vencemNaSemanaAgrupados = buildCedenteGroups(vencemNaSemana);
     const inadimplentesMesAtualEAnteriorAgrupados = buildCedenteGroups(inadimplentesMesAtualEAnterior);
 
     return {
@@ -657,12 +796,14 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
       quitadosEmAtraso: quitadosEmAtrasoAgrupados.rows,
       operacoesOntem: operacoesOntemAgrupadas.rows,
       vencemHoje: vencemHojeAgrupados.rows,
+      vencemNaSemana: vencemNaSemanaAgrupados.rows,
       inadimplentesMesAtualEAnterior: inadimplentesMesAtualEAnteriorAgrupados.rows,
       gruposInadimplenciaOntem: inadimplenciaOntemAgrupada.groups,
       gruposQuitadosOntem: quitadosOntemAgrupados.groups,
       gruposQuitadosEmAtraso: quitadosEmAtrasoAgrupados.groups,
       gruposOperacoesOntem: operacoesOntemAgrupadas.groups,
       gruposVencemHoje: vencemHojeAgrupados.groups,
+      gruposVencemNaSemana: vencemNaSemanaAgrupados.groups,
       gruposInadimplentesMesAtualEAnterior: inadimplentesMesAtualEAnteriorAgrupados.groups,
       volumeOperado,
       desagioOperado,
@@ -670,10 +811,11 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
       totalQuitadosOntem,
       totalQuitadosEmAtraso,
       totalVencemHoje,
+      totalVencemNaSemana,
       totalInadimplentesMesAtualEAnterior,
       taxaMediaPonderada,
     };
-  }, [rows, resumoPeriod, todayDueDateIso, previousMonthStartIso, todayIso]);
+  }, [rows, resumoPeriod, todayDueDateIso, currentWeek, previousMonthStartIso, todayIso]);
 
   if (loading) {
     return (
@@ -710,6 +852,7 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
   const vencemHojeSubtitle = todayDueDateIso === todayIso
     ? "Títulos em aberto com vencimento operacional hoje."
     : `Títulos em aberto com vencimento operacional em ${formatDate(todayDueDateIso)} por ajuste de fim de semana ou feriado.`;
+  const vencemNaSemanaSubtitle = `Títulos em aberto a vencer entre ${formatDate(todayIso)} e ${formatDate(currentWeek.endIso)}, limitados à semana atual.`;
   const inadimplentesMesAtualEAnteriorSubtitle = `Títulos em aberto com vencimento operacional entre ${formatDate(previousMonthStartIso)} e ${formatDate(addDays(todayIso, -1))}.`;
   const renderCedenteGroups = (groups, color, showWeightedRate = false) => (
     <CedenteGroupedMorningTables
@@ -745,6 +888,32 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
           />
         </label>
       </div>
+
+      <MorningSection
+        title="Crédito a Vencer na Semana"
+        subtitle={vencemNaSemanaSubtitle}
+        rows={resumo.vencemNaSemana}
+        hideValues={hideValues}
+        accent="#0ea5e9"
+        order={0}
+        onNavigateToMicro={onNavigateToMicro}
+        tableContent={(
+          <WeeklyDueBarChart
+            groups={resumo.gruposVencemNaSemana}
+            hideValues={hideValues}
+            onNavigateToMicro={onNavigateToMicro}
+          />
+        )}
+      >
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px" }}>
+          <SummaryMetric
+            label="Crédito Total a Vencer"
+            value={formatMoney(resumo.totalVencemNaSemana, hideValues)}
+            sublabel={`${resumo.vencemNaSemana.length} título(s) na semana`}
+            color="#0ea5e9"
+          />
+        </div>
+      </MorningSection>
 
       <MorningSection
         title="Inadimplência do Dia"
