@@ -1,37 +1,6 @@
 import React, { useEffect, useMemo, useState, useRef } from "react";
 import { supabase } from "./supabaseClient";
 
-const MICRO_RPC_CACHE_TTL_MS = 30_000;
-const microRpcCache = new Map();
-
-async function callMicroRpcCached(functionName, args) {
-  const cacheKey = `${functionName}:${JSON.stringify(args)}`;
-  const cached = microRpcCache.get(cacheKey);
-  const now = Date.now();
-
-  if (cached?.promise) return cached.promise;
-  if (cached && now - cached.updatedAt < MICRO_RPC_CACHE_TTL_MS) {
-    return { data: cached.data, error: null };
-  }
-
-  const promise = supabase.rpc(functionName, args)
-    .then((result) => {
-      if (result.error) {
-        microRpcCache.delete(cacheKey);
-      } else {
-        microRpcCache.set(cacheKey, { data: result.data, updatedAt: Date.now() });
-      }
-      return result;
-    })
-    .catch((error) => {
-      microRpcCache.delete(cacheKey);
-      throw error;
-    });
-
-  microRpcCache.set(cacheKey, { promise, updatedAt: now });
-  return promise;
-}
-
 // --- COLLAPSE ANIMADO ---
 function CollapsePanel({ isCollapsed, children }) {
   const ref = useRef(null);
@@ -713,7 +682,7 @@ const PAYMENT_DUE_BUCKETS = [
   { key: "91_plus", label: "3+ meses", minDays: 91, maxDays: null },
 ];
 
-function EvolutionCharts({ rows, serverData, dateFilter, setDateFilter, setBorderoFilter, setDctoFilter, setInsightFilter, insightFilter, setViewMode, hideValues, dataSourceTable = "secInfo" }) {
+function EvolutionCharts({ rows, dateFilter, setDateFilter, setBorderoFilter, setDctoFilter, setInsightFilter, insightFilter, setViewMode, hideValues, dataSourceTable = "secInfo" }) {
   const fmtM = (v) => hideValues ? "R$ -" : formatarMoeda(v);
   const [isCollapsed, setIsCollapsed] = useState(false);
 
@@ -727,7 +696,7 @@ function EvolutionCharts({ rows, serverData, dateFilter, setDateFilter, setBorde
 
   const [dragState, setDragState] = useState({ isDragging: false, startIndex: null, currentIndex: null, type: null });
 
-  const computedEvolutionData = useMemo(() => {
+  const { chartData, chartDataRate, chartDataDesagio, chartDataPrazoMedio, chartDataVencimentos } = useMemo(() => {
     const grouped = {};
     const groupedRate = {};
     const groupedDesagio = {};
@@ -893,14 +862,6 @@ function EvolutionCharts({ rows, serverData, dateFilter, setDateFilter, setBorde
 
     return { chartData: cData, chartDataRate: cDataRate, chartDataDesagio: cDataDesagio, chartDataPrazoMedio: cDataPrazoMedio, chartDataVencimentos: dueBuckets };
   }, [rows, dataSourceTable]);
-
-  const {
-    chartData,
-    chartDataRate,
-    chartDataDesagio,
-    chartDataPrazoMedio,
-    chartDataVencimentos,
-  } = serverData || computedEvolutionData;
 
   useEffect(() => {
     const handleMouseUp = () => {
@@ -3225,7 +3186,6 @@ export default function MicroDashboard({ session, onSidebarToggle, hideValues, s
 
   const [loading, setLoading] = useState(false);
   const [rows, setRows] = useState([]);
-  const [serverEvolutionData, setServerEvolutionData] = useState(null);
   const [dataSourceTable, setDataSourceTable] = useState(initialSourceTable);
   
   const [viewMode, setViewMode] = useState('all'); 
@@ -4185,21 +4145,6 @@ return {
     if (session?.user?.id) {
       async function buscarRelacionamentos() {
         try {
-          const sourceTables = getDataSourceTables(dataSourceTable);
-          const { data: rpcData, error: rpcError } = await callMicroRpcCached("dashboard_micro_relationships", {
-            p_sources: sourceTables,
-          });
-
-          if (!rpcError) {
-            setRelacionamentos(
-              (rpcData || [])
-                .map((row, index) => tagSourceRow(row, row?._sourceTable || sourceTables[0], index))
-                .filter(registroValidoParaAnalise)
-            );
-            return;
-          }
-
-          console.warn("RPC de relacionamentos indisponivel; usando consulta direta.", rpcError);
           const results = await Promise.all(getDataSourceTables(dataSourceTable).map(async (sourceTable) => {
             const { data, error } = await supabase.from(sourceTable).select("Cliente, Sacado, inadimplencia").limit(5000);
             if (error) throw error;
@@ -4240,40 +4185,16 @@ return {
     }
 
     try {
-      const sourceTables = getDataSourceTables(dataSourceTable);
-      const { data: rpcData, error: rpcError } = await callMicroRpcCached("dashboard_micro_rows", {
-        p_sources: sourceTables,
-        p_clientes: cedentesRelacionadosAliases,
-        p_sacados: null,
-        p_grupo_prefixos: null,
-        p_date_field: "emis",
-        p_start: null,
-        p_end: null,
-        p_bordero: null,
-        p_dcto_prefix: null,
-        p_today: formatToLocalISO(getTodayLocalDate()),
-        p_limit: 20000,
-        p_only_open: true,
-      });
+      const results = await Promise.all(getDataSourceTables(dataSourceTable).map(async (sourceTable) => {
+        let query = supabase.from(sourceTable).select("*");
+        const applied = applyInFilterIfPossible(query, "Cliente", cedentesRelacionadosAliases);
+        if (applied.empty) return [];
+        query = applied.query.order("id", { ascending: false }).limit(20000);
 
-      let results;
-      if (!rpcError) {
-        results = [(rpcData || []).map((row, index) =>
-          tagSourceRow(row, row?._sourceTable || sourceTables[0], index)
-        )];
-      } else {
-        console.warn("RPC de concentracao indisponivel; usando consulta direta.", rpcError);
-        results = await Promise.all(sourceTables.map(async (sourceTable) => {
-          let query = supabase.from(sourceTable).select("*");
-          const applied = applyInFilterIfPossible(query, "Cliente", cedentesRelacionadosAliases);
-          if (applied.empty) return [];
-          query = applied.query.order("id", { ascending: false }).limit(20000);
-
-          const { data, error } = await query;
-          if (error) throw error;
-          return (data || []).map((row, index) => tagSourceRow(row, sourceTable, index));
-        }));
-      }
+        const { data, error } = await query;
+        if (error) throw error;
+        return (data || []).map((row, index) => tagSourceRow(row, sourceTable, index));
+      }));
 
       const clienteKeysPermitidos = new Set(sacadoGroup?.relatedKeys || []);
       const filtrados = results
@@ -4309,66 +4230,36 @@ return {
         const activeSourceFilter = !clienteSelecionado && !grupoSelecionado && !sacadoSelecionado
           ? (borderoFilter?.sourceTable || dctoFilter?.sourceTable || null)
           : null;
-        const sourceTables = getDataSourceTables(dataSourceTable, activeSourceFilter);
-        const grupo = grupoSelecionado && !clienteSelecionado
-          ? gruposEconomicos.find((item) => item.label === grupoSelecionado)
-          : null;
-        const { data: rpcData, error: rpcError } = await callMicroRpcCached("dashboard_micro_rows", {
-          p_sources: sourceTables,
-          p_clientes: clienteSelecionado ? clienteSelecionadoAliases : null,
-          p_sacados: sacadoSelecionado ? sacadoSelecionadoAliases : null,
-          p_grupo_prefixos: grupo?.prefixos?.length ? grupo.prefixos : null,
-          p_date_field: dateFilter.type === "vcto" ? "vcto" : "emis",
-          p_start: dateFilter.start || null,
-          p_end: dateFilter.end || null,
-          p_bordero: !clienteSelecionado && !grupoSelecionado && !sacadoSelecionado && borderoFilter?.key
-            ? String(borderoFilter.value ?? "")
-            : null,
-          p_dcto_prefix: !clienteSelecionado && !grupoSelecionado && !sacadoSelecionado && dctoFilter?.key
-            ? getDocumentoBase(dctoFilter.value)
-            : null,
-          p_today: formatToLocalISO(getTodayLocalDate()),
-          p_limit: 20000,
-          p_only_open: false,
-        });
 
-        let results;
-        if (!rpcError) {
-          results = [(rpcData || []).map((row, index) =>
-            tagSourceRow(row, row?._sourceTable || sourceTables[0], index)
-          )];
-        } else {
-          console.warn("RPC principal do MicroDashboard indisponivel; usando consulta direta.", rpcError);
-          results = await Promise.all(sourceTables.map(async (sourceTable) => {
-            let query = supabase.from(sourceTable).select("*");
+        const results = await Promise.all(getDataSourceTables(dataSourceTable, activeSourceFilter).map(async (sourceTable) => {
+          let query = supabase.from(sourceTable).select("*");
 
-            if (clienteSelecionado) {
-              const applied = applyInFilterIfPossible(query, "Cliente", clienteSelecionadoAliases);
-              if (applied.empty) return [];
-              query = applied.query;
+          if (clienteSelecionado) {
+            const applied = applyInFilterIfPossible(query, "Cliente", clienteSelecionadoAliases);
+            if (applied.empty) return [];
+            query = applied.query;
+          }
+
+          if (sacadoSelecionado) {
+            const applied = applyInFilterIfPossible(query, "Sacado", sacadoSelecionadoAliases);
+            if (applied.empty) return [];
+            query = applied.query;
+          }
+
+          if (!clienteSelecionado && !grupoSelecionado && !sacadoSelecionado) {
+            if (borderoFilter?.key) {
+              query = query.eq(borderoFilter.key, borderoFilter.value);
+            } else if (dctoFilter?.key) {
+              const baseTarget = getDocumentoBase(dctoFilter.value);
+              query = query.ilike(dctoFilter.key, `${baseTarget}%`);
             }
+          }
 
-            if (sacadoSelecionado) {
-              const applied = applyInFilterIfPossible(query, "Sacado", sacadoSelecionadoAliases);
-              if (applied.empty) return [];
-              query = applied.query;
-            }
-
-            if (!clienteSelecionado && !grupoSelecionado && !sacadoSelecionado) {
-              if (borderoFilter?.key) {
-                query = query.eq(borderoFilter.key, borderoFilter.value);
-              } else if (dctoFilter?.key) {
-                const baseTarget = getDocumentoBase(dctoFilter.value);
-                query = query.ilike(dctoFilter.key, `${baseTarget}%`);
-              }
-            }
-
-            query = query.order("id", { ascending: false }).limit(10000);
-            const { data, error } = await query;
-            if (error) throw error;
-            return (data || []).map((row, index) => tagSourceRow(row, sourceTable, index));
-          }));
-        }
+          query = query.order("id", { ascending: false }).limit(10000);
+          const { data, error } = await query;
+          if (error) throw error;
+          return (data || []).map((row, index) => tagSourceRow(row, sourceTable, index));
+        }));
 
         let filtered = results.flat().filter(registroValidoParaAnalise);
         if (clienteSelecionadoKey) {
@@ -4392,52 +4283,7 @@ return {
       }
     }, 80);
     return () => clearTimeout(delayDebounceFn);
-  }, [clienteSelecionado, clienteSelecionadoKey, clienteSelecionadoAliases, sacadoSelecionado, sacadoSelecionadoKey, sacadoSelecionadoAliases, grupoSelecionado, gruposEconomicos, session?.user?.id, dataSourceTable, borderoFilter, dctoFilter, dateFilter]);
-
-  useEffect(() => {
-    if (!session?.user?.id) return;
-    let cancelled = false;
-
-    const delayDebounceFn = setTimeout(async () => {
-      const grupo = grupoSelecionado && !clienteSelecionado
-        ? gruposEconomicos.find((item) => item.label === grupoSelecionado)
-        : null;
-      const { data, error } = await callMicroRpcCached("dashboard_micro_evolution", {
-        p_sources: getDataSourceTables(dataSourceTable),
-        p_clientes: clienteSelecionado ? clienteSelecionadoAliases : null,
-        p_sacados: sacadoSelecionado ? sacadoSelecionadoAliases : null,
-        p_grupo_prefixos: grupo?.prefixos?.length ? grupo.prefixos : null,
-        p_view_mode: viewMode,
-        p_insight_status: insightFilter || null,
-        p_today: formatToLocalISO(getTodayLocalDate()),
-      });
-
-      if (cancelled) return;
-      if (error) {
-        console.warn("RPC de evolucao indisponivel; calculando graficos no navegador.", error);
-        setServerEvolutionData(null);
-        return;
-      }
-
-      const withMonthLabels = (items) => (Array.isArray(items) ? items : []).map((item) => ({
-        ...item,
-        label: formatarMesAno(item.ym),
-      }));
-
-      setServerEvolutionData({
-        chartData: withMonthLabels(data?.chartData),
-        chartDataRate: withMonthLabels(data?.chartDataRate),
-        chartDataDesagio: withMonthLabels(data?.chartDataDesagio),
-        chartDataPrazoMedio: withMonthLabels(data?.chartDataPrazoMedio),
-        chartDataVencimentos: Array.isArray(data?.chartDataVencimentos) ? data.chartDataVencimentos : [],
-      });
-    }, 80);
-
-    return () => {
-      cancelled = true;
-      clearTimeout(delayDebounceFn);
-    };
-  }, [session?.user?.id, dataSourceTable, clienteSelecionado, clienteSelecionadoAliases, sacadoSelecionado, sacadoSelecionadoAliases, grupoSelecionado, gruposEconomicos, viewMode, insightFilter]);
+  }, [clienteSelecionado, clienteSelecionadoKey, clienteSelecionadoAliases, sacadoSelecionado, sacadoSelecionadoKey, sacadoSelecionadoAliases, grupoSelecionado, gruposEconomicos, session?.user?.id, dataSourceTable, borderoFilter, dctoFilter]);
 
   const limparFiltroEntidades = () => {
     setClienteSelecionado(""); 
@@ -5187,7 +5033,7 @@ return (
   />
 )}
               
-              <EvolutionCharts rows={evolutionRows} serverData={serverEvolutionData} dateFilter={dateFilter} setDateFilter={handleSetDateFilter} setBorderoFilter={setBorderoFilter} setDctoFilter={setDctoFilter} setInsightFilter={setInsightFilter} insightFilter={insightFilter} setViewMode={setViewMode} hideValues={hideValues} dataSourceTable={dataSourceTable} />
+              <EvolutionCharts rows={evolutionRows} dateFilter={dateFilter} setDateFilter={handleSetDateFilter} setBorderoFilter={setBorderoFilter} setDctoFilter={setDctoFilter} setInsightFilter={setInsightFilter} insightFilter={insightFilter} setViewMode={setViewMode} hideValues={hideValues} dataSourceTable={dataSourceTable} />
             </div>
           )}
 
