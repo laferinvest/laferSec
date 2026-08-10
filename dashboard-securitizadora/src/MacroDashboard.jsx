@@ -261,7 +261,7 @@ function ensureMacroEntityBucket(map, key, rawName, defaults = {}) {
 }
 
 function isInadimplente(row) {
-  return normalizarValor(row?.inadimplencia ?? row?.Inadimplencia ?? row?.["Inadimplência"]) === "sim";
+  return normalizarValor(row?.inadimplencia) === "sim";
 }
 
 function cedenteValido(cedente) {
@@ -451,7 +451,7 @@ function normalizarRegistroMacro(row, sourceTable, index) {
     "Juros e Multa": jurosMulta,
     "Tx.Efet": txEfet,
     Status: getValorPorAliases(row, ["Status", "Situação", "SITUAÇÃO", "Estado"]) ?? row?.Status ?? row?.Estado ?? "",
-    inadimplencia: row?.inadimplencia ?? row?.Inadimplencia ?? row?.["Inadimplência"] ?? null,
+    inadimplencia: row?.inadimplencia ?? null,
     _clienteEntityKey: chaveEntidadePrefixo(cliente ?? row?.Cliente ?? ""),
     _sacadoEntityKey: chaveEntidadePrefixo(sacado ?? row?.Sacado ?? ""),
     _sourceTable: sourceTable,
@@ -459,7 +459,7 @@ function normalizarRegistroMacro(row, sourceTable, index) {
   };
 }
 
-const MACRO_SELECT_COLUMNS = 'id,Cliente,Sacado,"Dt.Emis",Vcto,Pgto,"Vl Pgto",Dcto,"Borderô",Entrada,Desagio,"Juros e Multa","Tx.Efet",Status,inadimplencia,Inadimplencia,"Inadimplência"';
+const MACRO_SELECT_COLUMNS = 'id,Cliente,Sacado,"Dt.Emis",Vcto,Pgto,"Vl Pgto",Dcto,"Borderô",Entrada,Desagio,"Juros e Multa","Tx.Efet",Status,inadimplencia';
 const MACRO_PAGE_SIZE = 5000;
 const MACRO_CACHE_TTL_MS = 5 * 60 * 1000;
 const macroDashboardCache = { data: null, promise: null, updatedAt: 0 };
@@ -578,7 +578,7 @@ function MacroDetailedTable({ rows, focus, setFocus, setSelectedSlice, hideValue
 
   useEffect(() => { setCurrentPage(1); }, [rows, focus, sortConfig]);
 
-  const colunasOcultas = ["id", "created_at", "Cód.Red", "UF", "Banco", "Rec.", "Estado", "_status", "_sourceTable", "_rowKey", "_clienteEntityKey", "_sacadoEntityKey", "_macroCedenteKey", "_macroCedenteLabel", "_macroGrupoEconomicoId", "Qtd Linhas Agrupadas", "Detalhes Agrupamento", "inadimplencia", "Inadimplencia", "Inadimplência"];
+  const colunasOcultas = ["id", "created_at", "Cód.Red", "UF", "Banco", "Rec.", "Estado", "_status", "_sourceTable", "_rowKey", "_clienteEntityKey", "_sacadoEntityKey", "_macroCedenteKey", "_macroCedenteLabel", "_macroGrupoEconomicoId", "Qtd Linhas Agrupadas", "Detalhes Agrupamento", "inadimplencia"];
 
   const columns = useMemo(() => {
     if (!rows.length) return [];

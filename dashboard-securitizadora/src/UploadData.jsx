@@ -133,7 +133,7 @@ const getRowPgto = (row) =>
 const hasRowPgto = (row) => Boolean(limpaChave(getRowPgto(row)));
 
 const isInadimplente = (row) =>
-  normalizarTexto(row?.inadimplencia ?? row?.Inadimplencia ?? row?.["Inadimplência"]) === "sim";
+  normalizarTexto(row?.inadimplencia) === "sim";
 
 const normalizarChaveTexto = (val) =>
   normalizarTexto(val).replace(/[^a-z0-9]/g, "");
@@ -397,7 +397,7 @@ function normalizarLinhaRiscoAtual(row, sourceTable, index) {
     Pgto: getValorPorAliases(row, ["Pgto", "Dt.Pgto", "Dt Pgto", "Data Pgto", "Data de Pgto", "Data de Pagamento", "Data de quitacao", "DATA DE QUITACAO"]) ?? row?.Pgto ?? null,
     Entrada: cleanNumber(getValorPorAliases(row, ["Entrada", "Valor", "Valor(R$)", "VALOR(R$)", "Total", "TOTAL", "TOTAL(R$)"])) ?? 0,
     Status: getValorPorAliases(row, ["Status", "Situacao", "SITUACAO", "Estado"]) ?? row?.Status ?? row?.Estado ?? "",
-    inadimplencia: getValorPorAliases(row, ["inadimplencia", "Inadimplencia"]) ?? null,
+    inadimplencia: getValorPorAliases(row, ["inadimplencia"]) ?? null,
     _sourceTable: sourceTable,
     _rowKey: `${sourceTable}-${row?.id ?? index}`,
   };

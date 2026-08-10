@@ -650,7 +650,7 @@ function adicionarDiasUteis(baseDate, qtdDiasUteis) {
 
 
 function isInadimplente(row) {
-  return normalizarChave(row?.inadimplencia ?? row?.Inadimplencia ?? row?.["Inadimplência"]) === "sim";
+  return normalizarChave(row?.inadimplencia) === "sim";
 }
 
 function isStatusRefinanciado(statusValue) {
@@ -2118,7 +2118,7 @@ const sectionSubtitleStyle = {
   color: "#6b7280",
 };
 
-const COLUNAS_OCULTAS_SET = new Set(["id", "created_at", "Cód.Red", "UF", "Banco", "Rec.", "Estado", "_status", "_sourceTable", "_rowKey", "_clienteEntityKey", "_sacadoEntityKey", "clienteEntityKey", "sacadoEntityKey", "ClienteEntityKey", "SacadoEntityKey", "Juros e Multa", "Qtd Linhas Agrupadas", "Detalhes Agrupamento", "inadimplencia", "Inadimplencia", "Inadimplência"]);
+const COLUNAS_OCULTAS_SET = new Set(["id", "created_at", "Cód.Red", "UF", "Banco", "Rec.", "Estado", "_status", "_sourceTable", "_rowKey", "_clienteEntityKey", "_sacadoEntityKey", "clienteEntityKey", "sacadoEntityKey", "ClienteEntityKey", "SacadoEntityKey", "Juros e Multa", "Qtd Linhas Agrupadas", "Detalhes Agrupamento", "inadimplencia"]);
 
 
 function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, borderoFilter, setBorderoFilter, dctoFilter, setDctoFilter, setDateFilter, setInsightFilter, setClienteSelecionado, setSacadoSelecionado, hideValues, dataSourceTable = "secInfo", onBorderoDrill, onDctoDrill }) {

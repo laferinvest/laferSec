@@ -371,11 +371,18 @@ const truncateChartLabel = (value, maxLength = 22) => {
 
 const getFirstWord = (value) => String(value || "Sem cedente").trim().split(/\s+/)[0];
 
-function WeeklyDueBarChart({ groups, hideValues, onNavigateToMicro }) {
+function WeeklyDueBarChart({
+  groups,
+  hideValues,
+  onNavigateToMicro,
+  emptyMessage = "Sem crédito a vencer nesta semana.",
+  ariaLabel = "Gráfico de barras do crédito a vencer na semana por cedente",
+  valueAxisLabel = "Valor a vencer",
+}) {
   if (!groups.length) {
     return (
       <div style={{ padding: "42px 18px", color: "#6b7280", fontSize: "14px", textAlign: "center", border: "1px dashed #d1d5db", borderRadius: "8px", background: "#f9fafb" }}>
-        Sem crédito a vencer nesta semana.
+        {emptyMessage}
       </div>
     );
   }
@@ -392,13 +399,13 @@ function WeeklyDueBarChart({ groups, hideValues, onNavigateToMicro }) {
   const tickCount = 4;
 
   return (
-    <div style={{ overflowX: "auto", paddingBottom: "4px" }}>
+    <div style={{ overflowX: "auto", maxWidth: "100%", paddingBottom: "4px", scrollbarGutter: "stable" }}>
       <svg
         viewBox={`0 0 ${chartWidth} ${chartHeight}`}
         width={chartWidth}
         height={chartHeight}
         role="img"
-        aria-label="Gráfico de barras do crédito a vencer na semana por cedente"
+        aria-label={ariaLabel}
         style={{ display: "block", minWidth: "100%" }}
       >
         {Array.from({ length: tickCount + 1 }, (_, index) => {
@@ -452,7 +459,7 @@ function WeeklyDueBarChart({ groups, hideValues, onNavigateToMicro }) {
         })}
 
         <text x="18" y={padding.top + plotHeight / 2} textAnchor="middle" transform={`rotate(-90 18 ${padding.top + plotHeight / 2})`} fill="#6b7280" fontSize="12" fontWeight="800">
-          Valor a vencer
+          {valueAxisLabel}
         </text>
         <text x={padding.left + (chartWidth - padding.left - padding.right) / 2} y={chartHeight - 8} textAnchor="middle" fill="#6b7280" fontSize="12" fontWeight="800">
           Cedente
@@ -606,10 +613,43 @@ function CedenteGroupedMorningTables({ groups, hideValues, onNavigateToMicro, co
   );
 }
 
-function MorningSection({ title, subtitle, rows, hideValues, accent = "#4f46e5", children, onNavigateToMicro, order = 0, tableContent }) {
+function MorningSection({
+  title,
+  subtitle,
+  rows,
+  hideValues,
+  accent = "#4f46e5",
+  children,
+  onNavigateToMicro,
+  order = 0,
+  tableContent,
+  collapsible = false,
+  defaultOpen = false,
+  headerRate,
+}) {
+  const [isOpen, setIsOpen] = useState(!collapsible || defaultOpen);
+  const headerVolume = rows.reduce((total, row) => total + parseNumber(row.Entrada), 0);
+  const toggleOpen = () => {
+    if (collapsible) setIsOpen((open) => !open);
+  };
+
+  const handleHeaderKeyDown = (event) => {
+    if (!collapsible || (event.key !== "Enter" && event.key !== " ")) return;
+    event.preventDefault();
+    toggleOpen();
+  };
+
   return (
-    <section style={{ order, background: "#fff", border: "1px solid #e5e7eb", borderRadius: "12px", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)", overflow: "hidden" }}>
-      <div style={{ padding: "18px 22px", borderTop: `4px solid ${accent}`, borderBottom: "1px solid #e5e7eb", display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "center", flexWrap: "wrap" }}>
+    <section style={{ order, minWidth: 0, background: "#fff", border: "1px solid #e5e7eb", borderRadius: "12px", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)", overflow: "hidden" }}>
+      <div
+        onClick={toggleOpen}
+        onKeyDown={handleHeaderKeyDown}
+        role={collapsible ? "button" : undefined}
+        tabIndex={collapsible ? 0 : undefined}
+        aria-expanded={collapsible ? isOpen : undefined}
+        aria-label={collapsible ? `${isOpen ? "Recolher" : "Expandir"} ${title}` : undefined}
+        style={{ padding: "18px 22px", borderTop: `4px solid ${accent}`, borderBottom: isOpen ? "1px solid #e5e7eb" : "none", display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "center", flexWrap: "wrap", cursor: collapsible ? "pointer" : "default", userSelect: collapsible ? "none" : "auto" }}
+      >
         <div>
           <h2 style={{ margin: 0, color: "#111827", fontSize: "20px", fontWeight: 800, letterSpacing: "-0.01em" }}>
             {title}
@@ -618,14 +658,39 @@ function MorningSection({ title, subtitle, rows, hideValues, accent = "#4f46e5",
             {subtitle}
           </p>
         </div>
-        <div style={{ color: accent, background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: "8px", padding: "8px 12px", fontSize: "13px", fontWeight: 800 }}>
-          {rows.length} título(s)
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+          <div style={{ color: accent, background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: "8px", padding: "8px 12px", fontSize: "13px", fontWeight: 800 }}>
+            {rows.length} título(s)
+          </div>
+          {collapsible && (
+            <div style={{ color: accent, background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: "8px", padding: "8px 12px", fontSize: "13px", fontWeight: 800 }}>
+              Volume: {formatMoney(headerVolume, hideValues)}
+            </div>
+          )}
+          {headerRate && (
+            <div style={{ color: accent, background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: "8px", padding: "8px 12px", fontSize: "13px", fontWeight: 800 }}>
+              Taxa: {headerRate}
+            </div>
+          )}
+          {collapsible && (
+            <span
+              aria-hidden="true"
+              style={{ display: "inline-flex", alignItems: "center", gap: "7px", padding: "8px 11px", borderRadius: "8px", border: `1px solid ${accent}40`, background: `${accent}0d`, color: accent, fontSize: "12px", fontWeight: 800, cursor: "pointer" }}
+            >
+              {isOpen ? "Recolher" : "Abrir"}
+              <span style={{ display: "inline-block", fontSize: "14px", transform: isOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 160ms ease" }}>
+                ▾
+              </span>
+            </span>
+          )}
         </div>
       </div>
-      <div style={{ padding: "20px 22px", display: "flex", flexDirection: "column", gap: "16px" }}>
-        {children}
-        {tableContent || <MorningTable rows={rows} hideValues={hideValues} onNavigateToMicro={onNavigateToMicro} />}
-      </div>
+      {isOpen && (
+        <div style={{ padding: "20px 22px", display: "flex", flexDirection: "column", gap: "16px" }}>
+          {children}
+          {tableContent || <MorningTable rows={rows} hideValues={hideValues} onNavigateToMicro={onNavigateToMicro} />}
+        </div>
+      )}
     </section>
   );
 }
@@ -648,6 +713,10 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
   const resumoPeriod = useMemo(() => getResumoPeriod(selectedDateIso), [selectedDateIso]);
   const todayDueDateIso = useMemo(() => shiftVencimentoToBusinessDay(todayIso), [todayIso]);
   const currentWeek = useMemo(() => getCalendarWeekRange(todayIso), [todayIso]);
+  const previousWeek = useMemo(() => ({
+    startIso: addDays(currentWeek.startIso, -7),
+    endIso: addDays(currentWeek.startIso, -1),
+  }), [currentWeek]);
   const monthStartIso = useMemo(() => `${todayIso.slice(0, 8)}01`, [todayIso]);
   const previousMonthStartIso = useMemo(() => {
     const date = parseIsoDate(monthStartIso);
@@ -715,6 +784,9 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
       isQuitadoOuPago(row)
     ));
     const operacoesOntem = validRows.filter((row) => row["Dt.Emis"] === resumoPeriod.operacaoDateIso);
+    const operacoesSemanaPassada = validRows.filter((row) => (
+      row["Dt.Emis"] >= previousWeek.startIso && row["Dt.Emis"] <= previousWeek.endIso
+    ));
     const vencemHoje = validRows.filter((row) => getVctoOperacional(row) === todayDueDateIso && isOpen(row));
     const vencemNaSemana = validRows.filter((row) => {
       const vctoOperacional = getVctoOperacional(row);
@@ -736,6 +808,7 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
     });
 
     const volumeOperado = operacoesOntem.reduce((acc, row) => acc + row.Entrada, 0);
+    const volumeOperadoSemanaPassada = operacoesSemanaPassada.reduce((acc, row) => acc + row.Entrada, 0);
     const desagioOperado = operacoesOntem.reduce((acc, row) => acc + row.Desagio, 0);
     const totalInadimplenciaOntem = inadimplenciaOntem.reduce((acc, row) => acc + row.Entrada, 0);
     const totalQuitadosOntem = quitadosOntem.reduce((acc, row) => acc + row.Entrada, 0);
@@ -786,6 +859,7 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
     const quitadosOntemAgrupados = buildCedenteGroups(quitadosOntem);
     const quitadosEmAtrasoAgrupados = buildCedenteGroups(quitadosEmAtraso);
     const operacoesOntemAgrupadas = buildCedenteGroups(operacoesOntem);
+    const operacoesSemanaPassadaAgrupadas = buildCedenteGroups(operacoesSemanaPassada);
     const vencemHojeAgrupados = buildCedenteGroups(vencemHoje);
     const vencemNaSemanaAgrupados = buildCedenteGroups(vencemNaSemana);
     const inadimplentesMesAtualEAnteriorAgrupados = buildCedenteGroups(inadimplentesMesAtualEAnterior);
@@ -795,6 +869,7 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
       quitadosOntem: quitadosOntemAgrupados.rows,
       quitadosEmAtraso: quitadosEmAtrasoAgrupados.rows,
       operacoesOntem: operacoesOntemAgrupadas.rows,
+      operacoesSemanaPassada: operacoesSemanaPassadaAgrupadas.rows,
       vencemHoje: vencemHojeAgrupados.rows,
       vencemNaSemana: vencemNaSemanaAgrupados.rows,
       inadimplentesMesAtualEAnterior: inadimplentesMesAtualEAnteriorAgrupados.rows,
@@ -802,10 +877,12 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
       gruposQuitadosOntem: quitadosOntemAgrupados.groups,
       gruposQuitadosEmAtraso: quitadosEmAtrasoAgrupados.groups,
       gruposOperacoesOntem: operacoesOntemAgrupadas.groups,
+      gruposOperacoesSemanaPassada: operacoesSemanaPassadaAgrupadas.groups,
       gruposVencemHoje: vencemHojeAgrupados.groups,
       gruposVencemNaSemana: vencemNaSemanaAgrupados.groups,
       gruposInadimplentesMesAtualEAnterior: inadimplentesMesAtualEAnteriorAgrupados.groups,
       volumeOperado,
+      volumeOperadoSemanaPassada,
       desagioOperado,
       totalInadimplenciaOntem,
       totalQuitadosOntem,
@@ -815,7 +892,7 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
       totalInadimplentesMesAtualEAnterior,
       taxaMediaPonderada,
     };
-  }, [rows, resumoPeriod, todayDueDateIso, currentWeek, previousMonthStartIso, todayIso]);
+  }, [rows, resumoPeriod, todayDueDateIso, currentWeek, previousWeek, previousMonthStartIso, todayIso]);
 
   if (loading) {
     return (
@@ -853,6 +930,7 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
     ? "Títulos em aberto com vencimento operacional hoje."
     : `Títulos em aberto com vencimento operacional em ${formatDate(todayDueDateIso)} por ajuste de fim de semana ou feriado.`;
   const vencemNaSemanaSubtitle = `Títulos em aberto a vencer entre ${formatDate(todayIso)} e ${formatDate(currentWeek.endIso)}, limitados à semana atual.`;
+  const operacoesSemanaPassadaSubtitle = `Títulos emitidos entre ${formatDate(previousWeek.startIso)} e ${formatDate(previousWeek.endIso)}, agrupados por cedente.`;
   const inadimplentesMesAtualEAnteriorSubtitle = `Títulos em aberto com vencimento operacional entre ${formatDate(previousMonthStartIso)} e ${formatDate(addDays(todayIso, -1))}.`;
   const renderCedenteGroups = (groups, color, showWeightedRate = false) => (
     <CedenteGroupedMorningTables
@@ -889,13 +967,13 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
         </label>
       </div>
 
+      <div style={{ order: 0, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 480px), 1fr))", gap: "24px", alignItems: "stretch", minWidth: 0 }}>
       <MorningSection
         title="Crédito a Vencer na Semana"
         subtitle={vencemNaSemanaSubtitle}
         rows={resumo.vencemNaSemana}
         hideValues={hideValues}
         accent="#0ea5e9"
-        order={0}
         onNavigateToMicro={onNavigateToMicro}
         tableContent={(
           <WeeklyDueBarChart
@@ -916,12 +994,43 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
       </MorningSection>
 
       <MorningSection
+        title="Volume Negociado na Semana Passada"
+        subtitle={operacoesSemanaPassadaSubtitle}
+        rows={resumo.operacoesSemanaPassada}
+        hideValues={hideValues}
+        accent="#0ea5e9"
+        onNavigateToMicro={onNavigateToMicro}
+        tableContent={(
+          <WeeklyDueBarChart
+            groups={resumo.gruposOperacoesSemanaPassada}
+            hideValues={hideValues}
+            onNavigateToMicro={onNavigateToMicro}
+            emptyMessage="Sem volume negociado na semana passada."
+            ariaLabel="Gráfico de barras do volume negociado na semana passada por cedente"
+            valueAxisLabel="Volume negociado"
+          />
+        )}
+      >
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px" }}>
+          <SummaryMetric
+            label="Volume Total Negociado"
+            value={formatMoney(resumo.volumeOperadoSemanaPassada, hideValues)}
+            sublabel={`${resumo.operacoesSemanaPassada.length} título(s) emitido(s)`}
+            color="#0ea5e9"
+          />
+        </div>
+      </MorningSection>
+      </div>
+
+      <MorningSection
         title="Inadimplência do Dia"
         subtitle={inadimplenciaSubtitle}
         rows={resumo.inadimplenciaOntem}
         hideValues={hideValues}
         accent="#ef4444"
         order={2}
+        collapsible
+        defaultOpen
         onNavigateToMicro={onNavigateToMicro}
         tableContent={renderCedenteGroups(resumo.gruposInadimplenciaOntem, "#ef4444")}
       >
@@ -942,6 +1051,8 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
         hideValues={hideValues}
         accent="#22c55e"
         order={3}
+        collapsible
+        defaultOpen
         onNavigateToMicro={onNavigateToMicro}
         tableContent={renderCedenteGroups(resumo.gruposQuitadosOntem, "#22c55e")}
       >
@@ -962,6 +1073,7 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
         hideValues={hideValues}
         accent="#f59e0b"
         order={4}
+        collapsible
         onNavigateToMicro={onNavigateToMicro}
         tableContent={renderCedenteGroups(resumo.gruposQuitadosEmAtraso, "#f59e0b")}
       >
@@ -982,6 +1094,8 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
         hideValues={hideValues}
         accent="#4f46e5"
         order={1}
+        collapsible
+        headerRate={formatRate(resumo.taxaMediaPonderada) || "0,00%"}
         onNavigateToMicro={onNavigateToMicro}
         tableContent={renderCedenteGroups(resumo.gruposOperacoesOntem, "#4f46e5", true)}
       >
@@ -1014,6 +1128,7 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
         hideValues={hideValues}
         accent="#0ea5e9"
         order={5}
+        collapsible
         onNavigateToMicro={onNavigateToMicro}
         tableContent={renderCedenteGroups(resumo.gruposVencemHoje, "#0ea5e9")}
       >
@@ -1034,6 +1149,7 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
         hideValues={hideValues}
         accent="#b91c1c"
         order={6}
+        collapsible
         onNavigateToMicro={onNavigateToMicro}
         tableContent={renderCedenteGroups(resumo.gruposInadimplentesMesAtualEAnterior, "#b91c1c")}
       >
