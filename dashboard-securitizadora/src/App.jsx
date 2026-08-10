@@ -74,6 +74,14 @@ export default function App() {
   };
 
   const activateTab = (tab) => {
+    if (tab === "micro" && typeof window !== "undefined") {
+      const width = window.innerWidth;
+      const mobile = width < 640;
+      const tablet = width >= 640 && width < 1824;
+      setIsMobile(mobile);
+      setIsTablet(tablet);
+      setIsSidebarOpen(!mobile);
+    }
     prepareTab(tab);
     setActiveTab(tab);
   };

@@ -3170,6 +3170,16 @@ function EconomicGroupDeleteDialog({ group, deleting, error, onClose, onConfirm 
   );
 }
 
+function getMicroSidebarLayout() {
+  const width = typeof window !== "undefined" ? window.innerWidth : 1024;
+  const mobile = width < 640;
+  return {
+    mobile,
+    tablet: width >= 640 && width < 1824,
+    open: !mobile,
+  };
+}
+
 // --- EXPORTAÇÃO DO MICRODASHBOARD ---
 export default function MicroDashboard({ session, onSidebarToggle, hideValues, setHideValues, initialFilter = null }) {
   const hasInitialFilter = Boolean(initialFilter?.type);
@@ -3217,9 +3227,10 @@ export default function MicroDashboard({ session, onSidebarToggle, hideValues, s
   const [grupoFeedback, setGrupoFeedback] = useState(null);
 
   // ESTADOS DE CONTROLO DA SIDEBAR
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
-  const [isTablet, setIsTablet] = useState(false);
+  const initialSidebarLayout = useMemo(getMicroSidebarLayout, []);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => initialSidebarLayout.open);
+  const [isMobile, setIsMobile] = useState(() => initialSidebarLayout.mobile);
+  const [isTablet, setIsTablet] = useState(() => initialSidebarLayout.tablet);
   // Formata moeda ou mascara o valor se hideValues estiver ativo
   const fmtM = (valor) => hideValues ? "R$ -" : formatarMoeda(valor);
 
@@ -3230,18 +3241,11 @@ export default function MicroDashboard({ session, onSidebarToggle, hideValues, s
 
   useEffect(() => {
     const handleResize = () => {
-      const w = window.innerWidth;
-      const mobile = w < 640;           // < 640px: overlay (flutua por cima)
-      const tablet = w >= 640 && w < 1824; // 640–1023px: sidebar empurra conteúdo sem translado
+      const { mobile, tablet, open } = getMicroSidebarLayout();
       setIsMobile(mobile);
       setIsTablet(tablet);
-      if (!mobile) {
-        setIsSidebarOpen(true);
-        if (onSidebarToggle) onSidebarToggle(true, mobile, tablet);
-      } else {
-        setIsSidebarOpen(false);
-        if (onSidebarToggle) onSidebarToggle(false, mobile, tablet);
-      }
+      setIsSidebarOpen(open);
+      if (onSidebarToggle) onSidebarToggle(open, mobile, tablet);
     };
 
     if (typeof window !== 'undefined') {
