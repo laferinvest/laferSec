@@ -732,17 +732,36 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
       setError("");
 
       try {
-        const [secInfoRows, smartRows] = await Promise.all([
-          fetchAllRows("secInfo"),
-          fetchAllRows("secInfoSmart"),
-        ]);
+        const { data: rpcRows, error: rpcError } = await supabase.rpc(
+          "dashboard_resumo_matinal_rows",
+          {
+            p_selected_date: selectedDateIso,
+            p_today: todayIso,
+          }
+        );
+
+        if (rpcError) {
+          console.warn("RPC do Resumo Matinal indisponível. Usando leitura completa como fallback.", rpcError);
+
+          const [secInfoRows, smartRows] = await Promise.all([
+            fetchAllRows("secInfo"),
+            fetchAllRows("secInfoSmart"),
+          ]);
+
+          if (ignore) return;
+
+          setRows([
+            ...(secInfoRows || []).map((row, index) => normalizeRow(row, "secInfo", index)),
+            ...(smartRows || []).map((row, index) => normalizeRow(row, "secInfoSmart", index)),
+          ]);
+          return;
+        }
 
         if (ignore) return;
 
-        setRows([
-          ...(secInfoRows || []).map((row, index) => normalizeRow(row, "secInfo", index)),
-          ...(smartRows || []).map((row, index) => normalizeRow(row, "secInfoSmart", index)),
-        ]);
+        setRows((Array.isArray(rpcRows) ? rpcRows : []).map((row, index) =>
+          normalizeRow(row, row?._sourceTable || "secInfo", index)
+        ));
       } catch (err) {
         if (!ignore) setError(err.message || "Erro ao carregar o resumo matinal.");
       } finally {
@@ -754,7 +773,7 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
     return () => {
       ignore = true;
     };
-  }, []);
+  }, [selectedDateIso, todayIso]);
 
   const resumo = useMemo(() => {
     const validRows = rows.filter((row) => row.Cliente && row.Sacado && row.Entrada > 0);
@@ -967,7 +986,6 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
         </label>
       </div>
 
-      <div style={{ order: 0, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 480px), 1fr))", gap: "24px", alignItems: "stretch", minWidth: 0 }}>
       <MorningSection
         title="Crédito a Vencer na Semana"
         subtitle={vencemNaSemanaSubtitle}
@@ -992,35 +1010,6 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
           />
         </div>
       </MorningSection>
-
-      <MorningSection
-        title="Volume Negociado na Semana Passada"
-        subtitle={operacoesSemanaPassadaSubtitle}
-        rows={resumo.operacoesSemanaPassada}
-        hideValues={hideValues}
-        accent="#0ea5e9"
-        onNavigateToMicro={onNavigateToMicro}
-        tableContent={(
-          <WeeklyDueBarChart
-            groups={resumo.gruposOperacoesSemanaPassada}
-            hideValues={hideValues}
-            onNavigateToMicro={onNavigateToMicro}
-            emptyMessage="Sem volume negociado na semana passada."
-            ariaLabel="Gráfico de barras do volume negociado na semana passada por cedente"
-            valueAxisLabel="Volume negociado"
-          />
-        )}
-      >
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px" }}>
-          <SummaryMetric
-            label="Volume Total Negociado"
-            value={formatMoney(resumo.volumeOperadoSemanaPassada, hideValues)}
-            sublabel={`${resumo.operacoesSemanaPassada.length} título(s) emitido(s)`}
-            color="#0ea5e9"
-          />
-        </div>
-      </MorningSection>
-      </div>
 
       <MorningSection
         title="Inadimplência do Dia"
@@ -1159,6 +1148,35 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
             value={formatMoney(resumo.totalInadimplentesMesAtualEAnterior, hideValues)}
             sublabel={`${resumo.inadimplentesMesAtualEAnterior.length} título(s) em aberto`}
             color="#b91c1c"
+          />
+        </div>
+      </MorningSection>
+
+      <MorningSection
+        title="Volume Negociado na Semana Passada"
+        subtitle={operacoesSemanaPassadaSubtitle}
+        rows={resumo.operacoesSemanaPassada}
+        hideValues={hideValues}
+        accent="#0ea5e9"
+        order={7}
+        onNavigateToMicro={onNavigateToMicro}
+        tableContent={(
+          <WeeklyDueBarChart
+            groups={resumo.gruposOperacoesSemanaPassada}
+            hideValues={hideValues}
+            onNavigateToMicro={onNavigateToMicro}
+            emptyMessage="Sem volume negociado na semana passada."
+            ariaLabel="Gráfico de barras do volume negociado na semana passada por cedente"
+            valueAxisLabel="Volume negociado"
+          />
+        )}
+      >
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px" }}>
+          <SummaryMetric
+            label="Volume Total Negociado"
+            value={formatMoney(resumo.volumeOperadoSemanaPassada, hideValues)}
+            sublabel={`${resumo.operacoesSemanaPassada.length} título(s) emitido(s)`}
+            color="#0ea5e9"
           />
         </div>
       </MorningSection>

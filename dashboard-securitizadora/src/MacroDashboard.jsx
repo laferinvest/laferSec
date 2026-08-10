@@ -10,6 +10,13 @@ function formatarData(dataString) {
   return dataString;
 }
 
+function formatLocalIsoDate(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 function formatarMoeda(valor) {
   if (valor === null || valor === undefined || valor === "") return "";
   const numero = Number(valor);
@@ -528,18 +535,30 @@ async function loadMacroDashboardData() {
   if (macroDashboardCache.promise) return macroDashboardCache.promise;
 
   macroDashboardCache.promise = (async () => {
-    const [wbaData, smartData, { data: snapshotData, error: snapshotError }] = await Promise.all([
-      fetchAllMacroRows("secInfo"),
-      fetchAllMacroRows("secInfoSmart"),
+    const [{ data: rpcRows, error: rpcError }, { data: snapshotData, error: snapshotError }] = await Promise.all([
+      supabase.rpc("dashboard_macro_rows", { p_today: formatLocalIsoDate() }),
       supabase.from("secSnapshots").select('Data, Recebiveis, "Dinheiro Banco"').order("Data", { ascending: false }).limit(1)
     ]);
 
     if (snapshotError) throw snapshotError;
 
-    const sourceRows = [
-      ...(wbaData || []).map((row, index) => normalizarRegistroMacro(row, "secInfo", index)),
-      ...(smartData || []).map((row, index) => normalizarRegistroMacro(row, "secInfoSmart", index)),
-    ];
+    let sourceRows;
+
+    if (rpcError) {
+      console.warn("RPC do Macro Dashboard indisponível. Usando leitura completa como fallback.", rpcError);
+      const [wbaData, smartData] = await Promise.all([
+        fetchAllMacroRows("secInfo"),
+        fetchAllMacroRows("secInfoSmart"),
+      ]);
+      sourceRows = [
+        ...(wbaData || []).map((row, index) => normalizarRegistroMacro(row, "secInfo", index)),
+        ...(smartData || []).map((row, index) => normalizarRegistroMacro(row, "secInfoSmart", index)),
+      ];
+    } else {
+      sourceRows = (Array.isArray(rpcRows) ? rpcRows : []).map((row, index) =>
+        normalizarRegistroMacro(row, row?._sourceTable || "secInfo", index)
+      );
+    }
 
     const dadosLimpos = sourceRows.filter(registroValidoParaAnalise);
     const ultimoSnapshot = snapshotData?.[0];
@@ -551,8 +570,8 @@ async function loadMacroDashboardData() {
       rows: dadosLimpos,
       latestPatrimonio: patrimonioAtual,
       counts: {
-        wba: wbaData?.length || 0,
-        smart: smartData?.length || 0,
+        wba: sourceRows.filter((row) => row._sourceTable === "secInfo").length,
+        smart: sourceRows.filter((row) => row._sourceTable === "secInfoSmart").length,
         total: sourceRows.length,
         validos: dadosLimpos.length,
       }
