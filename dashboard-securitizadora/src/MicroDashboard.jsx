@@ -1,6 +1,37 @@
 import React, { useEffect, useMemo, useState, useRef } from "react";
 import { supabase } from "./supabaseClient";
 
+const MICRO_RPC_CACHE_TTL_MS = 30_000;
+const microRpcCache = new Map();
+
+async function callMicroRpcCached(functionName, args) {
+  const cacheKey = `${functionName}:${JSON.stringify(args)}`;
+  const cached = microRpcCache.get(cacheKey);
+  const now = Date.now();
+
+  if (cached?.promise) return cached.promise;
+  if (cached && now - cached.updatedAt < MICRO_RPC_CACHE_TTL_MS) {
+    return { data: cached.data, error: null };
+  }
+
+  const promise = supabase.rpc(functionName, args)
+    .then((result) => {
+      if (result.error) {
+        microRpcCache.delete(cacheKey);
+      } else {
+        microRpcCache.set(cacheKey, { data: result.data, updatedAt: Date.now() });
+      }
+      return result;
+    })
+    .catch((error) => {
+      microRpcCache.delete(cacheKey);
+      throw error;
+    });
+
+  microRpcCache.set(cacheKey, { promise, updatedAt: now });
+  return promise;
+}
+
 // --- COLLAPSE ANIMADO ---
 function CollapsePanel({ isCollapsed, children }) {
   const ref = useRef(null);
@@ -4155,7 +4186,7 @@ return {
       async function buscarRelacionamentos() {
         try {
           const sourceTables = getDataSourceTables(dataSourceTable);
-          const { data: rpcData, error: rpcError } = await supabase.rpc("dashboard_micro_relationships", {
+          const { data: rpcData, error: rpcError } = await callMicroRpcCached("dashboard_micro_relationships", {
             p_sources: sourceTables,
           });
 
@@ -4210,7 +4241,7 @@ return {
 
     try {
       const sourceTables = getDataSourceTables(dataSourceTable);
-      const { data: rpcData, error: rpcError } = await supabase.rpc("dashboard_micro_rows", {
+      const { data: rpcData, error: rpcError } = await callMicroRpcCached("dashboard_micro_rows", {
         p_sources: sourceTables,
         p_clientes: cedentesRelacionadosAliases,
         p_sacados: null,
@@ -4282,7 +4313,7 @@ return {
         const grupo = grupoSelecionado && !clienteSelecionado
           ? gruposEconomicos.find((item) => item.label === grupoSelecionado)
           : null;
-        const { data: rpcData, error: rpcError } = await supabase.rpc("dashboard_micro_rows", {
+        const { data: rpcData, error: rpcError } = await callMicroRpcCached("dashboard_micro_rows", {
           p_sources: sourceTables,
           p_clientes: clienteSelecionado ? clienteSelecionadoAliases : null,
           p_sacados: sacadoSelecionado ? sacadoSelecionadoAliases : null,
@@ -4371,7 +4402,7 @@ return {
       const grupo = grupoSelecionado && !clienteSelecionado
         ? gruposEconomicos.find((item) => item.label === grupoSelecionado)
         : null;
-      const { data, error } = await supabase.rpc("dashboard_micro_evolution", {
+      const { data, error } = await callMicroRpcCached("dashboard_micro_evolution", {
         p_sources: getDataSourceTables(dataSourceTable),
         p_clientes: clienteSelecionado ? clienteSelecionadoAliases : null,
         p_sacados: sacadoSelecionado ? sacadoSelecionadoAliases : null,
