@@ -181,7 +181,6 @@ returns table (
   dcto text,
   bordero text,
   desagio numeric,
-  juros_multa numeric,
   tx_efet numeric,
   status_text text,
   inadimplencia text
@@ -212,7 +211,6 @@ as $$
     coalesce(row_data ->> 'Dcto', '') as dcto,
     coalesce(row_data ->> 'Borderô', '') as bordero,
     public.dashboard_try_numeric(row_data ->> 'Desagio') as desagio,
-    public.dashboard_try_numeric(row_data ->> 'Juros e Multa') as juros_multa,
     public.dashboard_try_numeric(row_data ->> 'Tx.Efet') as tx_efet,
     coalesce(row_data ->> 'Status', row_data ->> 'Estado', '') as status_text,
     coalesce(row_data ->> 'inadimplencia', '') as inadimplencia
@@ -258,7 +256,6 @@ as $$
     'Borderô', p_row_data -> 'Borderô',
     'Entrada', p_row_data -> 'Entrada',
     'Desagio', p_row_data -> 'Desagio',
-    'Juros e Multa', p_row_data -> 'Juros e Multa',
     'Tx.Efet', p_row_data -> 'Tx.Efet',
     'Status', coalesce(p_row_data -> 'Status', p_row_data -> 'Estado'),
     'inadimplencia', p_row_data -> 'inadimplencia',

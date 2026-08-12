@@ -974,6 +974,7 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
         rows={resumo.vencemNaSemana}
         hideValues={hideValues}
         accent="#0ea5e9"
+        collapsible
         onNavigateToMicro={onNavigateToMicro}
         tableContent={(
           <WeeklyDueBarChart
@@ -999,6 +1000,7 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
         rows={resumo.operacoesSemanaPassada}
         hideValues={hideValues}
         accent="#0ea5e9"
+        collapsible
         onNavigateToMicro={onNavigateToMicro}
         tableContent={(
           <WeeklyDueBarChart
@@ -1030,7 +1032,6 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
         accent="#ef4444"
         order={2}
         collapsible
-        defaultOpen
         onNavigateToMicro={onNavigateToMicro}
         tableContent={renderCedenteGroups(resumo.gruposInadimplenciaOntem, "#ef4444")}
       >
@@ -1052,7 +1053,6 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
         accent="#22c55e"
         order={3}
         collapsible
-        defaultOpen
         onNavigateToMicro={onNavigateToMicro}
         tableContent={renderCedenteGroups(resumo.gruposQuitadosOntem, "#22c55e")}
       >

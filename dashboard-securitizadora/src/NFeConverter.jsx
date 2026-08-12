@@ -338,7 +338,7 @@ function montarEmailConfirmacao(d) {
 
       <p>Meu nome é Daniel Ferreira, trabalho na Lafer Invest Securitizadora S/A, empresa parceira da ${escapeHtml(cedente)}. Nós somos responsáveis por emitir os boletos para o pagamento, entretanto, primeiro, precisamos fazer uma checagem de recebimento de mercadoria.</p>
 
-      <p>Nós negociamos com eles a NF de número ${escapeHtml(numeroNfe)}:</p>
+      <p>A Nota Fiscal que precisamos conferir é de número ${escapeHtml(numeroNfe)}:</p>
 
       <p>Venda de ${escapeHtml(qtdItens)} ${escapeHtml(pluralProduto(qtdItens))}, totalizando ${escapeHtml(totalNota)}, dividido conforme segue a fatura abaixo:</p>
 
@@ -367,7 +367,7 @@ A/C de [RESPONSÁVEL].
 
 Meu nome é Daniel Ferreira, trabalho na Lafer Invest Securitizadora S/A, empresa parceira da ${cedente}. Nós somos responsáveis por emitir os boletos para o pagamento, entretanto, primeiro, precisamos fazer uma checagem de recebimento de mercadoria.
 
-Nós negociamos com eles a NF de número ${numeroNfe}:
+A Nota Fiscal que precisamos conferir é de número ${numeroNfe}:
 
 Venda de ${qtdItens} ${pluralProduto(qtdItens)}, totalizando ${totalNota}, dividido conforme segue a fatura abaixo:
 

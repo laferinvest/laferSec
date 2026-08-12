@@ -432,7 +432,6 @@ function normalizarRegistroMacro(row, sourceTable, index) {
   const entrada = cleanNumberMacro(getValorPorAliases(row, ["Entrada", "Valor", "Valor(R$)", "VALOR(R$)", "Total", "TOTAL", "TOTAL(R$)"]));
   const vlPgto = cleanNumberMacro(getValorPorAliases(row, ["Vl Pgto", "Vl.Pgto", "Vl Pgto.", "Liquidado", "LIQUIDADO(R$)", "Valor Pgto", "Valor Pago"]));
   const desagio = cleanNumberMacro(getValorPorAliases(row, ["Desagio", "Deságio", "DESÁGIO"]));
-  const jurosMulta = cleanNumberMacro(getValorPorAliases(row, ["Juros e Multa", "Encargos", "Juros", "Multa"]));
   const txEfet = cleanNumberMacro(getValorPorAliases(row, ["Tx.Efet", "TX.EFET", "Tx Efet", "Taxa Efetiva"]));
   const bordero = getValorPorAliases(row, ["Borderô", "Bordero", "OP"]);
 
@@ -448,7 +447,6 @@ function normalizarRegistroMacro(row, sourceTable, index) {
     "Borderô": bordero ?? row?.["Borderô"] ?? null,
     Entrada: entrada,
     Desagio: desagio,
-    "Juros e Multa": jurosMulta,
     "Tx.Efet": txEfet,
     Status: getValorPorAliases(row, ["Status", "Situação", "SITUAÇÃO", "Estado"]) ?? row?.Status ?? row?.Estado ?? "",
     inadimplencia: row?.inadimplencia ?? null,
@@ -459,7 +457,7 @@ function normalizarRegistroMacro(row, sourceTable, index) {
   };
 }
 
-const MACRO_SELECT_COLUMNS = 'id,Cliente,Sacado,"Dt.Emis",Vcto,Pgto,"Vl Pgto",Dcto,"Borderô",Entrada,Desagio,"Juros e Multa","Tx.Efet",Status,inadimplencia';
+const MACRO_SELECT_COLUMNS = 'id,Cliente,Sacado,"Dt.Emis",Vcto,Pgto,"Vl Pgto",Dcto,"Borderô",Entrada,Desagio,"Tx.Efet",Status,inadimplencia';
 const MACRO_PAGE_SIZE = 5000;
 const MACRO_CACHE_TTL_MS = 5 * 60 * 1000;
 const macroDashboardCache = { data: null, promise: null, updatedAt: 0 };
@@ -935,20 +933,17 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
           }
 
           if (origemTabela === "secInfoSmart") {
-            const jurosMulta = Number(r["Juros e Multa"]) || 0;
             const valorDescontado = val - desagioVal;
-            const encargoTitulo = jurosMulta > 0 ? jurosMulta : 0;
-            const usaPrazoReal = encargoTitulo >= 1;
             const prazoEncargos = getMacroEffectiveTerm(
               r["Dt.Emis"],
               r.Vcto,
-              usaPrazoReal ? r.Pgto : null,
-              usaPrazoReal
+              null,
+              false
             );
 
             if (valorDescontado > 0 && prazoEncargos) {
               rankingBordero.totalDescontado += valorDescontado;
-              rankingBordero.totalDesagioEncargos += desagioVal + encargoTitulo;
+              rankingBordero.totalDesagioEncargos += desagioVal;
               rankingBordero.weightedPrazo += valorDescontado * prazoEncargos;
             }
           }

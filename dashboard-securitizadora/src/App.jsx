@@ -6,6 +6,7 @@ import ResumoMatinal from "./ResumoMatinal";
 import PatrimonioDashboard from "./PatrimonioDashboard";
 import UploadData from "./UploadData";
 import NFeConverter from "./NFeConverter";
+import RiskDashboard from "./RiskDashboard";
 
 export default function App() {
   const [session, setSession] = useState(null);
@@ -411,6 +412,16 @@ export default function App() {
 
                 <button
                   onClick={() => {
+                    activateTab("risk");
+                    setIsSidebarOpen(false);
+                  }}
+                  style={getTabStyle(activeTab === "risk")}
+                >
+                  Riscos e Alertas
+                </button>
+
+                <button
+                  onClick={() => {
                     activateTab("upload");
                     setIsSidebarOpen(false);
                   }}
@@ -446,6 +457,16 @@ export default function App() {
             {mountedTabs.has("macro") && (
               <div role="tabpanel" aria-hidden={activeTab !== "macro"} style={{ display: activeTab === "macro" ? "block" : "none" }}>
                 <MacroDashboard
+                  session={session}
+                  hideValues={hideValues}
+                  setHideValues={setHideValues}
+                />
+              </div>
+            )}
+
+            {mountedTabs.has("risk") && (
+              <div role="tabpanel" aria-hidden={activeTab !== "risk"} style={{ display: activeTab === "risk" ? "block" : "none" }}>
+                <RiskDashboard
                   session={session}
                   hideValues={hideValues}
                   setHideValues={setHideValues}

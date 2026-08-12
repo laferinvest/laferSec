@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState, useRef } from "react";
 import { supabase } from "./supabaseClient";
+import { applyPortfolioStatuses, isValidPortfolioRow } from "./portfolioRiskRules";
 
 // --- COLLAPSE ANIMADO ---
 function CollapsePanel({ isCollapsed, children }) {
@@ -618,58 +619,8 @@ function findKeyAcrossRows(rows, matcher) {
 }
 
 
-function getDiasUteisToleranciaComissaria(cedente) {
-  if (!cedente) return 0;
-  const ced = String(cedente).trim();
-
-  if (ced.startsWith("160 -") || ced.startsWith("260 -")) {
-    return 2;
-  }
-
-  if (ced.startsWith("466 -") || ced.startsWith("479 -")) {
-    return 1;
-  }
-
-  return 0;
-}
-
-function adicionarDiasUteis(baseDate, qtdDiasUteis) {
-  const d = new Date(baseDate);
-  let adicionados = 0;
-
-  while (adicionados < qtdDiasUteis) {
-    d.setDate(d.getDate() + 1);
-    const diaSemana = d.getDay();
-    if (diaSemana !== 0 && diaSemana !== 6) {
-      adicionados++;
-    }
-  }
-
-  return d;
-}
-
-
-function isInadimplente(row) {
-  return normalizarChave(row?.inadimplencia) === "sim";
-}
-
-function isStatusRefinanciado(statusValue) {
-  const statusNormalizado = normalizarChave(statusValue).replace(/[^a-z0-9]+/g, " ").trim();
-  return statusNormalizado.includes("refinanc");
-}
-
-function cedenteValido(cedente) {
-  return Boolean(cedente);
-}
-
-function sacadoValido(sacado) {
-  if (!sacado) return false;
-  const s = String(sacado).trim();
-  return !(s === "0s" || s.startsWith("0 s-") || s.startsWith("0s-"));
-}
-
 function registroValidoParaAnalise(row) {
-  return sacadoValido(row?.Sacado) && cedenteValido(row?.Cliente) && !isInadimplente(row);
+  return isValidPortfolioRow(row);
 }
 
 // --- COMPONENTE DE EVOLUÇÃO ---
@@ -2118,7 +2069,7 @@ const sectionSubtitleStyle = {
   color: "#6b7280",
 };
 
-const COLUNAS_OCULTAS_SET = new Set(["id", "created_at", "Cód.Red", "UF", "Banco", "Rec.", "Estado", "_status", "_sourceTable", "_rowKey", "_clienteEntityKey", "_sacadoEntityKey", "clienteEntityKey", "sacadoEntityKey", "ClienteEntityKey", "SacadoEntityKey", "Juros e Multa", "Qtd Linhas Agrupadas", "Detalhes Agrupamento", "inadimplencia"]);
+const COLUNAS_OCULTAS_SET = new Set(["id", "created_at", "Cód.Red", "UF", "Banco", "Rec.", "Estado", "_status", "_sourceTable", "_rowKey", "_clienteEntityKey", "_sacadoEntityKey", "clienteEntityKey", "sacadoEntityKey", "ClienteEntityKey", "SacadoEntityKey", "Qtd Linhas Agrupadas", "Detalhes Agrupamento", "inadimplencia"]);
 
 
 function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, borderoFilter, setBorderoFilter, dctoFilter, setDctoFilter, setDateFilter, setInsightFilter, setClienteSelecionado, setSacadoSelecionado, hideValues, dataSourceTable = "secInfo", onBorderoDrill, onDctoDrill }) {
@@ -2197,10 +2148,6 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
 
   const rowsWithEncargo = useMemo(() => {
     if (!rows.length) return rows;
-    const jurosMultaKey = findKeyAcrossRows(rows, k => {
-      const key = normalizarChave(k);
-      return key.includes("juros") && key.includes("multa");
-    });
     const vlPgtoKey = findKeyAcrossRows(rows, k => k.toLowerCase() === 'vl pgto');
     const pgtoKey = findKeyAcrossRows(rows, k => k.toLowerCase() === 'pgto' || (k.toLowerCase().includes('pgto') && !k.toLowerCase().includes('vl')));
     const valKey = findKeyAcrossRows(rows, k => k.toLowerCase() === 'entrada' || (k.toLowerCase().includes('valor') && !k.toLowerCase().includes('pgto')));
@@ -2224,9 +2171,7 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
       const val = valKey ? (Number(r[valKey]) || 0) : 0;
 
       if (isSmartSourceRow(r, dataSourceTable)) {
-        const encargoSmart = jurosMultaKey ? (Number(r[jurosMultaKey]) || 0) : 0;
-        const encargo = encargoSmart > 0 ? encargoSmart : 0;
-        return { ...r, __encargo__: encargo, __tx_encargos__: 0 };
+        return { ...r, __encargo__: 0, __tx_encargos__: 0 };
       }
 
       const vlPgto = vlPgtoKey ? (Number(r[vlPgtoKey]) || 0) : 0;
@@ -3718,47 +3663,7 @@ export default function MicroDashboard({ session, onSidebarToggle, hideValues, s
   };
 
   const processedRows = useMemo(() => {
-    if (rows.length === 0) return [];
-    
-    const vctoKey = findKeyAcrossRows(rows, k => k.toLowerCase() === 'vcto' || (k.toLowerCase().includes('vcto') && !k.toLowerCase().includes('vl')));
-    const pgtoKey = findKeyAcrossRows(rows, k => k.toLowerCase() === 'pgto' || (k.toLowerCase().includes('pgto') && !k.toLowerCase().includes('vl')));
-    const statusKey = findKeyAcrossRows(rows, k => k.toLowerCase() === 'status' || k.toLowerCase() === 'estado');
-    const today = new Date(); today.setHours(0, 0, 0, 0);
-
-    return rows.map(r => {
-      let status = 'invalido';
-      const vctoVal = vctoKey ? r[vctoKey] : null; const pgtoVal = pgtoKey ? r[pgtoKey] : null;
-      const statusVal = statusKey ? String(r[statusKey]).trim().toUpperCase() : "";
-
-      if (statusVal === "REC" || statusVal.includes("REC")) status = 'recompra';
-      else if (vctoVal) {
-        const effectiveVcto = new Date(String(vctoVal).split("T")[0] + "T00:00:00");
-        if (effectiveVcto.getDay() === 6) effectiveVcto.setDate(effectiveVcto.getDate() + 2);
-        else if (effectiveVcto.getDay() === 0) effectiveVcto.setDate(effectiveVcto.getDate() + 1);
-
-        if (isStatusRefinanciado(statusVal)) {
-          status = 'aVencer';
-        } else if (pgtoVal && String(pgtoVal).trim() !== "") {
-          const pgtoDate = new Date(String(pgtoVal).split("T")[0] + "T00:00:00");
-
-          const clienteAtual = String(r["Cliente"] || "").trim();
-          const diasTolerancia = getDiasUteisToleranciaComissaria(clienteAtual);
-          const toleranciaFinal = diasTolerancia > 0
-            ? adicionarDiasUteis(effectiveVcto, diasTolerancia)
-            : effectiveVcto;
-
-          if (pgtoDate <= toleranciaFinal) {
-            status = 'liquidado';
-          } else {
-            status = 'liquidadoAtraso';
-          }
-        } else {
-          if (effectiveVcto < today) status = 'atraso';
-          else status = 'aVencer';
-        }
-      }
-      return { ...r, _status: status }; 
-    });
+    return applyPortfolioStatuses(rows);
   }, [rows]);
 
   const rowsFilteredByMode = useMemo(() => {
@@ -3848,47 +3753,7 @@ const riscoAtual = useMemo(() => {
   const rowsConcentracaoSacadoComStatus = useMemo(() => {
     if (!sacadoSelecionado || clienteSelecionado || grupoSelecionado) return rowsParaTabela;
     if (!rowsConcentracaoSacado.length) return rowsParaTabela;
-
-    const vctoKey = findKeyAcrossRows(rowsConcentracaoSacado,
-      (k) => k.toLowerCase() === "vcto" || (k.toLowerCase().includes("vcto") && !k.toLowerCase().includes("vl"))
-    );
-    const pgtoKey = findKeyAcrossRows(rowsConcentracaoSacado,
-      (k) => k.toLowerCase() === "pgto" || (k.toLowerCase().includes("pgto") && !k.toLowerCase().includes("vl"))
-    );
-    const statusKey = findKeyAcrossRows(rowsConcentracaoSacado,
-      (k) => k.toLowerCase() === "status" || k.toLowerCase() === "estado"
-    );
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    return rowsConcentracaoSacado.map((r) => {
-      let status = "invalido";
-      const vctoVal = vctoKey ? r[vctoKey] : null;
-      const pgtoVal = pgtoKey ? r[pgtoKey] : null;
-      const statusVal = statusKey ? String(r[statusKey]).trim().toUpperCase() : "";
-
-      if (statusVal === "REC" || statusVal.includes("REC")) status = "recompra";
-      else if (vctoVal) {
-        const effectiveVcto = new Date(String(vctoVal).split("T")[0] + "T00:00:00");
-        if (effectiveVcto.getDay() === 6) effectiveVcto.setDate(effectiveVcto.getDate() + 2);
-        else if (effectiveVcto.getDay() === 0) effectiveVcto.setDate(effectiveVcto.getDate() + 1);
-
-        if (isStatusRefinanciado(statusVal)) {
-          status = "aVencer";
-        } else if (pgtoVal && String(pgtoVal).trim() !== "") {
-          const pgtoDate = new Date(String(pgtoVal).split("T")[0] + "T00:00:00");
-          const clienteAtual = String(r["Cliente"] || "").trim();
-          const diasTolerancia = getDiasUteisToleranciaComissaria(clienteAtual);
-          const toleranciaFinal = diasTolerancia > 0
-            ? adicionarDiasUteis(effectiveVcto, diasTolerancia)
-            : effectiveVcto;
-          status = pgtoDate <= toleranciaFinal ? "liquidado" : "liquidadoAtraso";
-        } else {
-          status = effectiveVcto < today ? "atraso" : "aVencer";
-        }
-      }
-      return { ...r, _status: status };
-    });
+    return applyPortfolioStatuses(rowsConcentracaoSacado);
   }, [rowsConcentracaoSacado, rowsParaTabela, sacadoSelecionado, clienteSelecionado, grupoSelecionado]);
 
 
@@ -3924,10 +3789,6 @@ const kpiData = useMemo(() => {
     const emisKey = findKeyAcrossRows(rowsParaTabela, k => k.toLowerCase().includes('emis'));
     const vctoKey = findKeyAcrossRows(rowsParaTabela, k => k.toLowerCase() === 'vcto' || (k.toLowerCase().includes('vcto') && !k.toLowerCase().includes('vl')));
     const desagioKey = findKeyAcrossRows(rowsParaTabela, k => k.toLowerCase() === 'desagio' || k.toLowerCase() === 'deságio');
-    const jurosMultaKey = findKeyAcrossRows(rowsParaTabela, k => {
-      const key = normalizarChave(k);
-      return key.includes("juros") && key.includes("multa");
-    });
 
     const seenBorderosDesagio = new Set();
     const latestBorderoById = new Map();
@@ -3946,7 +3807,6 @@ const kpiData = useMemo(() => {
       const val = valKey ? (Number(r[valKey]) || 0) : 0;
 
       const vlPgto = vlPgtoKey ? (Number(r[vlPgtoKey]) || 0) : 0;
-      const jurosMulta = jurosMultaKey ? (Number(r[jurosMultaKey]) || 0) : 0;
       
       const rawRate = rateKey ? r[rateKey] : null;
       const hasRateVal = rawRate !== null && rawRate !== undefined && String(rawRate).trim() !== "";
@@ -3961,9 +3821,7 @@ const kpiData = useMemo(() => {
       }
 
       // Encargo por título (não deduplicado por borderô)
-      if (rowIsSmart) {
-        if (jurosMulta > 0) totalEncargos += jurosMulta;
-      } else {
+      if (!rowIsSmart) {
         const temPgto = pgtoKey && r[pgtoKey] && String(r[pgtoKey]).trim() !== "";
         const encargoPossivel = temPgto && vlPgto > 0 && val > 0 && vlPgto !== val;
         if (encargoPossivel && vlPgto <= val * 1.4) {
@@ -3991,20 +3849,17 @@ const kpiData = useMemo(() => {
           });
         }
         const txEncargosData = txEncargosMap.get(bNum);
-        const encargoTitulo = jurosMulta > 0 ? jurosMulta : 0;
         const valorDescontado = val - desagioVal;
-        const desagioEncargosTitulo = desagioVal + encargoTitulo;
-        const usaPrazoReal = deveUsarPrazoRealEncargo(encargoTitulo);
         const prazoEncargos = getPrazoEfetivoComD2(
           emisKey ? r[emisKey] : null,
           vctoKey ? r[vctoKey] : null,
-          usaPrazoReal && pgtoKey ? r[pgtoKey] : null,
-          usaPrazoReal
+          null,
+          false
         );
 
         if (valorDescontado > 0 && prazoEncargos) {
           txEncargosData.totalDescontado += valorDescontado;
-          txEncargosData.totalDesagioEncargos += desagioEncargosTitulo;
+          txEncargosData.totalDesagioEncargos += desagioVal;
           txEncargosData.weightedPrazo += valorDescontado * prazoEncargos;
         }
       }
@@ -4940,7 +4795,7 @@ return (
                 </div>
                 <div style={{ height: "1px", background: "#e5e7eb", margin: "22px 0 20px" }} />
                 <div style={{ margin: 0, fontSize: "11px", fontWeight: "700", color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "normal" }}>
-                  Juros e Multa
+                  Encargos
                 </div>
                 <div style={{ display: "flex", alignItems: "baseline", gap: "4px", marginTop: "12px" }}>
                   <span style={{ fontSize: "28px", fontWeight: "700", color: "#111827", lineHeight: "1", letterSpacing: "-0.02em", wordBreak: "break-word" }}>

@@ -505,8 +505,6 @@ const SMART_HEADER_ALIASES = {
   Dcto: ["Documento", "Dcto"],
   "Borderô": ["OP", "Bordero", "Borderô"],
   Entrada: ["Valor(R$)", "VALOR(R$)", "Valor", "Total", "TOTAL(R$)", "Entrada"],
-  Juros: ["JUROS(R$)", "Juros(R$)", "Juros"],
-  Multa: ["MULTA(R$)", "Multa(R$)", "Multa"],
   Sacado: ["Sacado"],
   Status: ["Situação", "SITUAÇÃO", "Status"],
   Desagio: ["Desagio", "Deságio", "DESÁGIO", "Desagio(R$)", "Deságio(R$)", "DESÁGIO(R$)", "Desagio (R$)", "Deságio (R$)", "DESÁGIO (R$)"],
@@ -654,8 +652,6 @@ const sourceRowsFromRawArray = (rawArray) => {
 
 const mapSmartRow = (row, index) => {
   const bordero = cleanNumber(getSmartValue(row, SMART_HEADER_ALIASES["Borderô"]));
-  const juros = cleanNumber(getSmartValue(row, SMART_HEADER_ALIASES.Juros)) || 0;
-  const multa = cleanNumber(getSmartValue(row, SMART_HEADER_ALIASES.Multa)) || 0;
   const inadimplencia = getInadimplenciaFromSource(row);
 
   const mapped = {
@@ -668,7 +664,6 @@ const mapSmartRow = (row, index) => {
     "Cód.Red": index + 1,
     "Borderô": bordero,
     Entrada: cleanNumber(getSmartValue(row, SMART_HEADER_ALIASES.Entrada)),
-    "Juros e Multa": juros + multa,
     Sacado: getSmartValue(row, SMART_HEADER_ALIASES.Sacado),
     Status: getSmartValue(row, SMART_HEADER_ALIASES.Status),
     Estado: "A confirmar",
@@ -1271,7 +1266,7 @@ const updateSecInfoInadimplenciaFromSmartRows = async (rows, setSmartProgress) =
     setExistingColumnsWhenPresent(payload, targetRow, ["Entrada"], cleanNumber(sourceRow.Entrada));
     setExistingColumns(payload, targetRow, ["Dt.Pgto", "Dt Pgto", "Data Pgto", "Data de Pgto", "Data de Pagamento", "Pgto"], pgto);
     setExistingColumns(payload, targetRow, ["Vl.Pgto", "Vl Pgto", "Vl Pgto.", "Valor Pgto", "Valor Pago"], vlPgto);
-    setExistingColumns(payload, targetRow, ["Encargos", "Encargo", "Juros e Multa", "Rec."], encargos);
+    setExistingColumns(payload, targetRow, ["Encargos", "Encargo", "Rec."], encargos);
     setExistingColumns(
       payload,
       targetRow,

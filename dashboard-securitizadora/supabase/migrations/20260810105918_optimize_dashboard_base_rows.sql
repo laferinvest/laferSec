@@ -14,7 +14,6 @@ returns table (
   dcto text,
   bordero text,
   desagio numeric,
-  juros_multa numeric,
   tx_efet numeric,
   status_text text,
   inadimplencia text
@@ -38,7 +37,6 @@ as $$
     coalesce(s."Dcto", ''),
     coalesce(s."Borderô"::text, ''),
     coalesce(s."Desagio", 0),
-    0::numeric,
     coalesce(s."Tx.Efet", 0),
     coalesce(s."Status", s."Estado", ''),
     coalesce(s."inadimplencia", '')
@@ -60,7 +58,6 @@ as $$
     coalesce(s."Dcto", ''),
     coalesce(s."Borderô"::text, ''),
     coalesce(s."Desagio", 0),
-    coalesce(s."Juros e Multa", 0),
     coalesce(s."Tx.Efet", 0),
     coalesce(s."Status", s."Estado", ''),
     coalesce(s."inadimplencia", '')
