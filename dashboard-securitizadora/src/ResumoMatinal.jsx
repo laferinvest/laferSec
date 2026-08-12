@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "./supabaseClient";
+import { isRepurchaseStatus } from "./portfolioRiskRules";
 
 const PAGE_SIZE = 5000;
 const SELECT_COLUMNS = 'id,Cliente,Sacado,"Dt.Emis",Vcto,Pgto,"Vl Pgto",Dcto,"Borderô",Entrada,Desagio,"Tx.Efet",Status';
@@ -251,9 +252,7 @@ const isQuitadoStatus = (status) => {
   return normalized.includes("quit") || normalized.includes("liquid");
 };
 
-const isRecompradoStatus = (status) => normalizeText(status).includes("recompr");
-
-const isRefinanciadoStatus = (status) => normalizeText(status).includes("refinanci");
+const isRecompradoStatus = (status) => isRepurchaseStatus(status);
 
 const hasPayment = (row) => Boolean(toLocalIsoDate(row.Pgto));
 
@@ -802,8 +801,7 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
       return (
         vctoOperacional >= previousMonthStartIso &&
         vctoOperacional < todayIso &&
-        isOpen(row) &&
-        !isRefinanciadoStatus(row.Status)
+        isOpen(row)
       );
     });
 

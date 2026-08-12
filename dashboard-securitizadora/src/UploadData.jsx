@@ -1,5 +1,12 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "./supabaseClient";
+import { isRepurchaseStatus } from "./portfolioRiskRules";
+import {
+  buildSettlementUpdatePayload,
+  buildSettlementEvidenceIndex,
+  findSettlementEvidence,
+  isSettlementEvidenceRow,
+} from "./uploadSettlementRules";
 import * as XLSX from "xlsx";
 
 // ==========================================
@@ -88,7 +95,7 @@ const normalizarTexto = (val) =>
     .replace(/[\u0300-\u036f]/g, "")
     .trim();
 
-const isStatusRecomprado = (status) => normalizarTexto(status) === "recomprado";
+const isStatusRecomprado = (status) => isRepurchaseStatus(status);
 
 const getRowStatus = (row) =>
   row?.Status ??
@@ -450,7 +457,7 @@ function calcularRiscoAtualIgualMicro(rows) {
     const pgtoVal = r.Pgto;
     const statusVal = String(r.Status || "").trim().toUpperCase();
 
-    if (statusVal === "REC" || statusVal.includes("REC")) {
+    if (isRepurchaseStatus(statusVal)) {
       status = "recompra";
     } else if (vctoVal) {
       const effectiveVcto = new Date(String(vctoVal).split("T")[0] + "T00:00:00");
@@ -1362,7 +1369,7 @@ const updateSecInfoInadimplenciaFromSmartRows = async (rows, setSmartProgress) =
   };
 };
 
-export default function UploadData({ hideValues = false }) {
+export default function UploadData({ hideValues = false, onDataUpdated }) {
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("");
@@ -1375,8 +1382,7 @@ export default function UploadData({ hideValues = false }) {
 
   const [snapshotLoading, setSnapshotLoading] = useState(false);
   const [snapshotStatus, setSnapshotStatus] = useState("");
-  const [snapshotRiscoAtual, setSnapshotRiscoAtual] = useState(0);
-  const [snapshotLastUpdated, setSnapshotLastUpdated] = useState("");
+  const [recebiveis, setRecebiveis] = useState("");
   const [dinheiroBanco, setDinheiroBanco] = useState("");
   const [compraDebentures, setCompraDebentures] = useState("0");
 
@@ -1627,6 +1633,7 @@ export default function UploadData({ hideValues = false }) {
       const secInfoInadimplencia = await updateSecInfoInadimplenciaFromSmartRows(secInfoInadimplenciaRows, setSmartProgress);
 
       setSmartStatus(`✅ Dados Atualizados com Sucesso: ${insertedCount} novo(s), ${updatedCount} atualizado(s), ${deletedCount} removido(s).`);
+      onDataUpdated?.();
       setSmartProgress("");
       setSmartFiles([]);
       document.getElementById("smart-upload-input").value = "";
@@ -1639,27 +1646,7 @@ export default function UploadData({ hideValues = false }) {
     }
   };
 
-  const carregarRiscoAtualSnapshot = async () => {
-    setSnapshotStatus("");
-    try {
-      const rows = await carregarLinhasRiscoAtual();
-      const recebiveis = calcularRiscoAtualIgualMicro(rows);
-      setSnapshotRiscoAtual(recebiveis);
-      setSnapshotLastUpdated(new Date().toLocaleString("pt-BR"));
-
-      // const resultadoCedentesExcluidos =
-      //   calcularCreditoEmAbertoCedentesExcluidosSerie(data || []);
-
-      // imprimirCreditoEmAbertoCedentesExcluidos(resultadoCedentesExcluidos);
-
-    } catch (err) {
-      console.error(err);
-      setSnapshotStatus(`❌ Não foi possível calcular o risco atual: ${err.message}`);
-    }
-  };
-
   useEffect(() => {
-    carregarRiscoAtualSnapshot();
     carregarHistoricoSnapshots();
   }, []);
 
@@ -1682,8 +1669,14 @@ export default function UploadData({ hideValues = false }) {
   };
 
   const criarSnapshot = async () => {
+    const recebiveisNum = cleanNumber(recebiveis);
     const dinheiroBancoNum = cleanNumber(dinheiroBanco);
     const compraDebenturesNum = cleanNumber(compraDebentures) ?? 0;
+
+    if (recebiveisNum === null) {
+      setSnapshotStatus("❌ Informe o valor de Recebíveis.");
+      return;
+    }
 
     if (dinheiroBancoNum === null) {
       setSnapshotStatus("❌ Informe o valor de Dinheiro Banco.");
@@ -1696,7 +1689,7 @@ export default function UploadData({ hideValues = false }) {
     try {
       const payload = {
         Data: snapshotDate,
-        Recebiveis: Number(snapshotRiscoAtual || 0),
+        Recebiveis: recebiveisNum,
         "Dinheiro Banco": dinheiroBancoNum,
         "Compra Debentures": compraDebenturesNum,
       };
@@ -1705,9 +1698,9 @@ export default function UploadData({ hideValues = false }) {
       if (error) throw error;
 
       setSnapshotStatus("✅ Snapshot criado com sucesso!");
+      setRecebiveis("");
       setDinheiroBanco("");
       setCompraDebentures("0");
-      await carregarRiscoAtualSnapshot();
       await carregarHistoricoSnapshots();
     } catch (err) {
       console.error(err);
@@ -1764,7 +1757,7 @@ const exportarCreditoEmAberto = async () => {
         const statusVal = statusKey
           ? String(r[statusKey] || "").trim().toUpperCase()
           : "";
-        if (statusVal === "REC" || statusVal.includes("REC")) return false;
+        if (isRepurchaseStatus(statusVal)) return false;
 
         const pgtoVal = pgtoKey ? r[pgtoKey] : null;
         if (pgtoVal && String(pgtoVal).trim() !== "") return false;
@@ -2181,7 +2174,6 @@ const exportarCreditoEmAberto = async () => {
         setProgress("");
         setFiles([]);
         document.getElementById("upload-input").value = "";
-        await carregarRiscoAtualSnapshot();
         return;
       }
 
@@ -2260,6 +2252,8 @@ allExtractedRows.push(newRow);
       }
 
       if (allExtractedRows.length === 0) throw new Error("Nenhuma linha extraída dos arquivos. Verifique as planilhas.");
+
+      const settlementSourceRows = allExtractedRows.filter(isSettlementEvidenceRow);
 
       setProgress("4/5: Consolidando e limpando dados...");
 
@@ -2383,16 +2377,16 @@ auditoria.finalRows = finalRows.map((item) => ({ ...item }));
       const borderos = Array.from(new Set(finalRows.map((row) => row["Borderô"]).filter((value) => value !== null && value !== undefined && value !== "")));
       const vctosSemBordero = Array.from(
         new Set(
-          finalRows
-            .filter((row) => !limpaChave(row["Borderô"]))
+          [...finalRows, ...settlementSourceRows]
+            .filter((row) => !limpaChave(row["Borderô"]) || isSettlementEvidenceRow(row))
             .map((row) => row.Vcto)
             .filter((value) => value !== null && value !== undefined && value !== "")
         )
       );
       const dctosSemBordero = Array.from(
         new Set(
-          finalRows
-            .filter((row) => !limpaChave(row["Borderô"]))
+          [...finalRows, ...settlementSourceRows]
+            .filter((row) => !limpaChave(row["Borderô"]) || isSettlementEvidenceRow(row))
             .map((row) => row.Dcto)
             .filter((value) => value !== null && value !== undefined && value !== "")
         )
@@ -2455,9 +2449,33 @@ auditoria.finalRows = finalRows.map((item) => ({ ...item }));
       });
 
       const rowsToInsert = [];
-      const rowsToUpdate = [];
+      const rowsToUpdateById = new Map();
+      const queueExistingUpdate = (sourceRow, existingRow, settlementOnly = false) => {
+        const settlementPayload = settlementOnly ? buildSettlementUpdatePayload(sourceRow) : null;
+        const updateRow = settlementOnly ? settlementPayload : { ...sourceRow };
+        if (!updateRow) return;
+        if (isStatusRecomprado(existingRow.Status)) {
+          updateRow.Status = existingRow.Status;
+        }
+        if (!settlementOnly) {
+          if (!limpaChave(updateRow["Borderô"]) && limpaChave(existingRow["Borderô"])) {
+            updateRow["Borderô"] = existingRow["Borderô"];
+          }
+          updateRow["Cód.Red"] = existingRow["Cód.Red"];
+          if (updateRow.Desagio === null || updateRow.Desagio === undefined) {
+            updateRow.Desagio = existingRow.Desagio;
+          }
+          if (updateRow["Tx.Efet"] === null || updateRow["Tx.Efet"] === undefined) {
+            updateRow["Tx.Efet"] = existingRow["Tx.Efet"];
+          }
+        }
+        const queuedRow = rowsToUpdateById.get(existingRow.id)?.row || {};
+        rowsToUpdateById.set(existingRow.id, { id: existingRow.id, row: { ...queuedRow, ...updateRow } });
+      };
 
       finalRows.forEach((row) => {
+        if (isSettlementEvidenceRow(row) && !limpaChave(row["Borderô"])) return;
+
         const canMatchOpenWithoutBordero =
           !limpaChave(row["Borderô"]) &&
           (isStatusBaixado(row) || hasRowPgto(row));
@@ -2476,25 +2494,26 @@ auditoria.finalRows = finalRows.map((item) => ({ ...item }));
             : null);
 
         if (existingRow?.id) {
-          const updateRow = { ...row };
-          if (isStatusRecomprado(existingRow.Status)) {
-            updateRow.Status = existingRow.Status;
-          }
-          if (!limpaChave(updateRow["Borderô"]) && limpaChave(existingRow["Borderô"])) {
-            updateRow["Borderô"] = existingRow["Borderô"];
-          }
-          updateRow["Cód.Red"] = existingRow["Cód.Red"];
-          if (updateRow.Desagio === null || updateRow.Desagio === undefined) {
-            updateRow.Desagio = existingRow.Desagio;
-          }
-          if (updateRow["Tx.Efet"] === null || updateRow["Tx.Efet"] === undefined) {
-            updateRow["Tx.Efet"] = existingRow["Tx.Efet"];
-          }
-          rowsToUpdate.push({ id: existingRow.id, row: updateRow });
+          queueExistingUpdate(row, existingRow);
         } else {
           rowsToInsert.push(row);
         }
       });
+
+      const settlementIndex = buildSettlementEvidenceIndex(settlementSourceRows);
+      let settlementReconciledCount = 0;
+      existingData.forEach((existingRow) => {
+        const isExistingOpen = isStatusAberto(existingRow) || (!hasRowPgto(existingRow) && !isStatusBaixado(existingRow));
+        if (!existingRow?.id || !isExistingOpen) return;
+
+        const settlementRow = findSettlementEvidence(existingRow, settlementIndex);
+        if (settlementRow) {
+          queueExistingUpdate(settlementRow, existingRow, true);
+          settlementReconciledCount += 1;
+        }
+      });
+
+      const rowsToUpdate = Array.from(rowsToUpdateById.values());
 
       let nextCodRed = 0;
       if (rowsToInsert.some((row) => !limpaChave(row["Cód.Red"]))) {
@@ -2538,11 +2557,11 @@ auditoria.finalRows = finalRows.map((item) => ({ ...item }));
         }
       }
 
-      setStatus(`✅ Banco de dados atualizado: ${rowsToInsertWithCodRed.length} novo(s), ${rowsToUpdate.length} atualizado(s).`);
+      setStatus(`✅ Banco de dados atualizado: ${rowsToInsertWithCodRed.length} novo(s), ${rowsToUpdate.length} atualizado(s), ${settlementReconciledCount} baixa(s) reconciliada(s) por Dcto + Vcto.`);
+      onDataUpdated?.();
       setProgress("");
       setFiles([]);
       document.getElementById("upload-input").value = "";
-      await carregarRiscoAtualSnapshot();
     } catch (err) {
       setStatus(`❌ Erro: ${err.message}`);
       setProgress("");
@@ -2752,14 +2771,20 @@ auditoria.finalRows = finalRows.map((item) => ({ ...item }));
             <div style={{ fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.04em", color: "#6b7280", fontWeight: 700, marginBottom: "8px" }}>Data</div>
             <div style={{ fontSize: "22px", fontWeight: 700, color: "#111827" }}>{snapshotDate.split("-").reverse().join("/")}</div>
           </div>
-          <div style={{ background: "#f8fafc", border: "1px solid #e5e7eb", borderRadius: "10px", padding: "16px" }}>
-            <div style={{ fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.04em", color: "#6b7280", fontWeight: 700, marginBottom: "8px" }}>Recebíveis</div>
-            <div style={{ fontSize: "22px", fontWeight: 700, color: "#111827" }}>{formatarMoeda(snapshotRiscoAtual, hideValues)}</div>
-            <div style={{ fontSize: "12px", color: "#6b7280", marginTop: "8px" }}>Baseado nos títulos em aberto</div>
-          </div>
         </div>
 
         <div style={{ display: "grid", gap: "16px" }}>
+          <div>
+            <label style={{ display: "block", marginBottom: "6px", fontSize: "14px", fontWeight: 600, color: "#374151" }}>Recebíveis</label>
+            <input
+              type="text"
+              value={recebiveis}
+              onChange={(e) => setRecebiveis(e.target.value)}
+              placeholder="Ex.: 1784227,21"
+              style={inputStyle}
+            />
+          </div>
+
           <div>
             <label style={{ display: "block", marginBottom: "6px", fontSize: "14px", fontWeight: 600, color: "#374151" }}>Dinheiro no Banco</label>
             <input
@@ -2855,12 +2880,6 @@ auditoria.finalRows = finalRows.map((item) => ({ ...item }));
             </table>
           </div>
         </div>
-
-        {snapshotLastUpdated && (
-          <div style={{ marginTop: "12px", fontSize: "12px", color: "#6b7280", textAlign: "center" }}>
-            Recebíveis recalculados em {snapshotLastUpdated}
-          </div>
-        )}
 
         {snapshotStatus && (
           <div style={{ marginTop: "16px", padding: "12px", borderRadius: "8px", background: snapshotStatus.includes("❌") ? "#fef2f2" : "#ecfdf5", color: snapshotStatus.includes("❌") ? "#991b1b" : "#065f46", fontWeight: "500", fontSize: "14px", textAlign: "center" }}>

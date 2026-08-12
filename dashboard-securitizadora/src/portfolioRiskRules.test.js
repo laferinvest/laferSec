@@ -5,6 +5,8 @@ import {
   adjustToNextBusinessDay,
   applyPortfolioStatuses,
   calcularDiasAtrasoTitulo,
+  isRefinancedRepurchase,
+  isRepurchaseStatus,
   isValidPortfolioRow,
   parseIsoDateLocal,
 } from "./portfolioRiskRules.js";
@@ -33,7 +35,7 @@ test("classifica a carteira com a mesma regra operacional do Microdashboard", ()
   assert.deepEqual(processed.map((row) => row._status), [
     "atraso",
     "aVencer",
-    "aVencer",
+    "recompra",
     "liquidado",
     "liquidadoAtraso",
     "recompra",
@@ -56,6 +58,73 @@ test("Vl Pgto isolado não fecha o título e inadimplencia sim o retira da anál
   assert.equal(applyPortfolioStatuses([partial], TODAY)[0]._status, "aVencer");
   assert.equal(isValidPortfolioRow(partial), true);
   assert.equal(isValidPortfolioRow(excluded), false);
+});
+
+test("todo refinanciado é recompra, mesmo sem valor ou data de pagamento", () => {
+  const base = {
+    Cliente: "100 - Cedente",
+    Sacado: "Sacado A",
+    Vcto: "2026-08-01",
+    Pgto: null,
+    Status: "Refinanciado",
+    Entrada: 100,
+  };
+
+  const rows = [
+    { ...base, "Vl Pgto": 100 },
+    { ...base, "Vl Pgto": 0 },
+    { ...base, "Vl Pgto": null },
+  ];
+
+  assert.deepEqual(
+    applyPortfolioStatuses(rows, TODAY).map((row) => row._status),
+    ["recompra", "recompra", "recompra"],
+  );
+});
+
+test("reconhece aliases de Valor Pgto em título refinanciado", () => {
+  const aliases = ["Valor Pgto", "Valor Pago", "Vl.Pgto"];
+
+  aliases.forEach((alias) => {
+    const row = {
+      Cliente: "100 - Cedente",
+      Sacado: "Sacado A",
+      Vcto: "2026-08-01",
+      Status: "REFINANCIADO",
+      [alias]: "R$ 1.234,56",
+    };
+    assert.equal(applyPortfolioStatuses([row], TODAY)[0]._status, "recompra");
+  });
+});
+
+test("a recompra refinanciada independe de vencimento, pagamento e aliases de status", () => {
+  const rows = [
+    {
+      Cliente: "100 - Cedente",
+      Sacado: "Sacado A",
+      Vcto: null,
+      Status: "Refinanciado",
+      "Vl Pgto": null,
+    },
+    {
+      Cliente: "100 - Cedente",
+      Sacado: "Sacado B",
+      Vcto: "2026-08-20",
+      Situação: "Refinanciado",
+      "Valor Pago": 0,
+    },
+  ];
+
+  assert.equal(isRefinancedRepurchase(rows[0]), true);
+  assert.equal(isRefinancedRepurchase(rows[1]), true);
+  assert.equal(isRepurchaseStatus("REC"), true);
+  assert.equal(isRepurchaseStatus("Recomprado após cartório"), true);
+  assert.equal(isRepurchaseStatus("Refinanciado"), true);
+  assert.equal(isRepurchaseStatus("Aberto"), false);
+  assert.deepEqual(
+    applyPortfolioStatuses(rows, TODAY).map((row) => row._status),
+    ["recompra", "recompra"],
+  );
 });
 
 test("o total em aberto fecha com a soma de a vencer e em atraso", () => {

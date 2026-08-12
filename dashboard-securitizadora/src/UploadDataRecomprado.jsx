@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "./supabaseClient";
+import { isRepurchaseStatus } from "./portfolioRiskRules";
 import * as XLSX from "xlsx";
 
 // ==========================================
@@ -401,7 +402,7 @@ function calcularRiscoAtualIgualMicro(rows) {
     const pgtoVal = r.Pgto;
     const statusVal = String(r.Status || "").trim().toUpperCase();
 
-    if (statusVal === "REC" || statusVal.includes("REC")) {
+    if (isRepurchaseStatus(statusVal)) {
       status = "recompra";
     } else if (vctoVal) {
       const effectiveVcto = new Date(String(vctoVal).split("T")[0] + "T00:00:00");
@@ -1254,8 +1255,7 @@ export default function UploadData({ hideValues = false }) {
 
   const [snapshotLoading, setSnapshotLoading] = useState(false);
   const [snapshotStatus, setSnapshotStatus] = useState("");
-  const [snapshotRiscoAtual, setSnapshotRiscoAtual] = useState(0);
-  const [snapshotLastUpdated, setSnapshotLastUpdated] = useState("");
+  const [recebiveis, setRecebiveis] = useState("");
   const [dinheiroBanco, setDinheiroBanco] = useState("");
   const [compraDebentures, setCompraDebentures] = useState("0");
 
@@ -1412,7 +1412,7 @@ export default function UploadData({ hideValues = false }) {
 
         matchedSourceKeys.add(matchedKey);
 
-        if (normalizarTexto(targetRow.Status) === normalizarTexto(RECOMPRA_STATUS)) {
+        if (isRepurchaseStatus(targetRow.Status)) {
           alreadyRecompradoCount += 1;
           return;
         }
@@ -1470,7 +1470,6 @@ export default function UploadData({ hideValues = false }) {
       setRecompraFiles([]);
       const input = document.getElementById("recompra-upload-input");
       if (input) input.value = "";
-      await carregarRiscoAtualSnapshot();
     } catch (err) {
       setRecompraStatus(`❌ Erro: ${err.message}`);
       setRecompraProgress("");
@@ -1643,27 +1642,7 @@ export default function UploadData({ hideValues = false }) {
     }
   };
 
-  const carregarRiscoAtualSnapshot = async () => {
-    setSnapshotStatus("");
-    try {
-      const rows = await carregarLinhasRiscoAtual();
-      const recebiveis = calcularRiscoAtualIgualMicro(rows);
-      setSnapshotRiscoAtual(recebiveis);
-      setSnapshotLastUpdated(new Date().toLocaleString("pt-BR"));
-
-      // const resultadoCedentesExcluidos =
-      //   calcularCreditoEmAbertoCedentesExcluidosSerie(data || []);
-
-      // imprimirCreditoEmAbertoCedentesExcluidos(resultadoCedentesExcluidos);
-
-    } catch (err) {
-      console.error(err);
-      setSnapshotStatus(`❌ Não foi possível calcular o risco atual: ${err.message}`);
-    }
-  };
-
   useEffect(() => {
-    carregarRiscoAtualSnapshot();
     carregarHistoricoSnapshots();
   }, []);
 
@@ -1686,8 +1665,14 @@ export default function UploadData({ hideValues = false }) {
   };
 
   const criarSnapshot = async () => {
+    const recebiveisNum = cleanNumber(recebiveis);
     const dinheiroBancoNum = cleanNumber(dinheiroBanco);
     const compraDebenturesNum = cleanNumber(compraDebentures) ?? 0;
+
+    if (recebiveisNum === null) {
+      setSnapshotStatus("❌ Informe o valor de Recebíveis.");
+      return;
+    }
 
     if (dinheiroBancoNum === null) {
       setSnapshotStatus("❌ Informe o valor de Dinheiro Banco.");
@@ -1700,7 +1685,7 @@ export default function UploadData({ hideValues = false }) {
     try {
       const payload = {
         Data: snapshotDate,
-        Recebiveis: Number(snapshotRiscoAtual || 0),
+        Recebiveis: recebiveisNum,
         "Dinheiro Banco": dinheiroBancoNum,
         "Compra Debentures": compraDebenturesNum,
       };
@@ -1709,9 +1694,9 @@ export default function UploadData({ hideValues = false }) {
       if (error) throw error;
 
       setSnapshotStatus("✅ Snapshot criado com sucesso!");
+      setRecebiveis("");
       setDinheiroBanco("");
       setCompraDebentures("0");
-      await carregarRiscoAtualSnapshot();
       await carregarHistoricoSnapshots();
     } catch (err) {
       console.error(err);
@@ -1768,7 +1753,7 @@ const exportarCreditoEmAberto = async () => {
         const statusVal = statusKey
           ? String(r[statusKey] || "").trim().toUpperCase()
           : "";
-        if (statusVal === "REC" || statusVal.includes("REC")) return false;
+        if (isRepurchaseStatus(statusVal)) return false;
 
         const pgtoVal = pgtoKey ? r[pgtoKey] : null;
         if (pgtoVal && String(pgtoVal).trim() !== "") return false;
@@ -2185,7 +2170,6 @@ const exportarCreditoEmAberto = async () => {
         setProgress("");
         setFiles([]);
         document.getElementById("upload-input").value = "";
-        await carregarRiscoAtualSnapshot();
         return;
       }
 
@@ -2453,7 +2437,6 @@ auditoria.finalRows = finalRows.map((item) => ({ ...item }));
       setProgress("");
       setFiles([]);
       document.getElementById("upload-input").value = "";
-      await carregarRiscoAtualSnapshot();
     } catch (err) {
       setStatus(`❌ Erro: ${err.message}`);
       setProgress("");
@@ -2730,14 +2713,20 @@ auditoria.finalRows = finalRows.map((item) => ({ ...item }));
             <div style={{ fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.04em", color: "#6b7280", fontWeight: 700, marginBottom: "8px" }}>Data</div>
             <div style={{ fontSize: "22px", fontWeight: 700, color: "#111827" }}>{snapshotDate.split("-").reverse().join("/")}</div>
           </div>
-          <div style={{ background: "#f8fafc", border: "1px solid #e5e7eb", borderRadius: "10px", padding: "16px" }}>
-            <div style={{ fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.04em", color: "#6b7280", fontWeight: 700, marginBottom: "8px" }}>Recebíveis</div>
-            <div style={{ fontSize: "22px", fontWeight: 700, color: "#111827" }}>{formatarMoeda(snapshotRiscoAtual, hideValues)}</div>
-            <div style={{ fontSize: "12px", color: "#6b7280", marginTop: "8px" }}>Baseado nos títulos em aberto</div>
-          </div>
         </div>
 
         <div style={{ display: "grid", gap: "16px" }}>
+          <div>
+            <label style={{ display: "block", marginBottom: "6px", fontSize: "14px", fontWeight: 600, color: "#374151" }}>Recebíveis</label>
+            <input
+              type="text"
+              value={recebiveis}
+              onChange={(e) => setRecebiveis(e.target.value)}
+              placeholder="Ex.: 1784227,21"
+              style={inputStyle}
+            />
+          </div>
+
           <div>
             <label style={{ display: "block", marginBottom: "6px", fontSize: "14px", fontWeight: 600, color: "#374151" }}>Dinheiro no Banco</label>
             <input
@@ -2830,12 +2819,6 @@ auditoria.finalRows = finalRows.map((item) => ({ ...item }));
             </table>
           </div>
         </div>
-
-        {snapshotLastUpdated && (
-          <div style={{ marginTop: "12px", fontSize: "12px", color: "#6b7280", textAlign: "center" }}>
-            Recebíveis recalculados em {snapshotLastUpdated}
-          </div>
-        )}
 
         {snapshotStatus && (
           <div style={{ marginTop: "16px", padding: "12px", borderRadius: "8px", background: snapshotStatus.includes("❌") ? "#fef2f2" : "#ecfdf5", color: snapshotStatus.includes("❌") ? "#991b1b" : "#065f46", fontWeight: "500", fontSize: "14px", textAlign: "center" }}>

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "./supabaseClient";
+import { isRepurchaseStatus } from "./portfolioRiskRules";
 
 // --- FUNÇÕES DE FORMATAÇÃO ---
 function formatarData(dataString) {
@@ -864,7 +865,7 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
       const entity = getMacroEntityLabel(r, focus);
       const entityKey = getMacroEntityKey(r, focus);
 
-      if (statusVal === "REC" || statusVal.includes("REC")) {
+      if (isRepurchaseStatus(statusVal)) {
         status = 'recompra';
       } else if (vctoVal) {
         const effectiveVcto = new Date(String(vctoVal).split("T")[0] + "T00:00:00");

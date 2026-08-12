@@ -93,6 +93,18 @@ export function isStatusRefinanciado(statusValue) {
   return normalizeRuleText(statusValue).replace(/[^a-z0-9]+/g, " ").trim().includes("refinanc");
 }
 
+export function isRepurchaseStatus(statusValue) {
+  const normalized = normalizeRuleText(statusValue).replace(/[^a-z0-9]+/g, " ").trim();
+  const tokens = normalized.split(" ").filter(Boolean);
+  return tokens.includes("rec") || normalized.includes("recompr") || normalized.includes("refinanc");
+}
+
+function getRowValue(row, preferredKey, matcher) {
+  if (preferredKey && row?.[preferredKey] !== undefined) return row[preferredKey];
+  const matchingKey = Object.keys(row || {}).find(matcher);
+  return matchingKey ? row[matchingKey] : null;
+}
+
 export function isValidPortfolioRow(row) {
   const sacado = String(row?.Sacado ?? "").trim();
   const cedente = String(row?.Cliente ?? "").trim();
@@ -125,16 +137,26 @@ export function getPortfolioColumnKeys(rows) {
   };
 }
 
+export function isRefinancedRepurchase(row, keys = {}) {
+  const statusValue = getRowValue(row, keys.statusKey, (key) => {
+    const normalized = normalizeRuleText(key);
+    return normalized === "status" || normalized === "estado" || normalized === "situacao";
+  });
+  return isStatusRefinanciado(statusValue);
+}
+
 export function classifyPortfolioRow(row, keys, today = getTodayLocalDate()) {
   const { vctoKey, pgtoKey, statusKey } = keys || {};
-  const statusValue = statusKey ? String(row?.[statusKey] ?? "").trim().toUpperCase() : "";
-  if (statusValue.includes("REC")) return "recompra";
+  const statusValue = getRowValue(row, statusKey, (key) => {
+    const normalized = normalizeRuleText(key);
+    return normalized === "status" || normalized === "estado" || normalized === "situacao";
+  });
+  if (isRepurchaseStatus(statusValue)) return "recompra";
 
   const dueDate = vctoKey ? parseIsoDateLocal(row?.[vctoKey]) : null;
   if (!dueDate) return "invalido";
 
   const effectiveDueDate = adjustToNextBusinessDay(dueDate);
-  if (isStatusRefinanciado(statusValue)) return "aVencer";
 
   const paymentValue = pgtoKey ? row?.[pgtoKey] : null;
   if (paymentValue !== null && paymentValue !== undefined && String(paymentValue).trim() !== "") {

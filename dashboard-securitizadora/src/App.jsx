@@ -20,6 +20,7 @@ export default function App() {
   const [isTablet, setIsTablet] = useState(false);
   const [hideValues, setHideValues] = useState(false);
   const [microInitialFilter, setMicroInitialFilter] = useState(null);
+  const [dataRevision, setDataRevision] = useState(0);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
@@ -445,6 +446,7 @@ export default function App() {
             {mountedTabs.has("micro") && (
               <div role="tabpanel" aria-hidden={activeTab !== "micro"} style={{ display: activeTab === "micro" ? "block" : "none" }}>
                 <MicroDashboard
+                  key={`micro-${dataRevision}`}
                   session={session}
                   onSidebarToggle={handleSidebarToggle}
                   hideValues={hideValues}
@@ -457,6 +459,7 @@ export default function App() {
             {mountedTabs.has("macro") && (
               <div role="tabpanel" aria-hidden={activeTab !== "macro"} style={{ display: activeTab === "macro" ? "block" : "none" }}>
                 <MacroDashboard
+                  key={`macro-${dataRevision}`}
                   session={session}
                   hideValues={hideValues}
                   setHideValues={setHideValues}
@@ -467,6 +470,7 @@ export default function App() {
             {mountedTabs.has("risk") && (
               <div role="tabpanel" aria-hidden={activeTab !== "risk"} style={{ display: activeTab === "risk" ? "block" : "none" }}>
                 <RiskDashboard
+                  key={`risk-${dataRevision}`}
                   session={session}
                   hideValues={hideValues}
                   setHideValues={setHideValues}
@@ -476,13 +480,14 @@ export default function App() {
 
             {mountedTabs.has("resumoMatinal") && (
               <div role="tabpanel" aria-hidden={activeTab !== "resumoMatinal"} style={{ display: activeTab === "resumoMatinal" ? "block" : "none" }}>
-                <ResumoMatinal hideValues={hideValues} onNavigateToMicro={handleResumoMatinalFilter} />
+                <ResumoMatinal key={`resumo-${dataRevision}`} hideValues={hideValues} onNavigateToMicro={handleResumoMatinalFilter} />
               </div>
             )}
 
             {mountedTabs.has("patrimonio") && (
               <div role="tabpanel" aria-hidden={activeTab !== "patrimonio"} style={{ display: activeTab === "patrimonio" ? "block" : "none" }}>
                 <PatrimonioDashboard
+                  key={`patrimonio-${dataRevision}`}
                   hideValues={hideValues}
                   setHideValues={setHideValues}
                 />
@@ -491,7 +496,7 @@ export default function App() {
 
             {mountedTabs.has("upload") && (
               <div role="tabpanel" aria-hidden={activeTab !== "upload"} style={{ display: activeTab === "upload" ? "block" : "none" }}>
-                <UploadData hideValues={hideValues} />
+                <UploadData hideValues={hideValues} onDataUpdated={() => setDataRevision((current) => current + 1)} />
               </div>
             )}
 

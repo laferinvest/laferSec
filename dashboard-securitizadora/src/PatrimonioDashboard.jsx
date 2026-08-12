@@ -1,5 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "./supabaseClient";
+import {
+  calculateMonthVariation,
+  groupSnapshotsByMonth,
+} from "./patrimonioSnapshotRules";
 
 function formatarMoeda(valor, hideValues = false) {
   if (hideValues) return "R$ -";
@@ -40,33 +44,6 @@ function normalizeSnapshot(row) {
     compraDebentures,
     pl: recebiveis + dinheiroBanco,
   };
-}
-
-function agruparSnapshotsPorMes(rows) {
-  const mapa = new Map();
-
-  for (const row of rows) {
-    const ym = String(row.data).slice(0, 7);
-    if (!mapa.has(ym)) mapa.set(ym, []);
-    mapa.get(ym).push(row);
-  }
-
-  return Array.from(mapa.entries())
-    .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([mes, snapshots]) => {
-      const retornoMesIndex = snapshots.reduce(
-        (acumulado, snapshot) => acumulado * (1 + Number(snapshot.periodReturn || 0)),
-        1
-      );
-      const ultimoSnapshot = snapshots[snapshots.length - 1];
-
-      return {
-        ...ultimoSnapshot,
-        mes,
-        snapshots,
-        retornoMesPct: (retornoMesIndex - 1) * 100,
-      };
-    });
 }
 
 function buildPath(points) {
@@ -729,7 +706,7 @@ export default function PatrimonioDashboard({ hideValues, setHideValues }) {
   }, [filteredRows]);
 
   const seriesMensal = useMemo(() => {
-    return agruparSnapshotsPorMes(seriesDiaria);
+    return groupSnapshotsByMonth(seriesDiaria);
   }, [seriesDiaria]);
 
   const resumo = useMemo(() => {
@@ -737,7 +714,7 @@ export default function PatrimonioDashboard({ hideValues, setHideValues }) {
       return {
         plAtual: 0,
         retornoPct: 0,
-        variacaoAtual: 0,
+        variacaoMesAtual: 0,
         recebiveisAtual: 0,
         caixaAtual: 0,
       };
@@ -747,11 +724,11 @@ export default function PatrimonioDashboard({ hideValues, setHideValues }) {
     return {
       plAtual: last.pl,
       retornoPct: last.retornoAcumuladoPct,
-      variacaoAtual: last.variacao,
+      variacaoMesAtual: calculateMonthVariation(rows),
       recebiveisAtual: last.recebiveis,
       caixaAtual: last.dinheiroBanco,
     };
-  }, [seriesDiaria]);
+  }, [rows, seriesDiaria]);
 
   const metricasMensais = useMemo(() => {
     if (!seriesMensal.length) {
@@ -904,15 +881,15 @@ const handleChartRangeSelect = useCallback(({ start, end, source }) => {
               </div>
             </div>
             <div style={miniCardStyle}>
-              <div style={miniLabelStyle}>Variação</div>
+              <div style={miniLabelStyle}>Variação Mês Atual</div>
               <div
                 style={{
                   ...miniValueStyle,
                   fontSize: isMobile ? 15 : 16,
-                  color: resumo.variacaoAtual < 0 ? "#dc2626" : "#16a34a",
+                  color: resumo.variacaoMesAtual < 0 ? "#dc2626" : "#16a34a",
                 }}
               >
-                {formatarMoeda(resumo.variacaoAtual, hideValues)}
+                {formatarMoeda(resumo.variacaoMesAtual, hideValues)}
               </div>
             </div>
             <div style={miniCardStyle}>
@@ -1121,7 +1098,7 @@ const handleChartRangeSelect = useCallback(({ start, end, source }) => {
               </h3>
 
               <p style={{ margin: "-8px 0 16px", color: "#6b7280", fontSize: 12 }}>
-                O fechamento mensal fica visível. Clique nos meses com mais registros para ver os snapshots intermediários.
+                Cada linha principal agrega o mês. Clique para ver todos os snapshots diários, inclusive o fechamento.
               </p>
 
               <div style={{ overflowX: "auto", width: "100%" }}>
@@ -1141,9 +1118,9 @@ const handleChartRangeSelect = useCallback(({ start, end, source }) => {
                   </thead>
                   <tbody>
                     {[...seriesMensal].reverse().map((grupo) => {
-                      const hasIntermediarios = grupo.snapshots.length > 1;
+                      const hasSnapshots = grupo.snapshots.length > 0;
                       const isExpanded = expandedMonths.has(grupo.mes);
-                      const intermediarios = grupo.snapshots.slice(0, -1).reverse();
+                      const snapshotsDiarios = [...grupo.snapshots].reverse();
 
                       return (
                         <React.Fragment key={grupo.mes}>
@@ -1151,27 +1128,27 @@ const handleChartRangeSelect = useCallback(({ start, end, source }) => {
                             style={{
                               borderTop: "1px solid #e5e7eb",
                               background: isExpanded ? "#f8fafc" : "#fff",
-                              cursor: hasIntermediarios ? "pointer" : "default",
+                              cursor: hasSnapshots ? "pointer" : "default",
                             }}
-                            onClick={() => hasIntermediarios && toggleMonth(grupo.mes)}
+                            onClick={() => hasSnapshots && toggleMonth(grupo.mes)}
                             onKeyDown={(event) => {
-                              if (!hasIntermediarios || (event.key !== "Enter" && event.key !== " ")) return;
+                              if (!hasSnapshots || (event.key !== "Enter" && event.key !== " ")) return;
                               event.preventDefault();
                               toggleMonth(grupo.mes);
                             }}
-                            tabIndex={hasIntermediarios ? 0 : undefined}
-                            aria-expanded={hasIntermediarios ? isExpanded : undefined}
+                            tabIndex={hasSnapshots ? 0 : undefined}
+                            aria-expanded={hasSnapshots ? isExpanded : undefined}
                           >
                             <td style={{ ...tdStyle, fontWeight: 700 }}>
                               <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
                                 <span
                                   aria-hidden="true"
-                                  style={{ width: 12, color: hasIntermediarios ? "#4f46e5" : "transparent" }}
+                                  style={{ width: 12, color: hasSnapshots ? "#4f46e5" : "transparent" }}
                                 >
                                   {isExpanded ? "▾" : "▸"}
                                 </span>
                                 {formatarDataLabel(grupo.data)}
-                                {hasIntermediarios && (
+                                {hasSnapshots && (
                                   <span
                                     style={{
                                       padding: "2px 7px",
@@ -1221,7 +1198,7 @@ const handleChartRangeSelect = useCallback(({ start, end, source }) => {
                             <td style={tdStyle}>{formatarMoeda(grupo.compraDebentures, hideValues)}</td>
                           </tr>
 
-                          {isExpanded && intermediarios.map((snapshot, index) => (
+                          {isExpanded && snapshotsDiarios.map((snapshot, index) => (
                             <tr
                               key={`${grupo.mes}-${snapshot.data}-${index}`}
                               style={{ borderTop: "1px solid #f1f5f9", background: "#f8fafc" }}
