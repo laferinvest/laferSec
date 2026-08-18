@@ -433,6 +433,7 @@ function normalizarRegistroMacro(row, sourceTable, index) {
   const entrada = cleanNumberMacro(getValorPorAliases(row, ["Entrada", "Valor", "Valor(R$)", "VALOR(R$)", "Total", "TOTAL", "TOTAL(R$)"]));
   const vlPgto = cleanNumberMacro(getValorPorAliases(row, ["Vl Pgto", "Vl.Pgto", "Vl Pgto.", "Liquidado", "LIQUIDADO(R$)", "Valor Pgto", "Valor Pago"]));
   const desagio = cleanNumberMacro(getValorPorAliases(row, ["Desagio", "Deságio", "DESÁGIO"]));
+  const encargos = cleanNumberMacro(getValorPorAliases(row, ["Encargos"]));
   const txEfet = cleanNumberMacro(getValorPorAliases(row, ["Tx.Efet", "TX.EFET", "Tx Efet", "Taxa Efetiva"]));
   const bordero = getValorPorAliases(row, ["Borderô", "Bordero", "OP"]);
 
@@ -448,6 +449,7 @@ function normalizarRegistroMacro(row, sourceTable, index) {
     "Borderô": bordero ?? row?.["Borderô"] ?? null,
     Entrada: entrada,
     Desagio: desagio,
+    Encargos: encargos,
     "Tx.Efet": txEfet,
     Status: getValorPorAliases(row, ["Status", "Situação", "SITUAÇÃO", "Estado"]) ?? row?.Status ?? row?.Estado ?? "",
     inadimplencia: row?.inadimplencia ?? null,
@@ -459,11 +461,16 @@ function normalizarRegistroMacro(row, sourceTable, index) {
 }
 
 const MACRO_SELECT_COLUMNS = 'id,Cliente,Sacado,"Dt.Emis",Vcto,Pgto,"Vl Pgto",Dcto,"Borderô",Entrada,Desagio,"Tx.Efet",Status,inadimplencia';
+const MACRO_SMART_SELECT_COLUMNS = 'id,Cliente,Sacado,"Dt.Emis",Vcto,Pgto,"Vl Pgto",Dcto,"Borderô",Entrada,Desagio,Encargos,"Tx.Efet",Status,inadimplencia';
 const MACRO_PAGE_SIZE = 5000;
 const MACRO_CACHE_TTL_MS = 5 * 60 * 1000;
 const macroDashboardCache = { data: null, promise: null, updatedAt: 0 };
 
-async function fetchAllMacroRows(tableName, pageSize = MACRO_PAGE_SIZE, selectClause = MACRO_SELECT_COLUMNS) {
+async function fetchAllMacroRows(
+  tableName,
+  pageSize = MACRO_PAGE_SIZE,
+  selectClause = tableName === "secInfoSmart" ? MACRO_SMART_SELECT_COLUMNS : MACRO_SELECT_COLUMNS
+) {
   const allRows = [];
   let useFallbackSelectAll = false;
 
@@ -832,6 +839,7 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
     const vlPgtoKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'vl pgto');
     const borderoKey = Object.keys(firstRow).find(k => k.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").includes("border"));
     const desagioKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'desagio' || k.toLowerCase() === 'deságio');
+    const encargosKey = Object.keys(firstRow).find(k => normalizarChaveCampo(k) === 'encargos');
 
     const periodConfigs = {
       mes_atual: { start: monthStart, end: today },
@@ -858,9 +866,12 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
       const borderoRaw = (borderoKey && r[borderoKey]) ? String(r[borderoKey]).trim() : `avulso_${idx}`;
       const borderoNum = `${origemTabela}__${borderoRaw}`;
 
+      const encargoSmart = encargosKey ? (Number(r[encargosKey]) || 0) : 0;
       const temPgto = pgtoKey && r[pgtoKey] && String(r[pgtoKey]).trim() !== "";
       const encargoPossivel = temPgto && vlPgto > 0 && val > 0 && vlPgto !== val;
-      const encargo = encargoPossivel && vlPgto <= val * 1.4 ? Math.max(0, vlPgto - val) : 0;
+      const encargo = origemTabela === "secInfoSmart"
+        ? encargoSmart
+        : (encargoPossivel && vlPgto <= val * 1.4 ? Math.max(0, vlPgto - val) : 0);
 
       const entity = getMacroEntityLabel(r, focus);
       const entityKey = getMacroEntityKey(r, focus);
@@ -935,16 +946,17 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
 
           if (origemTabela === "secInfoSmart") {
             const valorDescontado = val - desagioVal;
+            const usaPrazoReal = encargo >= 1;
             const prazoEncargos = getMacroEffectiveTerm(
               r["Dt.Emis"],
               r.Vcto,
-              null,
-              false
+              usaPrazoReal ? r.Pgto : null,
+              usaPrazoReal
             );
 
             if (valorDescontado > 0 && prazoEncargos) {
               rankingBordero.totalDescontado += valorDescontado;
-              rankingBordero.totalDesagioEncargos += desagioVal;
+              rankingBordero.totalDesagioEncargos += desagioVal + encargo;
               rankingBordero.weightedPrazo += valorDescontado * prazoEncargos;
             }
           }
@@ -1173,6 +1185,7 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
     const emisKey = Object.keys(firstRow).find(k => k.toLowerCase().includes('emis'));
     const vctoKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'vcto' || (k.toLowerCase().includes('vcto') && !k.toLowerCase().includes('vl')));
     const desagioKey = Object.keys(firstRow).find(k => k.toLowerCase() === 'desagio' || k.toLowerCase() === 'deságio');
+    const encargosKey = Object.keys(firstRow).find(k => normalizarChaveCampo(k) === 'encargos');
 
     const seenBorderosDesagio = new Set();
     let totalDesagio = 0;
@@ -1201,11 +1214,16 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
         totalDesagio += desagioVal;
       }
 
-      const temPgto = pgtoKey && r[pgtoKey] && String(r[pgtoKey]).trim() !== "";
-      const encargoPossivel = temPgto && vlPgto > 0 && val > 0 && vlPgto !== val;
-      if (encargoPossivel && vlPgto <= val * 1.4) {
-        const encargoCalculado = vlPgto - val;
-        if (encargoCalculado > 0) totalEncargos += encargoCalculado;
+      if (origemTabela === "secInfoSmart") {
+        const encargoSmart = encargosKey ? (Number(r[encargosKey]) || 0) : 0;
+        if (encargoSmart > 0) totalEncargos += encargoSmart;
+      } else {
+        const temPgto = pgtoKey && r[pgtoKey] && String(r[pgtoKey]).trim() !== "";
+        const encargoPossivel = temPgto && vlPgto > 0 && val > 0 && vlPgto !== val;
+        if (encargoPossivel && vlPgto <= val * 1.4) {
+          const encargoCalculado = vlPgto - val;
+          if (encargoCalculado > 0) totalEncargos += encargoCalculado;
+        }
       }
 
       if (!borderoMap.has(bNum)) {

@@ -2069,7 +2069,7 @@ const sectionSubtitleStyle = {
   color: "#6b7280",
 };
 
-const COLUNAS_OCULTAS_SET = new Set(["id", "created_at", "Cód.Red", "UF", "Banco", "Rec.", "Estado", "_status", "_sourceTable", "_rowKey", "_clienteEntityKey", "_sacadoEntityKey", "clienteEntityKey", "sacadoEntityKey", "ClienteEntityKey", "SacadoEntityKey", "Qtd Linhas Agrupadas", "Detalhes Agrupamento", "inadimplencia"]);
+const COLUNAS_OCULTAS_SET = new Set(["id", "created_at", "Cód.Red", "UF", "Banco", "Rec.", "Estado", "Encargos", "_status", "_sourceTable", "_rowKey", "_clienteEntityKey", "_sacadoEntityKey", "clienteEntityKey", "sacadoEntityKey", "ClienteEntityKey", "SacadoEntityKey", "Qtd Linhas Agrupadas", "Detalhes Agrupamento", "inadimplencia"]);
 
 
 function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, borderoFilter, setBorderoFilter, dctoFilter, setDctoFilter, setDateFilter, setInsightFilter, setClienteSelecionado, setSacadoSelecionado, hideValues, dataSourceTable = "secInfo", onBorderoDrill, onDctoDrill }) {
@@ -2085,7 +2085,16 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
   const columns = useMemo(() => {
     if (!rows.length) return [];
     const firstRowKeys = Array.from(new Set(rows.flatMap((row) => Object.keys(row || {}))));
-    let cols = firstRowKeys.filter(c => !COLUNAS_OCULTAS_SET.has(c) && !String(c).toLowerCase().includes("entitykey"));
+    const isRawEncargosValueCol = (col) => {
+      if (col === "__encargo__") return false;
+      const key = normalizarChave(col).replace(/[^a-z0-9]+/g, "");
+      return key === "encargo" || key === "encargos";
+    };
+    let cols = firstRowKeys.filter(c => (
+      !COLUNAS_OCULTAS_SET.has(c) &&
+      !String(c).toLowerCase().includes("entitykey") &&
+      !isRawEncargosValueCol(c)
+    ));
     if (clienteSelecionado) cols = cols.filter(c => c !== "Cliente");
     if (sacadoSelecionado) cols = cols.filter(c => c !== "Sacado");
     if (clienteSelecionado && !sacadoSelecionado && cols.includes("Sacado")) cols = ["Sacado", ...cols.filter(c => c !== "Sacado")];
@@ -2154,6 +2163,7 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
     const emisKey = findKeyAcrossRows(rows, k => k.toLowerCase().includes('emis'));
     const vctoKey = findKeyAcrossRows(rows, k => k.toLowerCase() === 'vcto' || (k.toLowerCase().includes('vcto') && !k.toLowerCase().includes('vl')));
     const desagioKey = findKeyAcrossRows(rows, k => k.toLowerCase() === 'desagio' || k.toLowerCase() === 'deságio');
+    const encargosKey = findKeyAcrossRows(rows, k => normalizarChave(k).replace(/[^a-z0-9]+/g, '') === 'encargos');
     const borderoKey = findKeyAcrossRows(rows, k => normalizarChave(k).includes("border"));
     const rateKey = findKeyAcrossRows(rows, k => k.toLowerCase() === 'tx.efet' || k.toLowerCase().includes('tx.efet') || k.toLowerCase().includes('tx efet'));
 
@@ -2171,7 +2181,11 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
       const val = valKey ? (Number(r[valKey]) || 0) : 0;
 
       if (isSmartSourceRow(r, dataSourceTable)) {
-        return { ...r, __encargo__: 0, __tx_encargos__: 0 };
+        return {
+          ...r,
+          __encargo__: encargosKey ? (Number(r[encargosKey]) || 0) : 0,
+          __tx_encargos__: 0,
+        };
       }
 
       const vlPgto = vlPgtoKey ? (Number(r[vlPgtoKey]) || 0) : 0;
@@ -2230,9 +2244,13 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
       const txEncargos = totalDescontado > 0 && prazoMedio > 0
         ? (Math.pow(1 + totalDesagioEncargos / totalDescontado, 30 / prazoMedio) - 1) * 100
         : 0;
+      const borderoTemEncargo = group.some((row) => (Number(row.__encargo__) || 0) > 0);
 
       group.forEach((row) => {
-        row.__tx_encargos__ = Number.isFinite(txEncargos) ? txEncargos : 0;
+        const txEfetivaTitulo = rateKey ? parseTaxaPercentual(row[rateKey]) : 0;
+        row.__tx_encargos__ = borderoTemEncargo
+          ? (Number.isFinite(txEncargos) ? txEncargos : txEfetivaTitulo)
+          : txEfetivaTitulo;
       });
     });
 
@@ -3789,6 +3807,7 @@ const kpiData = useMemo(() => {
     const emisKey = findKeyAcrossRows(rowsParaTabela, k => k.toLowerCase().includes('emis'));
     const vctoKey = findKeyAcrossRows(rowsParaTabela, k => k.toLowerCase() === 'vcto' || (k.toLowerCase().includes('vcto') && !k.toLowerCase().includes('vl')));
     const desagioKey = findKeyAcrossRows(rowsParaTabela, k => k.toLowerCase() === 'desagio' || k.toLowerCase() === 'deságio');
+    const encargosKey = findKeyAcrossRows(rowsParaTabela, k => normalizarChave(k).replace(/[^a-z0-9]+/g, '') === 'encargos');
 
     const seenBorderosDesagio = new Set();
     const latestBorderoById = new Map();
@@ -3821,7 +3840,10 @@ const kpiData = useMemo(() => {
       }
 
       // Encargo por título (não deduplicado por borderô)
-      if (!rowIsSmart) {
+      if (rowIsSmart) {
+        const encargoSmart = encargosKey ? (Number(r[encargosKey]) || 0) : 0;
+        if (encargoSmart > 0) totalEncargos += encargoSmart;
+      } else {
         const temPgto = pgtoKey && r[pgtoKey] && String(r[pgtoKey]).trim() !== "";
         const encargoPossivel = temPgto && vlPgto > 0 && val > 0 && vlPgto !== val;
         if (encargoPossivel && vlPgto <= val * 1.4) {
@@ -3849,17 +3871,19 @@ const kpiData = useMemo(() => {
           });
         }
         const txEncargosData = txEncargosMap.get(bNum);
+        const encargoSmart = encargosKey ? (Number(r[encargosKey]) || 0) : 0;
         const valorDescontado = val - desagioVal;
+        const usaPrazoReal = deveUsarPrazoRealEncargo(encargoSmart);
         const prazoEncargos = getPrazoEfetivoComD2(
           emisKey ? r[emisKey] : null,
           vctoKey ? r[vctoKey] : null,
-          null,
-          false
+          usaPrazoReal && pgtoKey ? r[pgtoKey] : null,
+          usaPrazoReal
         );
 
         if (valorDescontado > 0 && prazoEncargos) {
           txEncargosData.totalDescontado += valorDescontado;
-          txEncargosData.totalDesagioEncargos += desagioVal;
+          txEncargosData.totalDesagioEncargos += desagioVal + encargoSmart;
           txEncargosData.weightedPrazo += valorDescontado * prazoEncargos;
         }
       }

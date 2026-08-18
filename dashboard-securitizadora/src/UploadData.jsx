@@ -515,6 +515,8 @@ const SMART_HEADER_ALIASES = {
   Sacado: ["Sacado"],
   Status: ["Situação", "SITUAÇÃO", "Status"],
   Desagio: ["Desagio", "Deságio", "DESÁGIO", "Desagio(R$)", "Deságio(R$)", "DESÁGIO(R$)", "Desagio (R$)", "Deságio (R$)", "DESÁGIO (R$)"],
+  Multa: ["MULTA(R$)", "Multa(R$)", "MULTA (R$)", "Multa (R$)", "Multa"],
+  Juros: ["JUROS(R$)", "Juros(R$)", "JUROS (R$)", "Juros (R$)", "Juros"],
   "Tx.Efet": ["Tx.Efet", "TX.EFET", "Tx Efet"],
 };
 
@@ -601,6 +603,12 @@ const getSmartValue = (row, aliases) => {
   return null;
 };
 
+const getSmartEncargos = (row) => {
+  const multa = cleanNumber(getSmartValue(row, SMART_HEADER_ALIASES.Multa)) || 0;
+  const juros = cleanNumber(getSmartValue(row, SMART_HEADER_ALIASES.Juros)) || 0;
+  return multa + juros;
+};
+
 const SECINFO_SOURCE_ALIASES = {
   Cliente: ["CEDENTE", "Cedente", "Cliente"],
   "Dt.Emis": ["DATA EMISSÃO", "Data emissao", "Data emissão", "Dt.Emis"],
@@ -675,6 +683,7 @@ const mapSmartRow = (row, index) => {
     Status: getSmartValue(row, SMART_HEADER_ALIASES.Status),
     Estado: "A confirmar",
     Desagio: cleanNumber(getSmartValue(row, SMART_HEADER_ALIASES.Desagio)),
+    Encargos: getSmartEncargos(row),
     "Tx.Efet": cleanNumber(getSmartValue(row, SMART_HEADER_ALIASES["Tx.Efet"])),
   };
 
@@ -1483,7 +1492,7 @@ export default function UploadData({ hideValues = false, onDataUpdated }) {
         const to = from + SMART_BATCH_SIZE - 1;
         const { data, error: existingError } = await supabase
           .from(SMART_TABLE)
-          .select('id,Cliente,Sacado,Dcto,"Borderô",Vcto,Entrada,Desagio,"Tx.Efet"')
+          .select('id,Cliente,Sacado,Dcto,"Borderô",Vcto,Entrada,Desagio,Encargos,"Tx.Efet"')
           .order("id", { ascending: true })
           .range(from, to);
 
