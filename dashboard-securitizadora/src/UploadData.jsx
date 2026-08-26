@@ -7,6 +7,12 @@ import {
   findSettlementEvidence,
   isSettlementEvidenceRow,
 } from "./uploadSettlementRules";
+import {
+  IMPORT_ORIGINAL_VCTO_FIELD,
+  buildImportTitleKey,
+  getImportMatchVcto,
+  stripImportMetadata,
+} from "./uploadOriginalDueDateRules";
 import * as XLSX from "xlsx";
 
 // ==========================================
@@ -507,6 +513,7 @@ const SMART_HEADER_ALIASES = {
   Cliente: ["Cedente", "Cliente"],
   "Dt.Emis": ["Data emissao", "Data emissão", "DATA EMISSÃO", "Dt.Emis"],
   Vcto: ["Vencimento", "Vcto"],
+  Original: ["Original", "Vencimento Original", "Vcto Original", "Data Original"],
   Pgto: ["Data de quitação", "DATA DE QUITAÇÃO", "Pgto"],
   "Vl Pgto": ["Liquidado", "LIQUIDADO(R$)", "Vl Pgto"],
   Dcto: ["Documento", "Dcto"],
@@ -613,6 +620,7 @@ const SECINFO_SOURCE_ALIASES = {
   Cliente: ["CEDENTE", "Cedente", "Cliente"],
   "Dt.Emis": ["DATA EMISSÃO", "Data emissao", "Data emissão", "Dt.Emis"],
   Vcto: ["VENCIMENTO", "Vencimento", "Vcto"],
+  Original: ["ORIGINAL", "Original", "Vencimento Original", "Vcto Original", "Data Original"],
   Pgto: ["DATA DE QUITAÇÃO", "Data de quitação", "Pgto"],
   "Vl Pgto": ["LIQUIDADO(R$)", "Liquidado", "Vl Pgto"],
   Dcto: ["DOCUMENTO", "Documento", "Dcto"],
@@ -637,6 +645,7 @@ const mapSecInfoSourceRow = (row) => {
     Cliente: getSmartValue(row, SECINFO_SOURCE_ALIASES.Cliente),
     "Dt.Emis": cleanDate(getSmartValue(row, SECINFO_SOURCE_ALIASES["Dt.Emis"])),
     Vcto: cleanDate(getSmartValue(row, SECINFO_SOURCE_ALIASES.Vcto)),
+    [IMPORT_ORIGINAL_VCTO_FIELD]: cleanDate(getSmartValue(row, SECINFO_SOURCE_ALIASES.Original)),
     Pgto: cleanDate(getSmartValue(row, SECINFO_SOURCE_ALIASES.Pgto)),
     "Vl Pgto": cleanNumber(getSmartValue(row, SECINFO_SOURCE_ALIASES["Vl Pgto"])),
     Dcto: getSmartValue(row, SECINFO_SOURCE_ALIASES.Dcto),
@@ -673,6 +682,7 @@ const mapSmartRow = (row, index) => {
     Cliente: getSmartValue(row, SMART_HEADER_ALIASES.Cliente),
     "Dt.Emis": cleanDate(getSmartValue(row, SMART_HEADER_ALIASES["Dt.Emis"])),
     Vcto: cleanDate(getSmartValue(row, SMART_HEADER_ALIASES.Vcto)),
+    [IMPORT_ORIGINAL_VCTO_FIELD]: cleanDate(getSmartValue(row, SMART_HEADER_ALIASES.Original)),
     Pgto: cleanDate(getSmartValue(row, SMART_HEADER_ALIASES.Pgto)),
     "Vl Pgto": cleanNumber(getSmartValue(row, SMART_HEADER_ALIASES["Vl Pgto"])),
     Dcto: getSmartValue(row, SMART_HEADER_ALIASES.Dcto),
@@ -787,8 +797,9 @@ const applySmartEffectiveRates = (rows) => {
   return rows;
 };
 
-const smartKey = (row) =>
-  `${limpaChave(row.Dcto)}__${limpaChave(row["Borderô"])}__${limpaChave(row.Vcto)}`;
+const smartKey = (row) => buildImportTitleKey(row);
+
+const smartOriginalKey = (row) => buildImportTitleKey(row, true);
 
 const secInfoKey = smartKey;
 
@@ -883,7 +894,7 @@ const sacadoDctoVctoKey = (row) =>
   entidadeDctoVctoKey(row?.Sacado, row?.Dcto, row?.Vcto);
 
 const toSmartDatabaseRow = (row) => {
-  const copy = { ...row };
+  const copy = stripImportMetadata(row);
   delete copy[SMART_RENEWAL_PREVIOUS_KEY];
   return copy;
 };
@@ -1015,7 +1026,7 @@ const updateSecInfoInadimplenciaFromSmartRows = async (rows, setSmartProgress) =
       dcto: limpaChave(row.Dcto),
       dctoNormalized: normalizeDctoKey(row.Dcto),
       emisVariants: dateKeyVariants(row["Dt.Emis"]),
-      vctoVariants: dateKeyVariants(row.Vcto),
+      matchVctoVariants: dateKeyVariants(getImportMatchVcto(row)),
       nextValue: row.inadimplencia ?? null,
     }));
 
@@ -1041,7 +1052,7 @@ const updateSecInfoInadimplenciaFromSmartRows = async (rows, setSmartProgress) =
   const vctos = Array.from(
     new Set(
       sourceItems
-        .flatMap((item) => Array.from(item.vctoVariants))
+        .flatMap((item) => Array.from(item.matchVctoVariants))
         .filter((value) => /^\d{4}-\d{2}-\d{2}$/.test(value))
     )
   );
@@ -1114,11 +1125,11 @@ const updateSecInfoInadimplenciaFromSmartRows = async (rows, setSmartProgress) =
   const getIsoDateVariants = (value) =>
     Array.from(dateKeyVariants(value)).filter((variant) => /^\d{4}-\d{2}-\d{2}$/.test(variant));
 
-  const makeMatchKeys = (rowOrItem, useNormalizedDcto = true, includeBordero = false) => {
+  const makeMatchKeys = (rowOrItem, useNormalizedDcto = true, includeBordero = false, useOriginalVcto = false) => {
     const row = rowOrItem?.row || rowOrItem;
     const dctoValue = useNormalizedDcto ? normalizeDctoKey(row?.Dcto) : limpaChave(row?.Dcto);
     const emisValues = getIsoDateVariants(row?.["Dt.Emis"]);
-    const vctoValues = getIsoDateVariants(row?.Vcto);
+    const vctoValues = getIsoDateVariants(useOriginalVcto ? getImportMatchVcto(row) : row?.Vcto);
     const borderoValue = limpaChave(row?.["Borderô"]);
 
     if (!dctoValue || emisValues.length === 0 || vctoValues.length === 0) return [];
@@ -1151,10 +1162,10 @@ const updateSecInfoInadimplenciaFromSmartRows = async (rows, setSmartProgress) =
   };
 
   sourceItems.forEach((item) => {
-    makeMatchKeys(item, false, false).forEach((key) => addToIndex(sourceIndex.raw, key, item));
-    makeMatchKeys(item, true, false).forEach((key) => addToIndex(sourceIndex.normalized, key, item));
-    makeMatchKeys(item, false, true).forEach((key) => addToIndex(sourceIndex.rawBordero, key, item));
-    makeMatchKeys(item, true, true).forEach((key) => addToIndex(sourceIndex.normalizedBordero, key, item));
+    makeMatchKeys(item, false, false, true).forEach((key) => addToIndex(sourceIndex.raw, key, item));
+    makeMatchKeys(item, true, false, true).forEach((key) => addToIndex(sourceIndex.normalized, key, item));
+    makeMatchKeys(item, false, true, true).forEach((key) => addToIndex(sourceIndex.rawBordero, key, item));
+    makeMatchKeys(item, true, true, true).forEach((key) => addToIndex(sourceIndex.normalizedBordero, key, item));
   });
 
   const getSourceEncargos = (sourceRow) => {
@@ -1518,6 +1529,7 @@ export default function UploadData({ hideValues = false, onDataUpdated }) {
         const renewalPreviousKey = row[SMART_RENEWAL_PREVIOUS_KEY];
         const existingRow =
           existingMap[smartKey(row)] ||
+          existingMap[smartOriginalKey(row)] ||
           (renewalPreviousKey ? existingMap[renewalPreviousKey] : null);
 
         if (existingRow?.id) {
@@ -2461,7 +2473,7 @@ auditoria.finalRows = finalRows.map((item) => ({ ...item }));
       const rowsToUpdateById = new Map();
       const queueExistingUpdate = (sourceRow, existingRow, settlementOnly = false) => {
         const settlementPayload = settlementOnly ? buildSettlementUpdatePayload(sourceRow) : null;
-        const updateRow = settlementOnly ? settlementPayload : { ...sourceRow };
+        const updateRow = settlementOnly ? settlementPayload : stripImportMetadata(sourceRow);
         if (!updateRow) return;
         if (isStatusRecomprado(existingRow.Status)) {
           updateRow.Status = existingRow.Status;
@@ -2491,6 +2503,7 @@ auditoria.finalRows = finalRows.map((item) => ({ ...item }));
 
         const existingRow =
           existingMap[secInfoKey(row)] ||
+          existingMap[smartOriginalKey(row)] ||
           (isStatusAberto(row)
             ? existingBaixadoByClienteDcto[clienteDctoKey(row)] ||
               existingBaixadoBySacadoDcto[sacadoDctoKey(row)]
@@ -2536,7 +2549,8 @@ auditoria.finalRows = finalRows.map((item) => ({ ...item }));
         nextCodRed = cleanNumber(lastCodRedRows?.[0]?.["Cód.Red"]) || 0;
       }
 
-      const rowsToInsertWithCodRed = rowsToInsert.map((row) => {
+      const rowsToInsertWithCodRed = rowsToInsert.map((sourceRow) => {
+        const row = stripImportMetadata(sourceRow);
         if (limpaChave(row["Cód.Red"])) return row;
         nextCodRed += 1;
         return { ...row, "Cód.Red": nextCodRed };
