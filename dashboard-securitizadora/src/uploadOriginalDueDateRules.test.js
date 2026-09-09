@@ -5,6 +5,7 @@ import {
   IMPORT_ORIGINAL_VCTO_FIELD,
   buildImportTitleKey,
   getImportMatchVcto,
+  getImportMatchVctos,
   stripImportMetadata,
 } from "./uploadOriginalDueDateRules.js";
 
@@ -27,6 +28,16 @@ test("mantem o vencimento atual como fallback quando Original nao foi informado"
 
   assert.equal(buildImportTitleKey(incomingRow), buildImportTitleKey(incomingRow, true));
   assert.equal(getImportMatchVcto(incomingRow), "2026-08-31");
+});
+
+test("oferece vencimento original e atual para reconciliar uma prorrogacao", () => {
+  const incomingRow = {
+    Dcto: "2225",
+    Vcto: "2026-08-31",
+    [IMPORT_ORIGINAL_VCTO_FIELD]: "2026-08-20",
+  };
+
+  assert.deepEqual(getImportMatchVctos(incomingRow), ["2026-08-20", "2026-08-31"]);
 });
 
 test("remove Original antes de enviar o payload ao banco", () => {

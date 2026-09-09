@@ -10,6 +10,15 @@ const cleanKeyPart = (value) => {
 export const getImportMatchVcto = (row) =>
   row?.[IMPORT_ORIGINAL_VCTO_FIELD] || row?.Vcto || null;
 
+export const getImportMatchVctos = (row) =>
+  Array.from(
+    new Set(
+      [getImportMatchVcto(row), row?.Vcto].filter(
+        (value) => value !== null && value !== undefined && String(value).trim() !== ""
+      )
+    )
+  );
+
 export const buildImportTitleKey = (row, useOriginalVcto = false) => {
   const vcto = useOriginalVcto ? getImportMatchVcto(row) : row?.Vcto;
   return `${cleanKeyPart(row?.Dcto)}__${cleanKeyPart(row?.["Borderô"])}__${cleanKeyPart(vcto)}`;

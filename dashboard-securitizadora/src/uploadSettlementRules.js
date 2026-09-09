@@ -1,3 +1,5 @@
+import { getImportMatchVctos } from "./uploadOriginalDueDateRules.js";
+
 const normalizeText = (value) =>
   String(value ?? "")
     .toLowerCase()
@@ -51,24 +53,26 @@ export function buildSettlementEvidenceIndex(rows) {
   const byDocumentDue = new Map();
 
   (rows || []).filter(isSettlementEvidenceRow).forEach((row) => {
-    const clienteKey = settlementKey(row.Cliente, row.Dcto, row.Vcto);
-    const sacadoKey = settlementKey(row.Sacado, row.Dcto, row.Vcto);
-    const fallbackKey = documentDueKey(row.Dcto, row.Vcto);
+    getImportMatchVctos(row).forEach((vcto) => {
+      const clienteKey = settlementKey(row.Cliente, row.Dcto, vcto);
+      const sacadoKey = settlementKey(row.Sacado, row.Dcto, vcto);
+      const fallbackKey = documentDueKey(row.Dcto, vcto);
 
-    if (normalizeEntity(row.Cliente)) {
-      byCliente.set(clienteKey, preferSettlement(byCliente.get(clienteKey), row));
-    }
-    if (normalizeEntity(row.Sacado)) {
-      bySacado.set(sacadoKey, preferSettlement(bySacado.get(sacadoKey), row));
-    }
+      if (normalizeEntity(row.Cliente)) {
+        byCliente.set(clienteKey, preferSettlement(byCliente.get(clienteKey), row));
+      }
+      if (normalizeEntity(row.Sacado)) {
+        bySacado.set(sacadoKey, preferSettlement(bySacado.get(sacadoKey), row));
+      }
 
-    const fallback = byDocumentDue.get(fallbackKey);
-    if (!fallback) {
-      byDocumentDue.set(fallbackKey, { row, entities: new Set([normalizeEntity(row.Cliente)]) });
-    } else {
-      fallback.entities.add(normalizeEntity(row.Cliente));
-      fallback.row = preferSettlement(fallback.row, row);
-    }
+      const fallback = byDocumentDue.get(fallbackKey);
+      if (!fallback) {
+        byDocumentDue.set(fallbackKey, { row, entities: new Set([normalizeEntity(row.Cliente)]) });
+      } else {
+        fallback.entities.add(normalizeEntity(row.Cliente));
+        fallback.row = preferSettlement(fallback.row, row);
+      }
+    });
   });
 
   return { byCliente, bySacado, byDocumentDue };

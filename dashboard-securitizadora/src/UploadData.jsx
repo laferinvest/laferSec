@@ -10,7 +10,7 @@ import {
 import {
   IMPORT_ORIGINAL_VCTO_FIELD,
   buildImportTitleKey,
-  getImportMatchVcto,
+  getImportMatchVctos,
   stripImportMetadata,
 } from "./uploadOriginalDueDateRules";
 import * as XLSX from "xlsx";
@@ -1026,7 +1026,9 @@ const updateSecInfoInadimplenciaFromSmartRows = async (rows, setSmartProgress) =
       dcto: limpaChave(row.Dcto),
       dctoNormalized: normalizeDctoKey(row.Dcto),
       emisVariants: dateKeyVariants(row["Dt.Emis"]),
-      matchVctoVariants: dateKeyVariants(getImportMatchVcto(row)),
+      matchVctoVariants: new Set(
+        getImportMatchVctos(row).flatMap((vcto) => Array.from(dateKeyVariants(vcto)))
+      ),
       nextValue: row.inadimplencia ?? null,
     }));
 
@@ -1125,11 +1127,14 @@ const updateSecInfoInadimplenciaFromSmartRows = async (rows, setSmartProgress) =
   const getIsoDateVariants = (value) =>
     Array.from(dateKeyVariants(value)).filter((variant) => /^\d{4}-\d{2}-\d{2}$/.test(variant));
 
-  const makeMatchKeys = (rowOrItem, useNormalizedDcto = true, includeBordero = false, useOriginalVcto = false) => {
+  const makeMatchKeys = (rowOrItem, useNormalizedDcto = true, includeBordero = false, includeOriginalVcto = false) => {
     const row = rowOrItem?.row || rowOrItem;
     const dctoValue = useNormalizedDcto ? normalizeDctoKey(row?.Dcto) : limpaChave(row?.Dcto);
     const emisValues = getIsoDateVariants(row?.["Dt.Emis"]);
-    const vctoValues = getIsoDateVariants(useOriginalVcto ? getImportMatchVcto(row) : row?.Vcto);
+    const matchVctos = includeOriginalVcto ? getImportMatchVctos(row) : [row?.Vcto];
+    const vctoValues = Array.from(
+      new Set(matchVctos.flatMap((vcto) => getIsoDateVariants(vcto)))
+    );
     const borderoValue = limpaChave(row?.["Borderô"]);
 
     if (!dctoValue || emisValues.length === 0 || vctoValues.length === 0) return [];

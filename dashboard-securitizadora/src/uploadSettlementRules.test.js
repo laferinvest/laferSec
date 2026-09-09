@@ -7,6 +7,7 @@ import {
   findSettlementEvidence,
   isSettlementEvidenceRow,
 } from "./uploadSettlementRules.js";
+import { IMPORT_ORIGINAL_VCTO_FIELD } from "./uploadOriginalDueDateRules.js";
 
 test("reconcilia título quitado sem borderô por Cliente + Dcto + Vcto", () => {
   const sourceRows = [
@@ -47,6 +48,35 @@ test("escolhe a quitação mais recente quando há pagamentos parcelados no mesm
   const match = findSettlementEvidence(target, buildSettlementEvidenceIndex(sourceRows));
   assert.equal(match.Pgto, "2026-07-07");
   assert.equal(match["Vl Pgto"], 2046.21);
+});
+
+test("reconcilia quitação depois de prorrogar o vencimento", () => {
+  const settlement = {
+    Cliente: "REFRIPOCOS REFRIGERACAO LTDA ME",
+    Sacado: "GOLDEN TOWER EXPRESS ANHEMBI-Sacado",
+    Dcto: "2225",
+    "Dt.Emis": "2026-05-20",
+    Vcto: "2026-08-31",
+    [IMPORT_ORIGINAL_VCTO_FIELD]: "2026-08-20",
+    Pgto: "2026-08-31",
+    "Vl Pgto": 5000,
+    Status: "Quitado",
+  };
+  const index = buildSettlementEvidenceIndex([settlement]);
+  const targetBeforeRenewal = {
+    Cliente: settlement.Cliente,
+    Sacado: settlement.Sacado,
+    Dcto: "2225",
+    Vcto: "2026-08-20",
+    Status: "Aberto",
+  };
+  const targetAfterRenewal = {
+    ...targetBeforeRenewal,
+    Vcto: "2026-08-31",
+  };
+
+  assert.equal(findSettlementEvidence(targetBeforeRenewal, index), settlement);
+  assert.equal(findSettlementEvidence(targetAfterRenewal, index), settlement);
 });
 
 test("não usa fallback ambíguo quando o mesmo Dcto + Vcto pertence a cedentes diferentes", () => {
