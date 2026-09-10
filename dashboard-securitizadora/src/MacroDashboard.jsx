@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "./supabaseClient";
 import { isRepurchaseStatus } from "./portfolioRiskRules";
+import { getOriginalSmartTitle, getSmartTitleAmounts } from "./smartPartialRepurchaseRules";
 
 // --- FUNÇÕES DE FORMATAÇÃO ---
 function formatarData(dataString) {
@@ -461,7 +462,7 @@ function normalizarRegistroMacro(row, sourceTable, index) {
 }
 
 const MACRO_SELECT_COLUMNS = 'id,Cliente,Sacado,"Dt.Emis",Vcto,Pgto,"Vl Pgto",Dcto,"Borderô",Entrada,Desagio,"Tx.Efet",Status,inadimplencia';
-const MACRO_SMART_SELECT_COLUMNS = 'id,Cliente,Sacado,"Dt.Emis",Vcto,Pgto,"Vl Pgto",Dcto,"Borderô",Entrada,Desagio,Encargos,"Tx.Efet",Status,inadimplencia';
+const MACRO_SMART_SELECT_COLUMNS = 'id,Cliente,Sacado,"Dt.Emis",Vcto,Pgto,"Vl Pgto",Dcto,"Borderô",Entrada,Desagio,Encargos,"Tx.Efet",Status,inadimplencia,recompra_parcial';
 const MACRO_PAGE_SIZE = 5000;
 const MACRO_CACHE_TTL_MS = 5 * 60 * 1000;
 const macroDashboardCache = { data: null, promise: null, updatedAt: 0 };
@@ -866,7 +867,7 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
       const borderoRaw = (borderoKey && r[borderoKey]) ? String(r[borderoKey]).trim() : `avulso_${idx}`;
       const borderoNum = `${origemTabela}__${borderoRaw}`;
 
-      const encargoSmart = encargosKey ? (Number(r[encargosKey]) || 0) : 0;
+      const encargoSmart = getSmartTitleAmounts({ ...r, Encargos: encargosKey ? r[encargosKey] : 0 }).accumulatedCharges;
       const temPgto = pgtoKey && r[pgtoKey] && String(r[pgtoKey]).trim() !== "";
       const encargoPossivel = temPgto && vlPgto > 0 && val > 0 && vlPgto !== val;
       const encargo = origemTabela === "secInfoSmart"
@@ -922,7 +923,8 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
         }
 
         if (rankingPeriod) {
-          rankingPeriod.volume += val;
+          const originalVal = Number(getOriginalSmartTitle(r).Entrada) || val;
+          rankingPeriod.volume += originalVal;
           if (!rankingPeriod.borderos.has(borderoNum)) {
             rankingPeriod.borderos.set(borderoNum, {
               sourceTable: origemTabela,
@@ -936,7 +938,7 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
           }
 
           const rankingBordero = rankingPeriod.borderos.get(borderoNum);
-          rankingBordero.totalValue += val;
+          rankingBordero.totalValue += originalVal;
           const rawRate = r["Tx.Efet"];
           const hasRate = rawRate !== null && rawRate !== undefined && String(rawRate).trim() !== "";
           if (!rankingBordero.hasRate && hasRate) {
@@ -945,7 +947,7 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
           }
 
           if (origemTabela === "secInfoSmart") {
-            const valorDescontado = val - desagioVal;
+            const valorDescontado = originalVal - desagioVal;
             const usaPrazoReal = encargo >= 1;
             const prazoEncargos = getMacroEffectiveTerm(
               r["Dt.Emis"],
@@ -974,7 +976,7 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
                 entity,
                 { val: 0, desEnc: 0 }
               );
-              negotiationBucket.val += val;
+              negotiationBucket.val += volumeDateBase === 'vencimento' ? val : (Number(getOriginalSmartTitle(r).Entrada) || val);
               negotiationBucket.desEnc += encargo;
 
               if (origemTabela === "secInfoSmart") {
@@ -1197,7 +1199,7 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
       const origemTabela = r._sourceTable || "secInfo";
       const borderoRaw = (borderoKey && r[borderoKey]) ? String(r[borderoKey]).trim() : `avulso_${idx}`;
       const bNum = `${origemTabela}__${borderoRaw}`;
-      const val = valKey ? (Number(r[valKey]) || 0) : 0;
+      const val = getSmartTitleAmounts(r).originalFace || (valKey ? (Number(r[valKey]) || 0) : 0);
       const vlPgto = vlPgtoKey ? (Number(r[vlPgtoKey]) || 0) : 0;
 
       const rawRate = rateKey ? r[rateKey] : null;
@@ -1215,7 +1217,7 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
       }
 
       if (origemTabela === "secInfoSmart") {
-        const encargoSmart = encargosKey ? (Number(r[encargosKey]) || 0) : 0;
+        const encargoSmart = getSmartTitleAmounts({ ...r, Encargos: encargosKey ? r[encargosKey] : 0 }).accumulatedCharges;
         if (encargoSmart > 0) totalEncargos += encargoSmart;
       } else {
         const temPgto = pgtoKey && r[pgtoKey] && String(r[pgtoKey]).trim() !== "";

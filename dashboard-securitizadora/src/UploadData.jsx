@@ -14,6 +14,11 @@ import {
   stripImportMetadata,
 } from "./uploadOriginalDueDateRules";
 import * as XLSX from "xlsx";
+import {
+  SMART_SOURCE_TOTAL, SMART_SOURCE_FEES, SMART_SOURCE_DISCOUNT,
+  getOriginalSmartTitle, reconcileSmartPartialRepurchases,
+  stripSmartSourceMetadata, planSmartTitleUpdates,
+} from "./smartPartialRepurchaseRules";
 
 // ==========================================
 // FUNÇÕES DE LIMPEZA
@@ -695,6 +700,9 @@ const mapSmartRow = (row, index) => {
     Desagio: cleanNumber(getSmartValue(row, SMART_HEADER_ALIASES.Desagio)),
     Encargos: getSmartEncargos(row),
     "Tx.Efet": cleanNumber(getSmartValue(row, SMART_HEADER_ALIASES["Tx.Efet"])),
+    [SMART_SOURCE_TOTAL]: cleanNumber(getSmartValue(row, ["TOTAL(R$)", "Total"])),
+    [SMART_SOURCE_FEES]: cleanNumber(getSmartValue(row, ["TARIFAS(R$)", "Tarifas"])),
+    [SMART_SOURCE_DISCOUNT]: cleanNumber(getSmartValue(row, ["DESCONTO(R$)", "Desconto"])),
   };
 
   if (inadimplencia !== undefined) mapped.inadimplencia = inadimplencia;
@@ -740,8 +748,9 @@ const diffCalendarDays = (startDate, endDate) => {
 };
 
 const getSmartPrazoTotal = (row) => {
-  const dataBase = parseSmartIsoDate(row["Dt.Emis"]);
-  const vencimento = parseSmartIsoDate(row.Vcto);
+  const original = getOriginalSmartTitle(row);
+  const dataBase = parseSmartIsoDate(original["Dt.Emis"]);
+  const vencimento = parseSmartIsoDate(original.Vcto);
   if (!dataBase || !vencimento) return null;
 
   const vencimentoAjustado = adjustToNextBusinessDay(vencimento);
@@ -770,7 +779,7 @@ const applySmartEffectiveRates = (rows) => {
     if (!hasDesagioPositivo) return;
 
     group.forEach((row) => {
-      const valorFace = cleanNumber(row.Entrada) || 0;
+      const valorFace = cleanNumber(getOriginalSmartTitle(row).Entrada) || 0;
       const desagio = cleanNumber(row.Desagio) || 0;
       const valorDescontado = valorFace - desagio;
       const prazo = getSmartPrazoTotal(row);
@@ -894,7 +903,7 @@ const sacadoDctoVctoKey = (row) =>
   entidadeDctoVctoKey(row?.Sacado, row?.Dcto, row?.Vcto);
 
 const toSmartDatabaseRow = (row) => {
-  const copy = stripImportMetadata(row);
+  const copy = stripSmartSourceMetadata(stripImportMetadata(row));
   delete copy[SMART_RENEWAL_PREVIOUS_KEY];
   return copy;
 };
@@ -1469,7 +1478,10 @@ export default function UploadData({ hideValues = false, onDataUpdated }) {
       const secInfoInadimplenciaRows = rowsByFile.flatMap((fileRows) => fileRows.secInfoInadimplenciaRows);
       const rowsByKey = new Map();
 
-      rowsByFile.flatMap((fileRows) => fileRows.smartRows).forEach((row) => {
+      const reconciledRows = reconcileSmartPartialRepurchases(
+        rowsByFile.flatMap((fileRows) => fileRows.smartRows)
+      );
+      reconciledRows.forEach((row) => {
         const key = smartKey(row);
         const existingRow = rowsByKey.get(key);
         const mergedRow = { ...existingRow, ...row };
@@ -1485,12 +1497,10 @@ export default function UploadData({ hideValues = false, onDataUpdated }) {
         rowsByKey.set(key, mergedRow);
       });
 
-      const smartRows = applySmartEffectiveRates(
-        Array.from(rowsByKey.values()).map((row, index) => ({
+      const smartRows = Array.from(rowsByKey.values()).map((row, index) => ({
           ...row,
           "Cód.Red": index + 1,
-        }))
-      );
+        }));
 
       if (smartRows.length === 0 && secInfoInadimplenciaRows.length === 0) {
         throw new Error("Nenhuma linha válida encontrada nos arquivos Smart.");
@@ -1508,7 +1518,7 @@ export default function UploadData({ hideValues = false, onDataUpdated }) {
         const to = from + SMART_BATCH_SIZE - 1;
         const { data, error: existingError } = await supabase
           .from(SMART_TABLE)
-          .select('id,Cliente,Sacado,Dcto,"Borderô",Vcto,Entrada,Desagio,Encargos,"Tx.Efet"')
+          .select('id,Cliente,Sacado,Dcto,"Borderô",Vcto,Entrada,Desagio,Encargos,"Tx.Efet",recompra_parcial')
           .order("id", { ascending: true })
           .range(from, to);
 
@@ -1520,50 +1530,9 @@ export default function UploadData({ hideValues = false, onDataUpdated }) {
         if (!data || data.length < SMART_BATCH_SIZE) break;
       }
 
-      const existingMap = {};
-      existingRows.forEach((row) => {
-        existingMap[smartKey(row)] = row;
-      });
-
-      const rowsToInsert = [];
-      const rowsToUpdate = [];
+      const { rowsToInsert, rowsToUpdate, matchedExistingIds } = planSmartTitleUpdates(smartRows, existingRows);
+      applySmartEffectiveRates([...rowsToInsert, ...rowsToUpdate.map(({ row }) => row)]);
       const smartKeysInFile = new Set(smartRows.map((row) => smartKey(row)));
-      const matchedExistingIds = new Set();
-
-      smartRows.forEach((row) => {
-        const renewalPreviousKey = row[SMART_RENEWAL_PREVIOUS_KEY];
-        const existingRow =
-          existingMap[smartKey(row)] ||
-          existingMap[smartOriginalKey(row)] ||
-          (renewalPreviousKey ? existingMap[renewalPreviousKey] : null);
-
-        if (existingRow?.id) {
-          matchedExistingIds.add(existingRow.id);
-          const updateRow = { ...row };
-          const existingDesagio = cleanNumber(existingRow.Desagio);
-          const incomingDesagio = cleanNumber(updateRow.Desagio);
-          const existingTxEfet = cleanNumber(existingRow["Tx.Efet"]);
-          const incomingTxEfet = cleanNumber(updateRow["Tx.Efet"]);
-
-          if (
-            updateRow.Desagio === null ||
-            updateRow.Desagio === undefined ||
-            (incomingDesagio === 0 && existingDesagio > 0)
-          ) {
-            updateRow.Desagio = existingRow.Desagio;
-          }
-          if (
-            updateRow["Tx.Efet"] === null ||
-            updateRow["Tx.Efet"] === undefined ||
-            (incomingTxEfet === 0 && existingTxEfet > 0)
-          ) {
-            updateRow["Tx.Efet"] = existingRow["Tx.Efet"];
-          }
-          rowsToUpdate.push({ id: existingRow.id, row: updateRow });
-        } else {
-          rowsToInsert.push(row);
-        }
-      });
 
       const rowsToDelete = existingRows.filter((row) =>
         row.id &&

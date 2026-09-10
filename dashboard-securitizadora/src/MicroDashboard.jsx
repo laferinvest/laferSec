@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState, useRef } from "react";
 import { supabase } from "./supabaseClient";
 import { applyPortfolioStatuses, isValidPortfolioRow } from "./portfolioRiskRules";
+import PartialRepurchaseHistory from "./PartialRepurchaseHistory";
+import { getOriginalSmartTitle, getPartialRepurchaseEvents, getSmartTitleAmounts } from "./smartPartialRepurchaseRules";
 
 // --- COLLAPSE ANIMADO ---
 function CollapsePanel({ isCollapsed, children }) {
@@ -692,7 +694,8 @@ function EvolutionCharts({ rows, dateFilter, setDateFilter, setBorderoFilter, se
         const emisStr = String(r[emisKey]).split("T")[0];
         if (emisStr.length >= 7) {
           const ym = emisStr.substring(0, 7); 
-          ensureGroupedMonth(ym).val += val;
+          const originalValue = Number(getOriginalSmartTitle(r).Entrada) || val;
+          ensureGroupedMonth(ym).val += originalValue;
 
           if (!groupedRate[ym]) groupedRate[ym] = new Map();
           const rawRate = rateKey ? r[rateKey] : null;
@@ -704,7 +707,7 @@ function EvolutionCharts({ rows, dateFilter, setDateFilter, setBorderoFilter, se
              mapYm.set(bNum, { totalValue: 0, rate: 0, hasRate: false });
           }
           const bData = mapYm.get(bNum);
-          bData.totalValue += val;
+          bData.totalValue += originalValue;
           if (!bData.hasRate && hasRateVal) {
              bData.rate = rate;
              bData.hasRate = true;
@@ -717,13 +720,13 @@ function EvolutionCharts({ rows, dateFilter, setDateFilter, setBorderoFilter, se
           if (!groupedDesagio[ym].has(desagioGroupKey)) groupedDesagio[ym].set(desagioGroupKey, desagioVal);
 
           const emissao = parseIsoDateLocal(r[emisKey]);
-          const vencimento = vctoKey ? parseIsoDateLocal(r[vctoKey]) : null;
-          if (emissao && vencimento && val > 0) {
+          const vencimento = vctoKey ? parseIsoDateLocal(getOriginalSmartTitle(r)[vctoKey]) : null;
+          if (emissao && vencimento && originalValue > 0) {
             const prazo = diffCalendarDays(emissao, vencimento);
             if (prazo > 0) {
               if (!groupedPrazo[ym]) groupedPrazo[ym] = { face: 0, weightedPrazo: 0, titulos: 0 };
-              groupedPrazo[ym].face += val;
-              groupedPrazo[ym].weightedPrazo += prazo * val;
+              groupedPrazo[ym].face += originalValue;
+              groupedPrazo[ym].weightedPrazo += prazo * originalValue;
               groupedPrazo[ym].titulos += 1;
             }
           }
@@ -1410,6 +1413,7 @@ return (
 // --- COMPONENTE DE INSIGHTS ---
 function DashboardInsights({ processedRows, insightFilter, setInsightFilter, setBorderoFilter, setDctoFilter, hideValues, dataSourceTable = "secInfo" }) {
   const fmtM = (v) => hideValues ? "R$ -" : formatarMoeda(v);
+  const partialRepurchases = processedRows.flatMap(getPartialRepurchaseEvents);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [hoveredSlice, setHoveredSlice] = useState(null);
   const [tooltip, setTooltip] = useState({ show: false, x: 0, y: 0, label: '', count: 0, value: 0 });
@@ -1658,6 +1662,10 @@ return (
               </div>
             </div>
           </div>
+          {partialRepurchases.length > 0 && <div style={{ marginTop: 16, padding: 12, background: "#f5f3ff", borderRadius: 8, color: "#5b21b6", fontSize: 13 }}>
+            <strong>Recompras parciais: {fmtM(partialRepurchases.reduce((sum, event) => sum + event.paid, 0))}</strong>
+            {" · "}{partialRepurchases.length} {partialRepurchases.length === 1 ? "movimentação" : "movimentações"}. Os saldos restantes seguem classificados pela situação atual. Consulte o histórico na tabela.
+          </div>}
           {insightFilter && <div style={{ marginTop: "16px", fontSize: "13px", color: "#2563eb", fontWeight: "500", textAlign: "right" }}>Filtro de status ativo. Clique no card novamente para limpar.</div>}
           {tooltip.show && (
             <div style={{ position: 'fixed', top: tooltip.y + 15, left: tooltip.x + 15, background: 'rgba(17, 24, 39, 0.9)', color: '#fff', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', pointerEvents: 'none', zIndex: 9999 }}>
@@ -2092,6 +2100,7 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
     };
     let cols = firstRowKeys.filter(c => (
       !COLUNAS_OCULTAS_SET.has(c) &&
+      c !== "recompra_parcial" &&
       !String(c).toLowerCase().includes("entitykey") &&
       !isRawEncargosValueCol(c)
     ));
@@ -2142,7 +2151,10 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
       baseCols.push(...metricCols);
     }
 
-    return [...baseCols, ...[dctoCol, borderoCol].filter(Boolean)];
+    const displayCols = [...baseCols, ...[dctoCol, borderoCol].filter(Boolean)];
+    return rows.some((row) => getPartialRepurchaseEvents(row).length)
+      ? displayCols.flatMap((col) => col === "Entrada" ? ["__face_original__", "__saldo_aberto__"] : [col])
+      : displayCols;
   }, [rows, clienteSelecionado, sacadoSelecionado]);
 
   const activeSort = useMemo(() => {
@@ -2179,11 +2191,13 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
 
     const rowsComEncargo = rows.map(r => {
       const val = valKey ? (Number(r[valKey]) || 0) : 0;
+      const amounts = getSmartTitleAmounts(r);
+      const displayed = { ...r, __face_original__: amounts.originalFace, __saldo_aberto__: amounts.openBalance };
 
       if (isSmartSourceRow(r, dataSourceTable)) {
         return {
-          ...r,
-          __encargo__: encargosKey ? (Number(r[encargosKey]) || 0) : 0,
+          ...displayed,
+          __encargo__: getSmartTitleAmounts({ ...r, Encargos: encargosKey ? r[encargosKey] : 0 }).accumulatedCharges,
           __tx_encargos__: 0,
         };
       }
@@ -2195,7 +2209,7 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
       const encargoDentroLimite = encargoPossivel && vlPgto <= val * 1.4;
       const encargoCalculado = encargoDentroLimite ? (vlPgto - val) : 0;
       const encargo = encargoCalculado > 0 ? encargoCalculado : 0;
-      return { ...r, __encargo__: encargo, __tx_encargos__: rateKey ? parseTaxaPercentual(r[rateKey]) : 0 };
+      return { ...displayed, __encargo__: encargo, __tx_encargos__: rateKey ? parseTaxaPercentual(r[rateKey]) : 0 };
     });
 
     const gruposPorBordero = new Map();
@@ -2214,7 +2228,7 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
       let wbaDesagioAplicado = false;
 
       group.forEach((row) => {
-        const valorFace = valKey ? (Number(row[valKey]) || 0) : 0;
+        const valorFace = getSmartTitleAmounts(row).originalFace;
         const desagio = desagioKey ? (Number(row[desagioKey]) || 0) : 0;
         const encargo = Number(row.__encargo__) || 0;
         const prazo = getPrazoComEncargos(row, encargo);
@@ -2265,7 +2279,7 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
         const keyLower = activeSort.key.toLowerCase();
         const isBordero = normalizarChave(activeSort.key).includes("border");
         
-        const isCurrency = keyLower === "entrada" || keyLower === "vl pgto" || keyLower.includes("valor") || keyLower === "desagio" || keyLower === "deságio" || keyLower === "__encargo__";
+        const isCurrency = keyLower === "entrada" || keyLower === "vl pgto" || keyLower.includes("valor") || keyLower === "desagio" || keyLower === "deságio" || ["__encargo__", "__face_original__", "__saldo_aberto__"].includes(keyLower);
         const isRate = keyLower.includes("tx") || keyLower.includes("taxa");
         const isDateColumn = !isCurrency && !isRate && (keyLower.includes("emis") || keyLower.includes("vcto") || keyLower.includes("pgto") || keyLower.includes("data"));
 
@@ -2316,7 +2330,7 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
 
     sortedRows.forEach((row, idx) => {
       const bNum = getScopedBorderoKey(row, borderoKey, idx, dataSourceTable);
-      const val = valKey ? (Number(row[valKey]) || 0) : 0;
+      const val = getSmartTitleAmounts(row).originalFace || (valKey ? (Number(row[valKey]) || 0) : 0);
 
       if (!borderoMapTicket.has(bNum)) {
         borderoMapTicket.set(bNum, 0);
@@ -2403,6 +2417,9 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
                 <tr>
                   {columns.map((c) => {
                     let labelColuna = c === "Entrada" ? "Valor de Face" : c === "Cliente" ? "Cedente" : c.toLowerCase() === "vcto" ? "Dt.Vcto" : c.toLowerCase() === "pgto" ? "Dt.Pgto" : c.toLowerCase() === "vl pgto" ? "Valor Pgto" : c === "__encargo__" ? "Encargos" : c === "__tx_encargos__" ? "Tx.Encargos" : c;
+                    if (c === "__face_original__") labelColuna = "Valor de Face Original";
+                    if (c === "__saldo_aberto__") labelColuna = "Saldo em Aberto";
+                    if (c === "__encargo__" && columns.includes("__face_original__")) labelColuna = "Encargos Acumulados";
                     const isSorted = activeSort?.key === c;
                     return (
                       <React.Fragment key={c}>
@@ -2424,7 +2441,7 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
                     let valor = r[c];
                     const valorOriginal = valor;
                         const cLower = c.toLowerCase();
-                        const isCurrency = cLower === "entrada" || cLower === "vl pgto" || cLower.includes("valor") || cLower === "desagio" || cLower === "deságio" || c === "__encargo__";
+                        const isCurrency = cLower === "entrada" || cLower === "vl pgto" || cLower.includes("valor") || cLower === "desagio" || cLower === "deságio" || ["__encargo__", "__face_original__", "__saldo_aberto__"].includes(c);
                         const isRate = cLower.includes("tx") || cLower.includes("taxa");
                         const isDateColumn = !isCurrency && !isRate && (cLower.includes("emis") || cLower.includes("vcto") || cLower.includes("pgto") || cLower.includes("data"));
                         const isBorderoCol = cLower.normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes("border");
@@ -2457,6 +2474,8 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
                               </span>
                             ) : isDctoCol ? (
                               <span onClick={(e) => { e.stopPropagation(); if (onDctoDrill) onDctoDrill({ key: c, value: valorOriginal, sourceTable: rowSourceTable, isActive: isThisDctoFiltered }); else if (isThisDctoFiltered) setDctoFilter(null); else { setDctoFilter({ key: c, value: valorOriginal, sourceTable: rowSourceTable }); setBorderoFilter(null); setDateFilter({ type: 'emis', start: '', end: '' }); if (setInsightFilter) setInsightFilter(null); } }} style={{ background: isThisDctoFiltered ? "#0ea5e9" : "rgba(14, 165, 233, 0.08)", color: isThisDctoFiltered ? "#fff" : "#0ea5e9", padding: "4px 8px", borderRadius: "6px", fontWeight: "600", cursor: "pointer" }}>{escapeText(valor)}</span>
+                            ) : c === "Status" ? (
+                              <div><span>{escapeText(valor)}</span><PartialRepurchaseHistory row={r} hideValues={hideValues} /></div>
                             ) : c === "Cliente" ? (
                               <span onClick={(e) => { e.stopPropagation(); setClienteSelecionado(valorOriginal); }} className="clickable-entity">{escapeText(valor)}</span>
                             ) : c === "Sacado" ? (
@@ -3823,7 +3842,7 @@ const kpiData = useMemo(() => {
       const bNum = getScopedBorderoKey(r, borderoKey, idx, dataSourceTable);
       const borderoDisplay = (borderoKey && r[borderoKey]) ? String(r[borderoKey]).trim() : `avulso_${idx}`;
       const rowIsSmart = isSmartSourceRow(r, dataSourceTable);
-      const val = valKey ? (Number(r[valKey]) || 0) : 0;
+      const val = getSmartTitleAmounts(r).originalFace || (valKey ? (Number(r[valKey]) || 0) : 0);
 
       const vlPgto = vlPgtoKey ? (Number(r[vlPgtoKey]) || 0) : 0;
       
@@ -3841,7 +3860,7 @@ const kpiData = useMemo(() => {
 
       // Encargo por título (não deduplicado por borderô)
       if (rowIsSmart) {
-        const encargoSmart = encargosKey ? (Number(r[encargosKey]) || 0) : 0;
+        const encargoSmart = getSmartTitleAmounts({ ...r, Encargos: encargosKey ? r[encargosKey] : 0 }).accumulatedCharges;
         if (encargoSmart > 0) totalEncargos += encargoSmart;
       } else {
         const temPgto = pgtoKey && r[pgtoKey] && String(r[pgtoKey]).trim() !== "";
@@ -3871,7 +3890,7 @@ const kpiData = useMemo(() => {
           });
         }
         const txEncargosData = txEncargosMap.get(bNum);
-        const encargoSmart = encargosKey ? (Number(r[encargosKey]) || 0) : 0;
+        const encargoSmart = getSmartTitleAmounts({ ...r, Encargos: encargosKey ? r[encargosKey] : 0 }).accumulatedCharges;
         const valorDescontado = val - desagioVal;
         const usaPrazoReal = deveUsarPrazoRealEncargo(encargoSmart);
         const prazoEncargos = getPrazoEfetivoComD2(

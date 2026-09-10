@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "./supabaseClient";
+import { getOriginalSmartTitle } from "./smartPartialRepurchaseRules";
 import {
   applyPortfolioStatuses,
   calcularDiasAtrasoTitulo,
@@ -145,7 +146,7 @@ async function fetchAllRows(tableName) {
   for (let from = 0; ; from += PAGE_SIZE) {
     let response = await supabase
       .from(tableName)
-      .select(selectAll ? "*" : SELECT_COLUMNS)
+      .select(selectAll ? "*" : SELECT_COLUMNS + (tableName === "secInfoSmart" ? ",recompra_parcial" : ""))
       .order("id", { ascending: false })
       .range(from, from + PAGE_SIZE - 1);
 
@@ -250,17 +251,18 @@ function buildMonthlyTrend(rows, groups) {
     const key = monthKey(issueDate);
     const bucket = buckets.get(key);
     if (!bucket) return;
-    const dueDate = parseDate(row.Vcto);
+    const dueDate = parseDate(getOriginalSmartTitle(row).Vcto);
     const term = dueDate && issueDate ? Math.max(0, daysBetween(dueDate, issueDate)) : 0;
     const economicGroup = findEconomicGroup(row.Cliente, groups);
     const cedenteKey = economicGroup
       ? `group:${economicGroup.id || entityKey(economicGroup.label)}`
       : `standalone:${entityKey(row.Cliente)}`;
 
-    bucket.volume += row.Entrada;
+    const originalValue = Number(getOriginalSmartTitle(row).Entrada) || row.Entrada;
+    bucket.volume += originalValue;
     bucket.titles += 1;
-    bucket.weightedTerm += term * row.Entrada;
-    bucket.cedentes.set(cedenteKey, (bucket.cedentes.get(cedenteKey) || 0) + row.Entrada);
+    bucket.weightedTerm += term * originalValue;
+    bucket.cedentes.set(cedenteKey, (bucket.cedentes.get(cedenteKey) || 0) + originalValue);
   });
 
   return [...buckets.values()].map((bucket) => {
