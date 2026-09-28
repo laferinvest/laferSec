@@ -191,3 +191,61 @@ test("nova etapa e atualização dos juros atuais não repetem encargos anterior
   assert.equal(getSmartTitleAmounts(updated).accumulatedCharges, 250.46);
   assert.equal(getPartialRepurchaseEvents(updated).length, 2);
 });
+
+test("recompra final do saldo do título 2327 preserva a parcial e zera o risco", () => {
+  const finalRepurchase = { ...balance, Status: "Recomprado", Pgto: "2026-09-24",
+    "Vl Pgto": 1865.5, Encargos: 0, [TOTAL]: 1865.5 };
+  const [open] = reconcileSmartPartialRepurchases([original, balance]);
+  for (const source of [[finalRepurchase, original], [original, finalRepurchase]]) {
+    const rows = reconcileSmartPartialRepurchases(source);
+    assert.equal(rows.length, 1);
+    const planned = planSmartTitleUpdates(rows, [{ ...open, id: 1 }]);
+    assert.equal(planned.rowsToInsert.length, 0);
+    assert.equal(planned.rowsToUpdate.length, 1);
+    assert.equal(planned.rowsToUpdate[0].id, 1);
+    const final = planned.rowsToUpdate[0].row;
+    assert.equal(final.Status, "Recomprado");
+    assert.equal(final.Pgto, "2026-09-24");
+    assert.equal(final.Entrada, 1865.5);
+    assert.equal(final.Desagio, 144.31);
+    assert.equal(getPartialRepurchaseEvents(final).length, 1);
+    assert.deepEqual(getSmartTitleAmounts(final), {
+      originalFace: 3500, accumulatedCharges: 231, openBalance: 0, accumulatedPaid: 3731,
+    });
+    assert.equal(applyPortfolioStatuses([final], new Date(2026, 8, 25))[0]._status, "recompra");
+    const again = planSmartTitleUpdates(rows, [{ ...final, id: 1 }]);
+    assert.deepEqual(again.rowsToUpdate[0].row.recompra_parcial, final.recompra_parcial);
+    assert.deepEqual(getSmartTitleAmounts(again.rowsToUpdate[0].row), getSmartTitleAmounts(final));
+  }
+});
+
+test("recompra final exige baixa completa, saldo compatível e ordem cronológica", () => {
+  const finalRepurchase = { ...balance, Status: "Recomprado", Pgto: "2026-09-24", "Vl Pgto": 1872.96 };
+  const [open] = reconcileSmartPartialRepurchases([original, balance]);
+  for (const changed of [{ [TOTAL]: null }, { Pgto: null }, { "Vl Pgto": 872.96 }, { "Vl Pgto": 1872.98 }]) {
+    const rows = reconcileSmartPartialRepurchases([original, { ...finalRepurchase, ...changed }]);
+    assert.throws(() => planSmartTitleUpdates(rows, [{ ...open, id: 1 }]), /não traz o saldo correspondente/);
+  }
+  for (const changed of [{ Entrada: 1800 }, { Entrada: 0 }, { Pgto: "2026-09-08" }]) {
+    assert.throws(() => planSmartTitleUpdates(
+      reconcileSmartPartialRepurchases([original, { ...finalRepurchase, ...changed }]),
+      [{ ...open, id: 1 }]
+    ), /Revise as linhas/);
+  }
+  assert.throws(() => reconcileSmartPartialRepurchases([
+    original, finalRepurchase, { ...finalRepurchase, Vcto: "2026-09-10" },
+  ]), /combinação possível/);
+  assert.deepEqual(reconcileSmartPartialRepurchases([finalRepurchase]), [finalRepurchase]);
+});
+
+test("recompra final encerra várias parciais sem duplicar pagamentos ou encargos", () => {
+  const second = { ...balance, Status: "Recomprado", Pgto: "2026-09-10", "Vl Pgto": 872.96 };
+  const finalRepurchase = { ...balance, Vcto: "2026-09-20", Entrada: 1000, Encargos: 10,
+    [TOTAL]: 1010, Status: "Recomprado", Pgto: "2026-09-24", "Vl Pgto": 1010 };
+  const rows = reconcileSmartPartialRepurchases([finalRepurchase, original, second, { ...finalRepurchase, "Cód.Red": 99 }]);
+  assert.equal(rows.length, 1);
+  assert.equal(getPartialRepurchaseEvents(rows[0]).length, 2);
+  assert.deepEqual(getSmartTitleAmounts(rows[0]), {
+    originalFace: 3500, accumulatedCharges: 248.46, openBalance: 0, accumulatedPaid: 3748.46,
+  });
+});

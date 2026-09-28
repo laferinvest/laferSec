@@ -16,6 +16,12 @@ const sameEntities = (a, b) => entity(a.Cliente) === entity(b.Cliente) && entity
 const isRepurchased = (row) => /recompr/.test(normalize(row.Status));
 const isOpen = (row) => /^(aberto|a vencer|vencido|em aberto)$/.test(normalize(row.Status)) && !row.Pgto;
 const isRemainingBalance = (row) => !isRepurchased(row) && (isOpen(row) || Boolean(parseIsoDateLocal(row.Pgto)));
+const isFullyRepurchased = (row) => {
+  const total = cents(row[SMART_SOURCE_TOTAL]);
+  const paid = cents(row["Vl Pgto"]);
+  return isRepurchased(row) && Boolean(parseIsoDateLocal(row.Pgto)) &&
+    cents(row.Entrada) > 0 && total > 0 && paid > 0 && Math.abs(total - paid) <= 1;
+};
 
 export function getPartialRepurchaseEvents(row) {
   return Array.isArray(row?.[SMART_REPURCHASE_HISTORY]?.events) ? row[SMART_REPURCHASE_HISTORY].events : [];
@@ -83,8 +89,14 @@ export function reconcileSmartPartialRepurchases(rows) {
       ...sourceSnapshot(row), total: row[SMART_SOURCE_TOTAL], fees: row[SMART_SOURCE_FEES],
       discount: row[SMART_SOURCE_DISCOUNT], original: row[IMPORT_ORIGINAL_VCTO_FIELD],
     }), row])).values()];
-    const previous = unique.filter(isRepurchased);
+    const repurchased = unique.filter(isRepurchased);
     const remaining = unique.filter(isRemainingBalance);
+    // A final repurchase closes the remaining balance. Its payment belongs
+    // to the current row, while earlier partial payments stay in history.
+    if (!remaining.length && repurchased.length > 1) {
+      remaining.push(...repurchased.filter(isFullyRepurchased));
+    }
+    const previous = repurchased.filter((row) => !remaining.includes(row));
     if (!previous.length || !remaining.length) continue;
     if (remaining.length !== 1 || unique.length !== previous.length + 1) {
       throw reviewError(previous[0], "há mais de uma combinação possível entre recompra e saldo");
