@@ -1109,7 +1109,6 @@ const handleChartRangeSelect = useCallback(({ start, end, source }) => {
                       <th style={thStyle}>PL</th>
                       <th style={thStyle}>Variação</th>
                       <th style={thStyle}>Retorno Período</th>
-                      <th style={thStyle}>Retorno Mês</th>
                       <th style={thStyle}>Retorno Acum. TWR</th>
                       <th style={thStyle}>Recebíveis</th>
                       <th style={thStyle}>Dinheiro Banco</th>
@@ -1183,15 +1182,6 @@ const handleChartRangeSelect = useCallback(({ start, end, source }) => {
                             >
                               {formatarPct(grupo.periodReturn * 100, hideValues)}
                             </td>
-                            <td
-                              style={{
-                                ...tdStyle,
-                                fontWeight: 700,
-                                color: grupo.retornoMesPct < 3 ? "#dc2626" : "#16a34a",
-                              }}
-                            >
-                              {formatarPct(grupo.retornoMesPct, hideValues)}
-                            </td>
                             <td style={{ ...tdStyle, fontWeight: 700 }}>{formatarPct(grupo.retornoAcumuladoPct, hideValues)}</td>
                             <td style={tdStyle}>{formatarMoeda(grupo.recebiveis, hideValues)}</td>
                             <td style={tdStyle}>{formatarMoeda(grupo.dinheiroBanco, hideValues)}</td>
@@ -1224,7 +1214,6 @@ const handleChartRangeSelect = useCallback(({ start, end, source }) => {
                               >
                                 {formatarPct(snapshot.periodReturn * 100, hideValues)}
                               </td>
-                              <td style={{ ...tdStyle, color: "#94a3b8" }}>-</td>
                               <td style={tdStyle}>{formatarPct(snapshot.retornoAcumuladoPct, hideValues)}</td>
                               <td style={tdStyle}>{formatarMoeda(snapshot.recebiveis, hideValues)}</td>
                               <td style={tdStyle}>{formatarMoeda(snapshot.dinheiroBanco, hideValues)}</td>

@@ -7,6 +7,7 @@ import PatrimonioDashboard from "./PatrimonioDashboard";
 import UploadData from "./UploadData";
 import NFeConverter from "./NFeConverter";
 import RiskDashboard from "./RiskDashboard";
+import CedentesTreeDashboard from "./CedentesTreeDashboard";
 
 export default function App() {
   const [session, setSession] = useState(null);
@@ -413,6 +414,17 @@ export default function App() {
 
                 <button
                   onClick={() => {
+                    activateTab("cedentesTree");
+                    setIsSidebarOpen(false);
+                  }}
+                  style={getTabStyle(activeTab === "cedentesTree")}
+                >
+                  Árvore de Cedentes
+                </button>
+
+                {/* Acesso a Riscos e Alertas pausado para revisão futura.
+                <button
+                  onClick={() => {
                     activateTab("risk");
                     setIsSidebarOpen(false);
                   }}
@@ -420,6 +432,7 @@ export default function App() {
                 >
                   Riscos e Alertas
                 </button>
+                */}
 
                 <button
                   onClick={() => {
@@ -461,6 +474,18 @@ export default function App() {
                 <MacroDashboard
                   key={`macro-${dataRevision}`}
                   session={session}
+                  hideValues={hideValues}
+                  setHideValues={setHideValues}
+                />
+              </div>
+            )}
+
+            {mountedTabs.has("cedentesTree") && (
+              <div role="tabpanel" aria-hidden={activeTab !== "cedentesTree"} style={{ display: activeTab === "cedentesTree" ? "block" : "none" }}>
+                <CedentesTreeDashboard
+                  key={session.user.id}
+                  userId={session.user.id}
+                  dataRevision={dataRevision}
                   hideValues={hideValues}
                   setHideValues={setHideValues}
                 />
