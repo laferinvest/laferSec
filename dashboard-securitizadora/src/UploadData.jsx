@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "./supabaseClient";
+import { recordRiskDelayHistory } from "./riskDelayHistory";
 import { isRepurchaseStatus } from "./portfolioRiskRules";
 import {
   buildSettlementUpdatePayload,
@@ -1404,6 +1405,24 @@ const updateSecInfoInadimplenciaFromSmartRows = async (rows, setSmartProgress) =
 };
 
 export default function UploadData({ hideValues = false, onDataUpdated }) {
+  const [historyError, setHistoryError] = useState("");
+  const [historySaving, setHistorySaving] = useState(false);
+
+  async function saveHistoryAfterUpdate() {
+    setHistorySaving(true);
+    try {
+      await recordRiskDelayHistory(supabase);
+      setHistoryError("");
+      return " Histórico de atraso salvo.";
+    } catch (err) {
+      setHistoryError(err.message);
+      return " ⚠️ A base foi atualizada, mas o histórico de atraso não foi salvo. Tente novamente no aviso acima.";
+    } finally {
+      setHistorySaving(false);
+      onDataUpdated?.();
+    }
+  }
+
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("");
@@ -1627,8 +1646,9 @@ export default function UploadData({ hideValues = false, onDataUpdated }) {
 
       const secInfoInadimplencia = await updateSecInfoInadimplenciaFromSmartRows(secInfoInadimplenciaRows, setSmartProgress);
 
-      setSmartStatus(`✅ Dados Atualizados com Sucesso: ${insertedCount} novo(s), ${updatedCount} atualizado(s), ${deletedCount} removido(s).`);
-      onDataUpdated?.();
+      setSmartProgress("Salvando histórico de atraso…");
+      const historyNotice = await saveHistoryAfterUpdate();
+      setSmartStatus(`✅ Dados Atualizados com Sucesso: ${insertedCount} novo(s), ${updatedCount} atualizado(s), ${deletedCount} removido(s).${historyNotice}`);
       setSmartProgress("");
       setSmartFiles([]);
       document.getElementById("smart-upload-input").value = "";
@@ -2165,7 +2185,9 @@ const exportarCreditoEmAberto = async () => {
           setProgress(`5/5: Atualizando... ${updatedCount} / ${updatedRows.length}`);
         }
 
-        setStatus(`✅ Taxas atualizadas com sucesso em ${updatedRows.length} registro(s)!`);
+        setProgress("Salvando histórico de atraso…");
+        const historyNotice = await saveHistoryAfterUpdate();
+        setStatus(`✅ Taxas atualizadas com sucesso em ${updatedRows.length} registro(s)!${historyNotice}`);
         setProgress("");
         setFiles([]);
         document.getElementById("upload-input").value = "";
@@ -2554,8 +2576,9 @@ auditoria.finalRows = finalRows.map((item) => ({ ...item }));
         }
       }
 
-      setStatus(`✅ Banco de dados atualizado: ${rowsToInsertWithCodRed.length} novo(s), ${rowsToUpdate.length} atualizado(s), ${settlementReconciledCount} baixa(s) reconciliada(s) por Dcto + Vcto.`);
-      onDataUpdated?.();
+      setProgress("Salvando histórico de atraso…");
+      const historyNotice = await saveHistoryAfterUpdate();
+      setStatus(`✅ Banco de dados atualizado: ${rowsToInsertWithCodRed.length} novo(s), ${rowsToUpdate.length} atualizado(s), ${settlementReconciledCount} baixa(s) reconciliada(s) por Dcto + Vcto.${historyNotice}`);
       setProgress("");
       setFiles([]);
       document.getElementById("upload-input").value = "";
@@ -2570,6 +2593,13 @@ auditoria.finalRows = finalRows.map((item) => ({ ...item }));
 
   return (
     <div style={{ display: "grid", gap: "24px", maxWidth: "820px", margin: "0 auto" }}>
+      {historyError && <div role="alert" style={{ ...cardStyle, border: "1px solid #f59e0b" }}>
+        <strong>A base foi atualizada. O histórico de atraso ainda não foi salvo.</strong>
+        <p>{historyError}</p>
+        <button type="button" disabled={historySaving || loading || smartLoading} onClick={saveHistoryAfterUpdate}>
+          {historySaving ? "Salvando…" : "Tentar salvar o histórico novamente"}
+        </button>
+      </div>}
       {false && (
       <div style={cardStyle}>
         <h2 style={{ marginTop: 0, color: "#111827", fontSize: "20px" }}>Atualização de Dados</h2>

@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "./supabaseClient";
 import { getOriginalSmartTitle } from "./smartPartialRepurchaseRules";
+import { calculateRiskExposure, getRiskReferenceDay } from "./riskDelayHistory";
+import RiskDelayHistoryChart from "./RiskDelayHistoryChart";
 import {
-  applyPortfolioStatuses,
   calcularDiasAtrasoTitulo,
-  isValidPortfolioRow,
 } from "./portfolioRiskRules";
 import {
   deriveHhiTarget,
@@ -280,7 +280,7 @@ function buildMonthlyTrend(rows, groups) {
   });
 }
 
-function buildDelinquency(openRows) {
+function buildDelinquency(openRows, today) {
   const definitions = [
     { key: "current", label: "Em dia", min: Number.NEGATIVE_INFINITY, max: 0, color: "#16a34a" },
     { key: "1-15", label: "1–15 dias", min: 1, max: 15, color: "#f59e0b" },
@@ -294,7 +294,7 @@ function buildDelinquency(openRows) {
   openRows.forEach((row) => {
     const hasDueDate = Boolean(row.Vcto);
     const daysPastDue = row._status === "atraso"
-      ? calcularDiasAtrasoTitulo(row, "Vcto", "Pgto")
+      ? calcularDiasAtrasoTitulo(row, "Vcto", "Pgto", today)
       : 0;
     const bucket = !hasDueDate
       ? buckets.find((item) => item.key === "no-date")
@@ -600,6 +600,8 @@ function OverviewView({ data, hidden, limits, alerts = [] }) {
           </div>
         </article>
       </section>
+
+      <RiskDelayHistoryChart hidden={hidden} />
 
       <section>
         <SectionHeader
@@ -1010,11 +1012,9 @@ export default function RiskDashboard({ session, hideValues, setHideValues }) {
     return () => { cancelled = true; };
   }, []);
 
+  const referenceDay = getRiskReferenceDay();
   const data = useMemo(() => {
-    const eligibleRows = rows.filter((row) => isValidPortfolioRow(row) && row.Entrada > 0);
-    const allRows = applyPortfolioStatuses(eligibleRows);
-    const openRows = allRows.filter((row) => ["aVencer", "atraso"].includes(row._status));
-    const totalOpen = openRows.reduce((sum, row) => sum + row.Entrada, 0);
+    const { allRows, openRows, totalOpen, referenceDate } = calculateRiskExposure(rows, referenceDay);
     const sacados = aggregateExposure(openRows, (row) => ({ key: entityKey(row.Sacado), label: displayEntity(row.Sacado) }));
     const grouped = aggregateExposure(openRows, (row) => {
       const group = findEconomicGroup(row.Cliente, groups);
@@ -1044,7 +1044,7 @@ export default function RiskDashboard({ session, hideValues, setHideValues }) {
       patrimonio,
       cedenteStats,
       sacadoStats,
-      delinquency: buildDelinquency(openRows),
+      delinquency: buildDelinquency(openRows, referenceDate),
       trend: buildMonthlyTrend(allRows, groups),
       cedenteHistory: buildCedenteHistory(allRows, openRows, groups),
       stress: [
@@ -1052,7 +1052,7 @@ export default function RiskDashboard({ session, hideValues, setHideValues }) {
         makeStress("top2", "Default dos dois maiores", stressTop2),
       ],
     };
-  }, [rows, groups, patrimonio]);
+  }, [rows, groups, patrimonio, referenceDay]);
 
   useEffect(() => {
     if (loading || !workflowReady || limits.length === 0) return undefined;

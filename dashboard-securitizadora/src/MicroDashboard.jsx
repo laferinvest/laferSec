@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState, useRef } from "react";
 import { supabase } from "./supabaseClient";
 import { applyPortfolioStatuses, isValidPortfolioRow } from "./portfolioRiskRules";
 import PartialRepurchaseHistory from "./PartialRepurchaseHistory";
-import { getOriginalSmartTitle, getPartialRepurchaseEvents, getSmartTitleAmounts } from "./smartPartialRepurchaseRules";
+import { getOriginalSmartTitle, getPartialRepurchaseEvents, getSmartTitleAmounts, isPartialRepurchaseEvent } from "./smartPartialRepurchaseRules";
 
 // --- COLLAPSE ANIMADO ---
 function CollapsePanel({ isCollapsed, children }) {
@@ -1413,7 +1413,7 @@ return (
 // --- COMPONENTE DE INSIGHTS ---
 function DashboardInsights({ processedRows, insightFilter, setInsightFilter, setBorderoFilter, setDctoFilter, hideValues, dataSourceTable = "secInfo" }) {
   const fmtM = (v) => hideValues ? "R$ -" : formatarMoeda(v);
-  const partialRepurchases = processedRows.flatMap(getPartialRepurchaseEvents);
+  const partialRepurchases = processedRows.flatMap(getPartialRepurchaseEvents).filter(isPartialRepurchaseEvent);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [hoveredSlice, setHoveredSlice] = useState(null);
   const [tooltip, setTooltip] = useState({ show: false, x: 0, y: 0, label: '', count: 0, value: 0 });

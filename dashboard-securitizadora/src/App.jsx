@@ -15,6 +15,7 @@ export default function App() {
   const [password, setPassword] = useState("");
   const [msg, setMsg] = useState("");
   const [activeTab, setActiveTab] = useState("patrimonio");
+  const [analysisView, setAnalysisView] = useState("cedentesTree");
   const [mountedTabs, setMountedTabs] = useState(() => new Set(["patrimonio"]));
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -30,6 +31,7 @@ export default function App() {
       if (event === "SIGNED_OUT") {
         setMsg("");
         setActiveTab("patrimonio");
+        setAnalysisView("cedentesTree");
         setMountedTabs(new Set(["patrimonio"]));
         setMicroInitialFilter(null);
       }
@@ -77,6 +79,7 @@ export default function App() {
   };
 
   const activateTab = (tab) => {
+    if (tab === "cedentesTree" || tab === "risk") setAnalysisView(tab);
     if (tab === "micro" && typeof window !== "undefined") {
       const width = window.innerWidth;
       const mobile = width < 640;
@@ -95,6 +98,7 @@ export default function App() {
   };
 
   const shouldShiftLayout = activeTab === "micro" && !isMobile;
+  const isAnalysisActive = activeTab === "cedentesTree" || activeTab === "risk";
 
   const slideStyle = !shouldShiftLayout
     ? {}
@@ -414,25 +418,14 @@ export default function App() {
 
                 <button
                   onClick={() => {
-                    activateTab("cedentesTree");
+                    activateTab(analysisView);
                     setIsSidebarOpen(false);
                   }}
-                  style={getTabStyle(activeTab === "cedentesTree")}
+                  style={getTabStyle(isAnalysisActive)}
+                  aria-pressed={isAnalysisActive}
                 >
-                  Árvore de Cedentes
+                  Análise Aprofundada
                 </button>
-
-                {/* Acesso a Riscos e Alertas pausado para revisão futura.
-                <button
-                  onClick={() => {
-                    activateTab("risk");
-                    setIsSidebarOpen(false);
-                  }}
-                  style={getTabStyle(activeTab === "risk")}
-                >
-                  Riscos e Alertas
-                </button>
-                */}
 
                 <button
                   onClick={() => {
@@ -455,6 +448,30 @@ export default function App() {
                 </button>
               </div>
             </div>
+
+            {isAnalysisActive && (
+              <nav
+                aria-label="Opções de Análise Aprofundada"
+                style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 10, padding: 12, marginBottom: 24, borderRadius: 12, background: "#f3f4f6" }}
+              >
+                <button
+                  type="button"
+                  aria-pressed={activeTab === "cedentesTree"}
+                  onClick={() => activateTab("cedentesTree")}
+                  style={getTabStyle(activeTab === "cedentesTree")}
+                >
+                  Árvore de Cedentes
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={activeTab === "risk"}
+                  onClick={() => activateTab("risk")}
+                  style={getTabStyle(activeTab === "risk")}
+                >
+                  Riscos e Alertas
+                </button>
+              </nav>
+            )}
 
             {mountedTabs.has("micro") && (
               <div role="tabpanel" aria-hidden={activeTab !== "micro"} style={{ display: activeTab === "micro" ? "block" : "none" }}>

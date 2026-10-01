@@ -6,6 +6,7 @@ import {
   SMART_SOURCE_TOTAL as TOTAL, SMART_SOURCE_FEES as FEES, SMART_SOURCE_DISCOUNT as DISCOUNT,
   reconcileSmartPartialRepurchases, planSmartTitleUpdates, getOriginalSmartTitle,
   getPartialRepurchaseEvents, stripSmartSourceMetadata, getSmartTitleAmounts,
+  isPartialRepurchaseEvent,
 } from "./smartPartialRepurchaseRules.js";
 
 const original = {
@@ -17,6 +18,88 @@ const original = {
 };
 const balance = { ...original, Vcto: "2026-09-09", Status: "Aberto", Pgto: null,
   Entrada: 1865.50, "Vl Pgto": 0, Desagio: 0, Encargos: 7.46, [TOTAL]: 1872.96 };
+
+const partialPayment = {
+  Cliente: "SOLUCAO COMERCIO DE INFORMATICA LTDA",
+  Sacado: "MG SAO BENTO AGROPECUARIA E PARTICIPACOES LTDA-Sacado",
+  Dcto: "122/2", "Borderô": 130, "Dt.Emis": "2026-07-31", Vcto: "2026-09-20",
+  [ORIGINAL]: "2026-09-20", Status: "Quitado", Pgto: "2026-09-30",
+  Entrada: 2800, "Vl Pgto": 125, Desagio: 227.05, Encargos: 196,
+  [TOTAL]: 2996, [FEES]: 0, [DISCOUNT]: 0,
+};
+const paymentBalance = { ...partialPayment, Vcto: "2026-09-30", Status: "Aberto", Pgto: null,
+  Entrada: 2871, "Vl Pgto": 0, Desagio: 0, Encargos: 11.48, [TOTAL]: 2882.48 };
+
+test("pagamento parcial marcado Quitado no título 122/2 mantém apenas o saldo aberto", () => {
+  for (const status of ["Quitado", "Liquidado"]) {
+    for (const source of [[paymentBalance, { ...partialPayment, Status: status }], [{ ...partialPayment, Status: status }, paymentBalance]]) {
+      const rows = reconcileSmartPartialRepurchases(source);
+      assert.equal(rows.length, 1);
+      const plan = planSmartTitleUpdates(rows, [{ ...partialPayment, id: 1, Status: "Aberto", Pgto: null, "Vl Pgto": 0 }]);
+      assert.equal(plan.rowsToInsert.length, 0);
+      assert.equal(plan.rowsToUpdate.length, 1);
+      const saved = plan.rowsToUpdate[0].row;
+      assert.equal(saved.Status, "Aberto");
+      assert.equal(saved.Pgto, null);
+      assert.equal(saved["Vl Pgto"], 0);
+      assert.equal(saved.Desagio, 227.05);
+      assert.equal(getPartialRepurchaseEvents(saved)[0].kind, "payment");
+      assert.equal(getPartialRepurchaseEvents(saved).filter(isPartialRepurchaseEvent).length, 0);
+      assert.deepEqual(getSmartTitleAmounts(saved), {
+        originalFace: 2800, accumulatedCharges: 207.48, openBalance: 2871, accumulatedPaid: 125,
+      });
+      assert.equal(applyPortfolioStatuses([saved], new Date(2026, 9, 1))[0]._status, "atraso");
+      const again = planSmartTitleUpdates(rows, [{ ...saved, id: 1 }]);
+      assert.deepEqual(getSmartTitleAmounts(again.rowsToUpdate[0].row), getSmartTitleAmounts(saved));
+      assert.equal(getPartialRepurchaseEvents(again.rowsToUpdate[0].row).length, 1);
+    }
+  }
+});
+
+test("pagamento histórico isolado não pode substituir o saldo importado", () => {
+  const [saved] = reconcileSmartPartialRepurchases([partialPayment, paymentBalance]);
+  assert.throws(() => planSmartTitleUpdates([partialPayment], [{ ...saved, id: 1 }]), /não traz o saldo correspondente/);
+  const planned = planSmartTitleUpdates([paymentBalance], [{ ...saved, id: 1 }]);
+  assert.equal(getPartialRepurchaseEvents(planned.rowsToUpdate[0].row).length, 1);
+});
+
+test("pagamento parcial exige saldo compatível e a quitação integral continua liquidada", () => {
+  assert.throws(() => reconcileSmartPartialRepurchases([partialPayment, { ...paymentBalance, Entrada: 2870 }]), /não confere/);
+  assert.throws(() => reconcileSmartPartialRepurchases([partialPayment, paymentBalance, { ...paymentBalance, Vcto: "2026-10-01" }]), /combinação possível/);
+  const final = { ...paymentBalance, Status: "Quitado", Pgto: "2026-10-01", "Vl Pgto": 2882.48 };
+  const [saved] = reconcileSmartPartialRepurchases([partialPayment, final]);
+  assert.equal(saved.Status, "Quitado");
+  assert.deepEqual(getSmartTitleAmounts(saved), {
+    originalFace: 2800, accumulatedCharges: 207.48, openBalance: 0, accumulatedPaid: 3007.48,
+  });
+  assert.equal(applyPortfolioStatuses([saved], new Date(2026, 9, 1))[0]._status, "liquidadoAtraso");
+  assert.deepEqual(reconcileSmartPartialRepurchases([final]), [final]);
+});
+
+test("sequência com pagamento e recompra mantém os tipos e os totais separados", () => {
+  const second = { ...paymentBalance, Status: "Recomprado", Pgto: "2026-10-01", "Vl Pgto": 882.48 };
+  const remaining = { ...paymentBalance, Vcto: "2026-10-01", Entrada: 2000, Encargos: 0, [TOTAL]: 2000 };
+  const [saved] = reconcileSmartPartialRepurchases([remaining, partialPayment, second]);
+  assert.deepEqual(getPartialRepurchaseEvents(saved).map(event => event.kind), ["payment", "repurchase"]);
+  assert.deepEqual(getSmartTitleAmounts(saved), {
+    originalFace: 2800, accumulatedCharges: 207.48, openBalance: 2000, accumulatedPaid: 1007.48,
+  });
+  const repurchases = getPartialRepurchaseEvents(saved).filter(isPartialRepurchaseEvent);
+  assert.equal(repurchases.length, 1);
+  assert.equal(repurchases[0].paid, 882.48);
+  assert.equal(isPartialRepurchaseEvent({ paid: 125 }), true);
+});
+
+test("recompra integral do saldo depois de pagamento parcial encerra o título", () => {
+  const final = { ...paymentBalance, Status: "Recomprado", Pgto: "2026-10-01", "Vl Pgto": 2882.48 };
+  const [saved] = reconcileSmartPartialRepurchases([partialPayment, final]);
+  assert.equal(saved.Status, "Recomprado");
+  assert.equal(getPartialRepurchaseEvents(saved).length, 1);
+  assert.equal(getPartialRepurchaseEvents(saved)[0].kind, "payment");
+  assert.deepEqual(getSmartTitleAmounts(saved), {
+    originalFace: 2800, accumulatedCharges: 207.48, openBalance: 0, accumulatedPaid: 3007.48,
+  });
+});
 
 test("reconcilia a recompra parcial e mantém só o saldo aberto, sem inventar deságio", () => {
   const rows = reconcileSmartPartialRepurchases([balance, original]);

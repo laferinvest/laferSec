@@ -14,8 +14,15 @@ const cents = (value) => value === null || value === undefined || value === ""
   ? null : (Number.isFinite(Number(value)) ? Math.round(Number(value) * 100) : null);
 const sameEntities = (a, b) => entity(a.Cliente) === entity(b.Cliente) && entity(a.Sacado) === entity(b.Sacado);
 const isRepurchased = (row) => /recompr/.test(normalize(row.Status));
+const isSettled = (row) => /^(quitado|liquidado)(?:\s|$)/.test(normalize(row.Status));
+const isPartialSettlement = (row) => {
+  const total = cents(row[SMART_SOURCE_TOTAL]);
+  const paid = cents(row["Vl Pgto"]);
+  return isSettled(row) && Boolean(parseIsoDateLocal(row.Pgto)) && paid > 0 && total > paid;
+};
 const isOpen = (row) => /^(aberto|a vencer|vencido|em aberto)$/.test(normalize(row.Status)) && !row.Pgto;
-const isRemainingBalance = (row) => !isRepurchased(row) && (isOpen(row) || Boolean(parseIsoDateLocal(row.Pgto)));
+const isRemainingBalance = (row) => !isRepurchased(row) && !isPartialSettlement(row) &&
+  (isOpen(row) || Boolean(parseIsoDateLocal(row.Pgto)));
 const isFullyRepurchased = (row) => {
   const total = cents(row[SMART_SOURCE_TOTAL]);
   const paid = cents(row["Vl Pgto"]);
@@ -26,6 +33,9 @@ const isFullyRepurchased = (row) => {
 export function getPartialRepurchaseEvents(row) {
   return Array.isArray(row?.[SMART_REPURCHASE_HISTORY]?.events) ? row[SMART_REPURCHASE_HISTORY].events : [];
 }
+
+// Older histories contain only repurchases and have no kind field.
+export const isPartialRepurchaseEvent = (event) => event.kind !== "payment";
 
 export function getOriginalSmartTitle(row) {
   return row?.[SMART_REPURCHASE_HISTORY]?.original || row;
@@ -59,7 +69,7 @@ const sourceSnapshot = (row) => {
 };
 
 const reviewError = (row, reason) => new Error(
-  `Recompra parcial do título ${row.Dcto}, OP ${row["Borderô"]}: ${reason}. Revise as linhas antes de importar.`
+  `${isRepurchased(row) ? "Recompra" : "Baixa"} parcial do título ${row.Dcto}, OP ${row["Borderô"]}: ${reason}. Revise as linhas antes de importar.`
 );
 
 export function mergePartialRepurchaseHistory(existing, incoming) {
@@ -93,10 +103,11 @@ export function reconcileSmartPartialRepurchases(rows) {
     const remaining = unique.filter(isRemainingBalance);
     // A final repurchase closes the remaining balance. Its payment belongs
     // to the current row, while earlier partial payments stay in history.
-    if (!remaining.length && repurchased.length > 1) {
+    if (!remaining.length && unique.length > 1) {
       remaining.push(...repurchased.filter(isFullyRepurchased));
     }
-    const previous = repurchased.filter((row) => !remaining.includes(row));
+    const previous = unique.filter((row) =>
+      (isRepurchased(row) || isPartialSettlement(row)) && !remaining.includes(row));
     if (!previous.length || !remaining.length) continue;
     if (remaining.length !== 1 || unique.length !== previous.length + 1) {
       throw reviewError(previous[0], "há mais de uma combinação possível entre recompra e saldo");
@@ -134,6 +145,7 @@ export function reconcileSmartPartialRepurchases(rows) {
     }
     return {
       key: `${buildImportTitleKey(old, true)}__${old.Vcto}__${old.Pgto}`,
+      kind: isRepurchased(old) ? "repurchase" : "payment",
       date: old.Pgto, faceValue: face / 100, charges: Number(old.Encargos || 0),
       fees: Number(old[SMART_SOURCE_FEES] || 0), discount: Number(old[SMART_SOURCE_DISCOUNT] || 0),
       total: total / 100, paid: paid / 100, remaining: balance / 100,
@@ -182,17 +194,17 @@ export function planSmartTitleUpdates(rows, existingRows) {
       if (candidates.length > 1) throw reviewError(source, "mais de um registro existente corresponde ao título");
       if (candidates.length) { existing = candidates[0]; break; }
     }
-    if (existing && !source[SMART_REPURCHASE_HISTORY] && isRepurchased(source) &&
+    if (existing && !source[SMART_REPURCHASE_HISTORY] && (isRepurchased(source) || isPartialSettlement(source)) &&
         getPartialRepurchaseEvents(existing).some((event) => event.date === source.Pgto &&
           event.previousDueDate === source.Vcto && cents(event.paid) === cents(source["Vl Pgto"]))) {
-      throw reviewError(source, "a recompra já está no histórico, mas o arquivo não traz o saldo correspondente");
+      throw reviewError(source, `${isRepurchased(source) ? "a recompra" : "o pagamento"} já está no histórico, mas o arquivo não traz o saldo correspondente`);
     }
     const row = { ...source, [SMART_REPURCHASE_HISTORY]: mergePartialRepurchaseHistory(
       existing?.[SMART_REPURCHASE_HISTORY], source[SMART_REPURCHASE_HISTORY]
     ) };
     if (!existing?.id) { rowsToInsert.push(row); continue; }
     if (matchedExistingIds.has(existing.id)) {
-      throw reviewError(source, "duas linhas tentam atualizar o mesmo registro e não formam uma recompra parcial validada");
+      throw reviewError(source, "duas linhas tentam atualizar o mesmo registro e não formam uma baixa parcial validada");
     }
     matchedExistingIds.add(existing.id);
     for (const field of ["Desagio", "Tx.Efet"]) {

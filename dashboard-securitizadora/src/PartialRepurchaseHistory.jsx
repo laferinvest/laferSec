@@ -9,7 +9,7 @@ export default function PartialRepurchaseHistory({ row, hideValues = false }) {
   const amounts = getSmartTitleAmounts(row);
   return (
     <details style={{ marginTop: 6, minWidth: 240, maxWidth: 360, whiteSpace: "normal", fontSize: 12 }}>
-      <summary style={{ cursor: "pointer", color: "#6d28d9", fontWeight: 600 }}>Recompra parcial · Ver histórico</summary>
+      <summary style={{ cursor: "pointer", color: "#6d28d9", fontWeight: 600 }}>{events.some((event) => event.kind === "payment") ? "Baixas parciais" : "Recompra parcial"} · Ver histórico</summary>
       <div style={{ marginTop: 8, padding: 12, background: "#f5f3ff", border: "1px solid #ddd6fe", borderRadius: 8 }}>
         <div><strong>Título {row.Dcto}</strong> · OP {row["Borderô"]}</div>
         <div>Valor original: <strong>{money(original.Entrada)}</strong></div>
@@ -20,13 +20,13 @@ export default function PartialRepurchaseHistory({ row, hideValues = false }) {
         <div>Deságio original: {money(original.Desagio)}</div>
         {events.map((event) => (
           <div key={event.key} style={{ marginTop: 10, paddingTop: 8, borderTop: "1px solid #ddd6fe" }}>
-            <strong>Recompra parcial em {date(event.date)}</strong>
+            <strong>{event.kind === "payment" ? "Pagamento parcial" : "Recompra parcial"} em {date(event.date)}</strong>
             <div>Multa e juros: {money(event.charges)}</div>
             {event.fees > 0 && <div>Tarifas: {money(event.fees)}</div>}
             {event.discount > 0 && <div>Desconto: {money(event.discount)}</div>}
-            <div>Total antes da recompra: {money(event.total)}</div>
+            <div>Total antes da {event.kind === "payment" ? "baixa" : "recompra"}: {money(event.total)}</div>
             <div>Valor liquidado: <strong>{money(event.paid)}</strong></div>
-            <div>Saldo após a recompra: {money(event.remaining)}</div>
+            <div>Saldo após a {event.kind === "payment" ? "baixa" : "recompra"}: {money(event.remaining)}</div>
           </div>
         ))}
         <div style={{ marginTop: 10, paddingTop: 8, borderTop: "1px solid #ddd6fe" }}>
