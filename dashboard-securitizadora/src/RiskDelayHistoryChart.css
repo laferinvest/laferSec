@@ -1,4 +1,7 @@
 .risk-delay-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; }
+.risk-delay-filters { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px; flex-shrink: 0; max-width: 100%; }
+.risk-delay-filters label { min-width: 0; max-width: 100%; }
+.risk-delay-filters select { max-width: min(300px, 100%); }
 .risk-delay-heading h3 { margin: 4px 0 8px; color: #0f172a; }
 .risk-delay-heading p, .risk-delay-empty { color: #64748b; font-size: 13px; line-height: 1.5; }
 .risk-delay-heading label { display: grid; gap: 6px; color: #475569; font-size: 13px; flex-shrink: 0; }
@@ -10,6 +13,7 @@
 .risk-delay-history summary { cursor: pointer; font-size: 13px; color: #475569; }
 @media (max-width: 640px) {
   .risk-delay-heading { flex-direction: column; gap: 10px; }
+  .risk-delay-filters { width: 100%; }
   .risk-delay-chart { min-height: 180px; }
 }
 .risk-delay-history { font-size: 13px; }

@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from "react";
 import { APPLICATIONS, CAPEX_REASONS, CATALOG_VERSION, FACTORS, FAMILIES, PURPOSES, SECTORS, classificationPath, indicatorsFor, labelFor } from "./cedentesCatalog.js";
 // * Para reativar o antigo painel de contexto, importar ATTRIBUTES, CHANNELS e MARKETS.
 import { NODE_HEIGHT, NODE_WIDTH, buildTree, emptyRecord, flattenTree, layoutTree, normalizeName, validateRecord } from "./cedentesTree.js";
-import { bindPortfolioScope, formatCapital, resolvePortfolioScope, scopeConflict, summarizeLinkedCapital } from "./cedentesPortfolio.js";
+import { availablePortfolioScopes, bindPortfolioScope, formatCapital, resolvePortfolioScope, scopeConflict, summarizeLinkedCapital } from "./cedentesPortfolio.js";
 import { deleteCloudRecord, saveCloudRecord } from "./cedentesCloud.js";
 import { supabase } from "./supabaseClient.js";
 import useCedentesCloud from "./useCedentesCloud.js";
@@ -17,12 +17,12 @@ function TreeIcon() {
   return <svg width="23" height="23" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 6h6v12h8M11 12h8M11 6h8" stroke="currentColor" strokeWidth="1.7" /><circle cx="4" cy="6" r="2.5" fill="currentColor" /><circle cx="20" cy="6" r="2" fill="currentColor" /><circle cx="20" cy="12" r="2" fill="currentColor" /><circle cx="20" cy="18" r="2" fill="currentColor" /></svg>;
 }
 
-function ParcelDetails({ record, hidden, portfolio, onEdit, onDelete, deleting, onAddPath }) {
+function ParcelDetails({ record, hidden, portfolio, onEdit, onDelete, deleting, onAddPath, canAddPath }) {
   const name = (value, placeholder = "Não identificado") => hidden && value ? "Informação oculta" : value || placeholder;
   const balance = resolvePortfolioScope(record, portfolio);
   return <>
     <div className="ct-detail-title"><div><span className="ct-eyebrow">Cedente cadastrado no Supabase</span><h3>{name(record.name)}</h3><p>{name(record.parcel)}</p></div>
-      {!hidden && <div className="ct-actions"><button className="ct-button" disabled={deleting} onClick={onEdit}>Editar classificação</button><button className="ct-button ct-delete" disabled={deleting} onClick={onDelete}>{deleting ? "Excluindo…" : "Excluir classificação"}</button>{record.scope !== "cedente" && <button className="ct-button" disabled={deleting} onClick={onAddPath}>Classificar outro sacado</button>}</div>}
+      {!hidden && <div className="ct-actions"><button className="ct-button" disabled={deleting} onClick={onEdit}>Editar classificação</button><button className="ct-button ct-delete" disabled={deleting} onClick={onDelete}>{deleting ? "Excluindo…" : "Excluir classificação"}</button>{canAddPath && <button className="ct-button" disabled={deleting} onClick={onAddPath}>Classificar outro sacado</button>}</div>}
     </div>
     <ol className="ct-breadcrumb" aria-label="Caminho completo da parcela">{classificationPath(record).map((part) => <li key={part.code}>{part.label}</li>)}</ol>
     {balance.status === "ready" ? <section className="ct-capital-summary" aria-label="Capital da classificação"><div><span>Capital em aberto · {record.scope === "cedente" ? "todos os sacados" : "sacado selecionado"}</span><strong>{formatCapital(balance.capitalCents, hidden)}</strong><small>{balance.titleCount} títulos em aberto</small></div><dl><div><dt>A vencer</dt><dd>{formatCapital(balance.notDueCents, hidden)}</dd></div><div><dt>Vencido</dt><dd>{formatCapital(balance.overdueCents, hidden)}</dd></div></dl></section> : <p className="ct-notice">{balance.message}</p>}
@@ -63,6 +63,7 @@ export function CedentesTreeView({ cloud, refreshCloud, portfolio, refreshPortfo
   const viewport = useRef(null);
   const details = useRef(null);
   const records = cloud.records;
+  const availableScopes = useMemo(() => availablePortfolioScopes(portfolio, records), [portfolio, records]);
   const hasRecordedFactors = records.some((record) => record.factors.length > 0);
   const tree = useMemo(() => buildTree(records, { family, showEmpty, showBuyers }), [records, family, showEmpty, showBuyers]);
   const allNodes = useMemo(() => flattenTree(tree), [tree]);
@@ -182,7 +183,7 @@ export function CedentesTreeView({ cloud, refreshCloud, portfolio, refreshPortfo
     </div>
 
     <section className="ct-details" ref={details} aria-label="Detalhes do ramo selecionado">
-      {detailRecord ? <ParcelDetails record={detailRecord} hidden={hideValues} portfolio={portfolio} deleting={deletingId === detailRecord.id} onDelete={() => removeRecord(detailRecord)} onEdit={() => setWizard(detailRecord)} onAddPath={() => setWizard({ ...emptyRecord(), name: detailRecord.name, cedenteKey: detailRecord.cedenteKey || "", scope: "sacado" })} /> : <>
+      {detailRecord ? <ParcelDetails record={detailRecord} hidden={hideValues} portfolio={portfolio} deleting={deletingId === detailRecord.id} onDelete={() => removeRecord(detailRecord)} onEdit={() => setWizard(detailRecord)} canAddPath={availableScopes.some((item) => item.key === detailRecord.cedenteKey && item.availableBuyers.length > 0)} onAddPath={() => setWizard({ ...emptyRecord(), name: detailRecord.name, cedenteKey: detailRecord.cedenteKey || "", scope: "sacado" })} /> : <>
         <div className="ct-detail-title"><div><span className="ct-eyebrow">{LEVELS[selected.kind]}</span><h3>{selected.kind === "root" ? "Uma carteira, várias dependências econômicas" : selected.kind === "record" && hideValues ? "Cedente oculto" : selected.label}</h3><p>{selected.kind === "root" ? "Siga as conexões da esquerda para a direita. Clique em um cedente para ver a classificação e o capital vinculado." : `${countCedentes(selectedRecords)} cedentes em ${selectedRecords.length} classificações neste ramo.`}</p>{capitalByNode.get(selected.id)?.linked > 0 && <p><strong>{formatCapital(capitalByNode.get(selected.id).capitalCents, hideValues)}</strong> de capital em aberto vinculado{capitalByNode.get(selected.id).unavailable ? " · há classificações sem saldo identificado" : ""}</p>}</div><span className="ct-badge">Catálogo · {CATALOG_VERSION.split("-").reverse().join("/")}</span></div>
         {selected.kind === "root" ? <div className="ct-explain-grid"><div><span>01</span><h4>Destino, depois atividade</h4><p>Metal, plástico e frete podem depender da mesma cadeia automotiva, mesmo com atividades diferentes.</p></div><div><span>02</span><h4>O choque percorre a cadeia</h4><p>Menor produção do comprador pode reduzir os pedidos ao fornecedor e pressionar sua receita e seu caixa.</p></div><div><span>03</span><h4>O desconhecido fica visível</h4><p>Classifique até onde houver evidência. Recorrência de demanda não garante margem ou pagamento.</p></div></div> : <>
           {selected.description && <p className="ct-help">{selected.description}</p>}

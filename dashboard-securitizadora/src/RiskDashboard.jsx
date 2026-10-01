@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "./supabaseClient";
 import { getOriginalSmartTitle } from "./smartPartialRepurchaseRules";
-import { calculateRiskExposure, getRiskReferenceDay } from "./riskDelayHistory";
+import { buildRiskCedenteOptions, calculateRiskExposure, getRiskReferenceDay } from "./riskDelayHistory";
 import RiskDelayHistoryChart from "./RiskDelayHistoryChart";
 import {
   calcularDiasAtrasoTitulo,
@@ -601,7 +601,7 @@ function OverviewView({ data, hidden, limits, alerts = [] }) {
         </article>
       </section>
 
-      <RiskDelayHistoryChart hidden={hidden} />
+      <RiskDelayHistoryChart hidden={hidden} cedentes={data.riskCedentes} />
 
       <section>
         <SectionHeader
@@ -1041,6 +1041,7 @@ export default function RiskDashboard({ session, hideValues, setHideValues }) {
       allRows,
       openRows,
       totalOpen,
+      riskCedentes: buildRiskCedenteOptions(rows),
       patrimonio,
       cedenteStats,
       sacadoStats,

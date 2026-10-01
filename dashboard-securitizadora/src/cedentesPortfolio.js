@@ -1,4 +1,5 @@
 import { applyPortfolioStatuses, isValidPortfolioRow } from "./portfolioRiskRules.js";
+import { isCedenteNameVisible } from "./cedentesVisibility.js";
 
 const LEGAL_SUFFIXES = new Set(["ltda", "lt", "me", "eireli", "epp", "sa", "s/a", "ss", "s/s", "mei", "com", "comercio", "industria", "servicos", "servico", "importacao", "exportacao"]);
 export const displayEntityName = (name) => String(name || "").trim().replace(/^\d+\s*-\s*/, "").replace(/\s*-\s*sacado\s*$/i, "");
@@ -116,6 +117,21 @@ export function scopeConflict(records, candidate) {
   if (conflict.scope === "cedente") return "Este cedente já está classificado por inteiro. Edite essa classificação para evitar contar o mesmo capital novamente.";
   if (candidate.scope === "cedente") return "Já existem sacados classificados para este cedente. Edite os vínculos existentes antes de classificar o cedente inteiro, para não duplicar o capital.";
   return "Este sacado já está classificado para o cedente. Edite a classificação existente para evitar duplicidade.";
+}
+
+export function availablePortfolioScopes(portfolio, records, editingId = "") {
+  // Ao editar, o vínculo atual fica disponível; os demais continuam reservados.
+  const occupied = records.filter((record) => !editingId || record.id !== editingId);
+  const editingRecord = editingId ? records.find((record) => record.id === editingId) : null;
+  return portfolio.cedentes.filter((cedente) => cedente.key === editingRecord?.cedenteKey
+    || isCedenteNameVisible(cedente.name, ...(cedente.aliases || []))).map((cedente) => {
+    const candidate = { cedenteKey: cedente.key };
+    const canClassifyWhole = !scopeConflict(occupied, { ...candidate, scope: "cedente" });
+    const availableBuyers = cedente.buyers.filter((buyer) => !scopeConflict(occupied, {
+      ...candidate, scope: "sacado", sacadoKey: buyer.key,
+    }));
+    return { ...cedente, canClassifyWhole, availableBuyers };
+  }).filter((cedente) => cedente.canClassifyWhole || cedente.availableBuyers.length > 0);
 }
 
 export function summarizeLinkedCapital(records, portfolio) {

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "./supabaseClient";
-import { loadRiskDelayHistory } from "./riskDelayHistory";
+import { isRiskCedenteVisible, loadRiskDelayCedentes, loadRiskDelayHistory } from "./riskDelayHistory";
 import "./RiskDelayHistoryChart.css";
 
 const percent = (value) => value === null ? "Sem exposição em aberto" : `${(value * 100).toFixed(2).replace(".", ",")}%`;
@@ -8,15 +8,19 @@ const dateLabel = (value) => value.split("-").reverse().join("/");
 const timestamp = (day) => Date.parse(`${day}T12:00:00Z`);
 const money = (value, hidden) => hidden ? "R$ ••••••" : new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
 
-export default function RiskDelayHistoryChart({ hidden }) {
+export default function RiskDelayHistoryChart({ hidden, cedentes = [] }) {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [revision, setRevision] = useState(0);
   const [range, setRange] = useState("90");
   const [selected, setSelected] = useState(null);
+  const [cedenteKey, setCedenteKey] = useState("");
+  const [savedCedentes, setSavedCedentes] = useState([]);
+  const [cedentesError, setCedentesError] = useState("");
   const chartContainer = useRef(null);
   const [chartWidth, setChartWidth] = useState(940);
+  const activeCedenteKey = isRiskCedenteVisible({ cedente_key: cedenteKey }) ? cedenteKey : "";
 
   useEffect(() => {
     const observer = new ResizeObserver(([entry]) => setChartWidth(Math.max(entry.contentRect.width, 1)));
@@ -26,12 +30,25 @@ export default function RiskDelayHistoryChart({ hidden }) {
 
   useEffect(() => {
     let cancelled = false;
-    loadRiskDelayHistory(supabase).then((rows) => {
+    loadRiskDelayCedentes(supabase).then((options) => {
+      if (!cancelled) { setSavedCedentes(options); setCedentesError(""); }
+    }).catch((err) => { if (!cancelled) setCedentesError(err.message); });
+    return () => { cancelled = true; };
+  }, [revision]);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadRiskDelayHistory(supabase, activeCedenteKey).then((rows) => {
       if (!cancelled) { setHistory(rows); setError(""); }
     }).catch((err) => { if (!cancelled) setError(err.message); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [revision]);
+  }, [revision, activeCedenteKey]);
+
+  const options = [...new Map([...savedCedentes, ...cedentes].map((item) => [item.cedente_key, item])).values()]
+    .filter(isRiskCedenteVisible)
+    .sort((a, b) => a.cedente.localeCompare(b.cedente, "pt-BR"));
+  const seriesLabel = options.find((item) => item.cedente_key === activeCedenteKey)?.cedente || "Carteira";
 
   const last = history.at(-1);
   const cutoff = last && range !== "all" ? timestamp(last.data_referencia) - (Number(range) - 1) * 86400000 : -Infinity;
@@ -55,14 +72,21 @@ export default function RiskDelayHistoryChart({ hidden }) {
     <div className="risk-delay-heading">
       <div><div className="risk-kicker">Evolução da carteira</div><h3>Histórico do percentual de atraso</h3>
         <p>Exposição vencida ÷ exposição em aberto.</p></div>
-      <label>Período <select value={range} onChange={(event) => { setRange(event.target.value); setSelected(null); }}>
+      <div className="risk-delay-filters"><label>Período <select value={range} onChange={(event) => { setRange(event.target.value); setSelected(null); }}>
         <option value="30">30 dias</option><option value="90">90 dias</option><option value="all">Todo o histórico</option>
       </select></label>
+      <label>Carteira / cedente <select value={activeCedenteKey} onChange={(event) => {
+        setCedenteKey(event.target.value); setHistory([]); setLoading(true); setError(""); setSelected(null);
+      }}>
+        <option value="">Carteira</option>
+        {options.map((item) => <option key={item.cedente_key} value={item.cedente_key}>{item.cedente}</option>)}
+      </select></label></div>
     </div>
+    {cedentesError && <p role="alert">Não foi possível carregar a lista completa de cedentes. <button className="risk-config-button" onClick={() => setRevision((value) => value + 1)}>Tentar novamente</button></p>}
     {loading ? <p role="status">Carregando histórico…</p> : error ? <div role="alert"><p>Não foi possível carregar o histórico: {error}</p>
       <button className="risk-config-button" onClick={() => { setLoading(true); setRevision((value) => value + 1); }}>Tentar novamente</button></div>
-      : !last ? <p className="risk-delay-empty">O histórico começa na próxima atualização da base. Dias sem atualização não terão registro.</p> : <>
-        {valid.length > 0 ? <svg className="risk-delay-chart" viewBox={`0 0 ${chartWidth} 290`} role="group" aria-label="Evolução do percentual de atraso por data de atualização">
+      : !last ? <p className="risk-delay-empty">{activeCedenteKey ? "Este cedente ainda não tem registros. O histórico por cedente começa na próxima atualização da base." : "O histórico começa na próxima atualização da base. Dias sem atualização não terão registro."}</p> : <>
+        {valid.length > 0 ? <svg className="risk-delay-chart" viewBox={`0 0 ${chartWidth} 290`} role="group" aria-label={`Evolução do percentual de atraso: ${seriesLabel}`}>
           {[0, 1, 2, 3, 4].map((tick) => <g key={tick}>
             <line x1="70" x2={plotRight} y1={235 - tick * 50} y2={235 - tick * 50} stroke="#e2e8f0" />
             <text x="60" y={240 - tick * 50} textAnchor="end">{(yMax * tick / 4 * 100).toFixed(1).replace(".", ",")}%</text>

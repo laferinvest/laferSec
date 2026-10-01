@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { bindPortfolioScope, buildPortfolioIndex, fetchPortfolioTable, loadCedentesPortfolio, portfolioEntityKey, resolvePortfolioScope, scopeConflict, summarizeLinkedCapital } from "./cedentesPortfolio.js";
+import { availablePortfolioScopes, bindPortfolioScope, buildPortfolioIndex, fetchPortfolioTable, loadCedentesPortfolio, portfolioEntityKey, resolvePortfolioScope, scopeConflict, summarizeLinkedCapital } from "./cedentesPortfolio.js";
 import { buildTree, emptyRecord, flattenTree, validateRecord } from "./cedentesTree.js";
 
 const TODAY = new Date(2026, 8, 29);
@@ -73,6 +73,67 @@ test("bloqueia dupla classificação do mesmo sacado e sobreposição com cedent
   assert.ok(scopeConflict([buyer], record({ id: "other", sector: "SET-A2" })));
   assert.equal(scopeConflict([buyer], record({ id: "other", sacadoKey: "outro" })), "");
   assert.equal(scopeConflict([buyer], buyer), "");
+});
+
+test("cadastro esconde cedente inteiro e deixa só sacados ainda não classificados", () => {
+  const portfolio = index([row(1), row(2, { Sacado: "Segundo comprador" }),
+    row(3, { Cliente: "Cedente Beta", Sacado: "Horizonte Alimentos" })]);
+  const whole = record({ id: "whole-beta", cedenteKey: portfolioEntityKey("Cedente Beta"), scope: "cedente", sacadoKey: "", buyer: "" });
+  const available = availablePortfolioScopes(portfolio, [record(), whole]);
+  assert.equal(available.length, 1);
+  assert.equal(available[0].key, portfolioEntityKey("Aurora Máquinas"));
+  assert.equal(available[0].canClassifyWhole, false);
+  assert.deepEqual(available[0].availableBuyers.map((buyer) => buyer.key), [portfolioEntityKey("Segundo comprador")]);
+  // O vínculo do mesmo sacado em outro cedente continua independente.
+  assert.equal(availablePortfolioScopes(portfolio, [record()]).find((item) => item.key === whole.cedenteKey).availableBuyers.length, 1);
+});
+
+test("cedente some quando todos os sacados estão classificados e volta após excluir um vínculo", () => {
+  const portfolio = index([row(1), row(2, { Sacado: "Segundo comprador" })]);
+  const second = record({ id: "second", sacadoKey: portfolioEntityKey("Segundo comprador"), buyer: "Segundo comprador" });
+  assert.deepEqual(availablePortfolioScopes(portfolio, [record(), second]), []);
+  const reopened = availablePortfolioScopes(portfolio, [second]);
+  assert.deepEqual(reopened[0].availableBuyers.map((buyer) => buyer.key), [record().sacadoKey]);
+  assert.equal(reopened[0].canClassifyWhole, false);
+  assert.equal(availablePortfolioScopes(portfolio, [])[0].canClassifyWhole, true);
+});
+
+test("edição mantém o próprio vínculo disponível sem liberar os de outras classificações", () => {
+  const portfolio = index([row(1), row(2, { Sacado: "Segundo comprador" })]);
+  const first = record();
+  const second = record({ id: "second", sacadoKey: portfolioEntityKey("Segundo comprador"), buyer: "Segundo comprador" });
+  const editing = availablePortfolioScopes(portfolio, [first, second], first.id)[0];
+  assert.equal(editing.canClassifyWhole, false);
+  assert.deepEqual(editing.availableBuyers.map((buyer) => buyer.key), [first.sacadoKey]);
+  const whole = record({ scope: "cedente", sacadoKey: "", buyer: "" });
+  assert.deepEqual(availablePortfolioScopes(portfolio, [whole]), []);
+  const editingWhole = availablePortfolioScopes(portfolio, [whole], whole.id)[0];
+  assert.equal(editingWhole.canClassifyWhole, true);
+  assert.equal(editingWhole.availableBuyers.length, 2);
+});
+
+test("cadastro na árvore oculta os mesmos nomes da inadimplência sem alterar o capital", () => {
+  const hiddenNames = ["59 399 143 SHIRLEI APARECIDA", "ATACADO PRIMUS LTDA", "COMPANHIA UAI",
+    "EMPÓRIO TROVOADA", "GRID MOTORS", "INDUMAX", "INOVA", "J.L. COMERCIO", "KAMMER",
+    "LELECO", "M.G. LTDA", "MARCENARIA", "MILK LAT", "R10", "REGES", "S.L. LTDA",
+    "SOLUÇÃO COMERCIO", "VISUAL", "LUIS CARLOS LELECO", "59.339 EMPRESA LTDA",
+    "COMERCIAL ATACADO PRIMU LTDA", "LAFER INVEST"];
+  const portfolio = index([row(100), ...hiddenNames.map((Cliente, i) => row(i, { Cliente }))]);
+  const capitalBefore = portfolio.totalCents;
+  const available = availablePortfolioScopes(portfolio, []);
+  assert.deepEqual(available.map((item) => item.key), [record().cedenteKey]);
+  assert.equal(portfolio.cedentes.length, hiddenNames.length + 1);
+  assert.equal(portfolio.totalCents, capitalBefore);
+  assert.equal(capitalBefore, (hiddenNames.length + 1) * 10000);
+});
+
+test("nomes ocultos continuam editáveis e aliases são considerados no cadastro", () => {
+  const portfolio = index([row(1, { Cliente: "59 399 143 SHIRLEI APARECIDA" })]);
+  const existing = record({ cedenteKey: portfolio.cedentes[0].key });
+  assert.deepEqual(availablePortfolioScopes(portfolio, []), []);
+  assert.equal(availablePortfolioScopes(portfolio, [existing], existing.id)[0].key, existing.cedenteKey);
+  const aliases = { cedentes: [{ ...portfolio.cedentes[0], name: "Outro rótulo", aliases: ["LAFER INVEST"] }] };
+  assert.deepEqual(availablePortfolioScopes(aliases, []), []);
 });
 
 test("saldo agregado usa a união dos vínculos e sinaliza classificações antigas sem saldo", () => {
