@@ -2,7 +2,7 @@ import { APPLICATIONS, ATTRIBUTES, CAPEX_REASONS, CATALOG_VERSION, CHANNELS, DIR
 import { scopeConflict } from "./cedentesPortfolio.js";
 
 export const NODE_WIDTH = 202;
-export const NODE_HEIGHT = 126;
+export const NODE_HEIGHT = 164;
 export const COLUMN_GAP = 44;
 const ROW_GAP = 22;
 
@@ -19,7 +19,8 @@ export function buildTree(records, { family = "all", showEmpty = false, showBuye
     }
     return node;
   };
-  FAMILIES.filter((item) => family === "all" || item.code === family).forEach((item) => {
+  const classifiedFamilies = new Set(records.map((record) => record.family));
+  FAMILIES.filter((item) => classifiedFamilies.has(item.code) && (family === "all" || item.code === family)).forEach((item) => {
     const branch = addNode(root, { ...item, kind: "family" });
     if (showEmpty) SECTORS.filter((sector) => sector.family === item.code).forEach((sector) => addNode(branch, { ...sector, kind: "sector" }));
   });

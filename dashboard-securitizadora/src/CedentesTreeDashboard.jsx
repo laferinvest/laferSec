@@ -12,6 +12,7 @@ import "./CedentesTreeDashboard.css";
 
 const LEVELS = { root: "Tronco", family: "Família econômica", sector: "Setor de destino", purpose: "Finalidade econômica", application: "Aplicação", record: "Cedente" };
 const countCedentes = (records) => new Set(records.map((record) => record.cedenteKey || normalizeName(record.name))).size;
+const overduePercentFormatter = new Intl.NumberFormat("pt-BR", { style: "percent", minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 function TreeIcon() {
   return <svg width="23" height="23" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 6h6v12h8M11 12h8M11 6h8" stroke="currentColor" strokeWidth="1.7" /><circle cx="4" cy="6" r="2.5" fill="currentColor" /><circle cx="20" cy="6" r="2" fill="currentColor" /><circle cx="20" cy="12" r="2" fill="currentColor" /><circle cx="20" cy="18" r="2" fill="currentColor" /></svg>;
@@ -63,9 +64,11 @@ export function CedentesTreeView({ cloud, refreshCloud, portfolio, refreshPortfo
   const viewport = useRef(null);
   const details = useRef(null);
   const records = cloud.records;
+  const classifiedFamilies = useMemo(() => FAMILIES.filter((item) => records.some((record) => record.family === item.code)), [records]);
+  const activeFamily = classifiedFamilies.some((item) => item.code === family) ? family : "all";
   const availableScopes = useMemo(() => availablePortfolioScopes(portfolio, records), [portfolio, records]);
   const hasRecordedFactors = records.some((record) => record.factors.length > 0);
-  const tree = useMemo(() => buildTree(records, { family, showEmpty, showBuyers }), [records, family, showEmpty, showBuyers]);
+  const tree = useMemo(() => buildTree(records, { family: activeFamily, showEmpty, showBuyers }), [records, activeFamily, showEmpty, showBuyers]);
   const allNodes = useMemo(() => flattenTree(tree), [tree]);
   const layout = useMemo(() => layoutTree(tree, collapsed), [tree, collapsed]);
   const selected = allNodes.find((node) => node.id === selectedId) || allNodes.find((node) => node.kind === "record" && node.recordIds.includes(selectedId.replace(/^record\//, ""))) || tree;
@@ -74,7 +77,7 @@ export function CedentesTreeView({ cloud, refreshCloud, portfolio, refreshPortfo
   const capitalByNode = useMemo(() => new Map(allNodes.map((node) => [node.id, summarizeLinkedCapital(records.filter((record) => node.recordIds.includes(record.id)), portfolio)])), [allNodes, records, portfolio]);
   const selectedNode = layout.nodes.find((node) => node.id === selected.id);
   const selectedPath = new Set([selected.id, ...(selectedNode?.ancestors || [])]);
-  const visibleRecords = records.filter((record) => family === "all" || record.family === family);
+  const visibleRecords = records.filter((record) => activeFamily === "all" || record.family === activeFamily);
   const matchingIds = useMemo(() => new Set(visibleRecords.filter((record) => {
     const text = [...classificationPath(record).map((part) => part.label), ...record.factors.map((factor) => labelFor(FACTORS, factor.code)), ...(!hideValues ? [record.name, record.parcel, record.buyer, record.downstream] : [])].join(" ");
     return (!query || normalizeName(text).includes(normalizeName(query))) && (!factorCode || record.factors.some((factor) => factor.code === factorCode));
@@ -130,7 +133,7 @@ export function CedentesTreeView({ cloud, refreshCloud, portfolio, refreshPortfo
   return <section className="cedentes-tree" aria-labelledby="ct-title">
     <header className="ct-hero"><div className="ct-hero-copy"><span className="ct-eyebrow"><TreeIcon /> Mapa de exposição econômica</span><h2 id="ct-title">Árvore de cedentes</h2><p>Descubra onde as vendas se conectam — e como uma mudança na economia pode percorrer a sua carteira.</p></div><button className="ct-button ct-primary ct-add" disabled={cloud.status !== "ready"} onClick={() => setWizard(emptyRecord())}><span aria-hidden="true">+</span> Adicionar cedente</button></header>
 
-    <div className="ct-overview"><div><strong>{FAMILIES.length}</strong><span>famílias econômicas</span></div><div><strong>{SECTORS.length}</strong><span>setores no catálogo</span></div><div><strong>{countCedentes(records)}</strong><span>cedentes cadastrados</span></div><div><strong>{records.length}</strong><span>classificações</span></div><div className="ct-overview-caption"><span className="ct-small-dot" />Destino da venda como eixo principal<br /><small>Um cedente pode ocupar mais de um caminho.</small></div></div>
+    <div className="ct-overview"><div><strong>{classifiedFamilies.length}</strong><span>famílias classificadas</span></div><div><strong>{SECTORS.length}</strong><span>setores no catálogo</span></div><div><strong>{countCedentes(records)}</strong><span>cedentes cadastrados</span></div><div><strong>{records.length}</strong><span>classificações</span></div><div className="ct-overview-caption"><span className="ct-small-dot" />Destino da venda como eixo principal<br /><small>Um cedente pode ocupar mais de um caminho.</small></div></div>
 
     <div className="ct-data-banner"><div><strong>Classificações da equipe · salvas no Supabase</strong><p>Cedentes, sacados e capital vêm da carteira; os caminhos econômicos ficam disponíveis para a equipe autorizada.</p></div></div>
     <div className="ct-portfolio-status"><span role="status">{cloud.status === "loading" ? "Carregando classificações do Supabase…" : cloud.status === "error" ? cloud.error : `${records.length} classificações carregadas do Supabase`}</span><button className="ct-button ct-small" disabled={cloud.status === "loading"} onClick={refreshCloud}>Atualizar árvore</button></div>
@@ -143,7 +146,7 @@ export function CedentesTreeView({ cloud, refreshCloud, portfolio, refreshPortfo
       <div className="ct-map-header"><div><h3>Do destino econômico ao cedente</h3><p>Selecione um nó para entender o caminho. Use + e − nos ramos para abrir ou recolher.</p></div><button className="ct-text-button" onClick={() => { setHideValues(!hideValues); setQuery(""); }}>{hideValues ? "Mostrar nomes" : "Ocultar nomes"}</button></div>
       <div className="ct-toolbar">
         <label className="ct-search"><span className="ct-sr-only">Buscar na árvore</span><svg viewBox="0 0 20 20" width="18" height="18" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="5.5" stroke="currentColor" strokeWidth="1.5" /><path d="m12 12 5 5" stroke="currentColor" strokeWidth="1.5" /></svg><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={hideValues ? "Buscar classificação…" : "Buscar cedente, setor ou sacado…"} /></label>
-        <label className="ct-toolbar-select"><span>Ramos</span><select aria-label="Filtrar família econômica" value={family} onChange={(event) => { setFamily(event.target.value); resetView(); }}><option value="all">Todas as famílias</option>{FAMILIES.map((item) => <option key={item.code} value={item.code}>{item.label}</option>)}</select></label>
+        <label className="ct-toolbar-select"><span>Ramos</span><select aria-label="Filtrar família econômica" value={activeFamily} onChange={(event) => { setFamily(event.target.value); resetView(); }}><option value="all">Todas as famílias</option>{classifiedFamilies.map((item) => <option key={item.code} value={item.code}>{item.label}</option>)}</select></label>
         {hasRecordedFactors && <label className="ct-toolbar-select"><span>Fator em comum</span><select aria-label="Destacar fator de exposição" value={factorCode} onChange={(event) => { setFactorCode(event.target.value); setCollapsed(new Set()); }}><option value="">Todos os fatores</option>{FACTORS.map((item) => <option key={item.code} value={item.code}>{item.label}</option>)}</select></label>}
       </div>
       {factor && <div className="ct-factor-banner"><strong>{factor.label}</strong><span>{factor.description} Os caminhos destacados têm esse vínculo registrado.</span><button className="ct-text-button" onClick={() => setFactorCode("")}>Limpar destaque</button></div>}
@@ -151,34 +154,39 @@ export function CedentesTreeView({ cloud, refreshCloud, portfolio, refreshPortfo
       <div className="ct-map-actions"><div className="ct-actions"><button className="ct-button ct-small" onClick={() => setCollapsed(new Set())}>Expandir tudo</button><button className="ct-button ct-small" onClick={() => { setCollapsed(new Set(allNodes.filter((node) => node.kind === "family").map((node) => node.id))); viewport.current?.scrollTo({ top: 0, left: 0 }); }}>Recolher ramos</button><label className="ct-inline-check"><input type="checkbox" checked={showEmpty} onChange={(event) => setShowEmpty(event.target.checked)} />Mostrar setores sem classificações</label></div>
         <div className="ct-zoom"><button aria-label="Diminuir zoom" disabled={zoom <= 0.7} onClick={() => setZoom((value) => Math.max(0.7, Math.round((value - 0.1) * 100) / 100))}>−</button><output aria-label="Zoom atual">{Math.round(zoom * 100)}%</output><button aria-label="Aumentar zoom" disabled={zoom >= 1.4} onClick={() => setZoom((value) => Math.min(1.4, Math.round((value + 0.1) * 100) / 100))}>+</button><button onClick={() => { setZoom(Math.max(0.7, Math.min(1, (viewport.current.clientWidth - 12) / layout.width))); viewport.current.scrollTo({ top: 0, left: 0 }); }}>Ajustar</button></div>
       </div>
-      <div className="ct-canvas" ref={viewport} tabIndex={0} role="region" aria-label="Árvore de exposição econômica. Use as barras de rolagem ou as setas para navegar." style={{ height: family === "all" ? 640 : 560 }}>
+      <div className="ct-canvas" ref={viewport} tabIndex={0} role="region" aria-label="Árvore de exposição econômica. Use as barras de rolagem ou as setas para navegar." style={{ height: activeFamily === "all" ? 640 : 560 }}>
         <div className="ct-canvas-size" style={{ width: layout.width * zoom, height: layout.height * zoom }}><div className="ct-canvas-content" style={{ width: layout.width, height: layout.height, transform: `scale(${zoom})` }}>
           {["CARTEIRA", "FAMÍLIA ECONÔMICA", "SETOR DE DESTINO", "FINALIDADE", "APLICAÇÃO", showBuyers ? "CEDENTE / SACADO" : "CEDENTE"].map((label, index) => layout.nodes.some((node) => node.depth === index) && <span className="ct-column-label" key={label} style={{ left: 26 + index * 246 }}>{label}</span>)}
           <svg className="ct-connections" width={layout.width} height={layout.height} aria-hidden="true">{layout.edges.map(({ from, to }) => {
             const x1 = from.x + NODE_WIDTH; const y1 = from.y + NODE_HEIGHT / 2; const x2 = to.x; const y2 = to.y + NODE_HEIGHT / 2;
             const highlighted = selectedPath.has(from.id) && selectedPath.has(to.id);
             const muted = isFiltering && !to.recordIds.some((id) => matchingIds.has(id));
-            return <path key={to.id} d={`M${x1},${y1} C${x1 + 24},${y1} ${x2 - 24},${y2} ${x2},${y2}`} fill="none" stroke={to.color} strokeWidth={highlighted ? 3 : 1.6} opacity={muted ? 0.12 : highlighted ? 1 : 0.46} />;
+            const inactive = capitalByNode.get(to.id)?.inactive;
+            return <path key={to.id} d={`M${x1},${y1} C${x1 + 24},${y1} ${x2 - 24},${y2} ${x2},${y2}`} fill="none" stroke={inactive ? "#9ca3af" : to.color} strokeWidth={highlighted ? 3 : 1.6} opacity={muted ? 0.12 : highlighted ? 1 : 0.46} />;
           })}</svg>
           {layout.nodes.map((node) => {
             const muted = isFiltering && !node.recordIds.some((id) => matchingIds.has(id)) && !(!factorCode && normalizeName(node.label).includes(normalizeName(query)));
             const selectedHere = selected.id === node.id;
             const label = node.kind === "record" && hideValues ? "Cedente oculto" : node.label;
             const balance = capitalByNode.get(node.id);
+            const overduePercentage = hideValues ? "•••%" : balance.capitalCents > 0 ? overduePercentFormatter.format(balance.overdueCents / balance.capitalCents) : "—";
+            const inactive = node.kind !== "root" && balance.inactive;
+            const capitalLabel = balance.inactive ? (balance.linked ? "Sem capital em aberto" : "Sem capital vinculado") : balance.linked ? `${formatCapital(balance.capitalCents, hideValues)}${balance.unavailable ? " · parcial" : ""}` : portfolio.status === "loading" ? "Carregando capital…" : portfolio.status === "error" ? "Capital indisponível" : "Capital não vinculado";
             const buyerLabel = node.kind === "record" ? (node.record.scope === "cedente" ? "Todos os sacados" : hideValues ? "Sacado oculto" : node.record.buyer || "Sacado não identificado") : "";
-            return <div key={node.id} className={`ct-node ct-node-${node.kind} ${selectedHere ? "is-selected" : ""} ${muted ? "is-muted" : ""} ${isFiltering && !muted ? "is-match" : ""}`} style={{ left: node.x, top: node.y, width: NODE_WIDTH, height: NODE_HEIGHT, "--branch-color": node.color }}>
-              <button className="ct-node-main" title={showBuyers && node.kind === "record" ? `${label}\n${buyerLabel}` : label} aria-label={`Ver ${LEVELS[node.kind]}: ${label}${showBuyers && node.kind === "record" ? ` — ${buyerLabel}` : ""}`} aria-pressed={selectedHere} onClick={() => selectNode(node, node.kind === "record")}>
+            return <div key={node.id} className={`ct-node ct-node-${node.kind} ${inactive ? "is-inactive" : ""} ${selectedHere ? "is-selected" : ""} ${muted ? "is-muted" : ""} ${isFiltering && !muted ? "is-match" : ""}`} style={{ left: node.x, top: node.y, width: NODE_WIDTH, height: NODE_HEIGHT, "--branch-color": inactive ? "#9ca3af" : node.color }}>
+              <button className="ct-node-main" title={showBuyers && node.kind === "record" ? `${label}\n${buyerLabel}` : label} aria-label={`Ver ${LEVELS[node.kind]}: ${label}${showBuyers && node.kind === "record" ? ` — ${buyerLabel}` : ""}${inactive ? ` — ${capitalLabel.toLowerCase()}` : ""}`} aria-pressed={selectedHere} onClick={() => selectNode(node, node.kind === "record")}>
                 <span className="ct-node-type">{node.kind === "record" ? "Cedente" : LEVELS[node.kind]}</span><strong>{label}</strong>
                 {node.kind === "record" && showBuyers && <small className="ct-node-buyer">{buyerLabel}</small>}
                 {(node.kind !== "record" || (!showBuyers && node.recordIds.length > 1)) && <small>{node.recordIds.length} {node.recordIds.length === 1 ? "classificação" : "classificações"}</small>}
-                {node.recordIds.length > 0 && <small className="ct-node-capital">{balance.linked ? `${formatCapital(balance.capitalCents, hideValues)}${balance.unavailable ? " · parcial" : ""}` : portfolio.status === "loading" ? "Carregando capital…" : portfolio.status === "error" ? "Capital indisponível" : "Capital não vinculado"}</small>}
+                {node.recordIds.length > 0 && <small className="ct-node-capital">{capitalLabel}</small>}
+                {balance.linked > 0 && <small className="ct-node-overdue">Vencido: {formatCapital(balance.overdueCents, hideValues)} ({overduePercentage}){balance.unavailable ? " · parcial" : ""}</small>}
               </button>
               {node.children.length > 0 && <button className="ct-node-toggle" aria-label={`${collapsed.has(node.id) ? "Expandir" : "Recolher"} ${label}`} aria-expanded={!collapsed.has(node.id)} onClick={() => toggleNode(node.id)}>{collapsed.has(node.id) ? "+" : "−"}</button>}
             </div>;
           })}
         </div></div>
       </div>
-      <div className="ct-map-footer"><span><i className="ct-legend-dot" />Cor identifica a família, não o nível de risco.</span><span role="status">{isFiltering ? `${matchingIds.size} ${matchingIds.size === 1 ? "classificação destacada" : "classificações destacadas"}` : `${visibleRecords.length} ${visibleRecords.length === 1 ? "classificação" : "classificações"} nesta visão`} · role para explorar ↔</span></div>
+      <div className="ct-map-footer"><span><i className="ct-legend-dot" />Cor identifica a família. Cinza indica classificação sem capital vinculado atualmente.</span><span role="status">{isFiltering ? `${matchingIds.size} ${matchingIds.size === 1 ? "classificação destacada" : "classificações destacadas"}` : `${visibleRecords.length} ${visibleRecords.length === 1 ? "classificação" : "classificações"} nesta visão`} · role para explorar ↔</span></div>
       {isFiltering && !matchingIds.size && <p className="ct-empty-search">Nenhuma classificação corresponde à busca e ao fator nesta família. <button className="ct-text-button" onClick={() => { setQuery(""); setFactorCode(""); setFamily("all"); }}>Limpar filtros</button></p>}
     </div>
 

@@ -137,10 +137,36 @@ test("nomes ocultos continuam editáveis e aliases são considerados no cadastro
 });
 
 test("saldo agregado usa a união dos vínculos e sinaliza classificações antigas sem saldo", () => {
-  const portfolio = index([row(1), row(2, { Sacado: "Segundo comprador", Entrada: 200 })]);
+  const portfolio = index([row(1, { Vcto: "2026-09-01" }), row(2, { Sacado: "Segundo comprador", Entrada: 200 }),
+    row(3, { Sacado: "Segundo comprador", Entrada: 25.50, Vcto: "2026-09-01" }),
+    row(4, { Entrada: 80, Vcto: "2026-09-01", Pgto: "2026-09-20" })]);
   const result = summarizeLinkedCapital([record(), record({ id: "whole", scope: "cedente", sacadoKey: "", buyer: "" }), record({ id: "old", scope: "" })], portfolio);
-  assert.equal(result.capitalCents, 30000);
+  assert.equal(result.capitalCents, 32550);
+  assert.equal(result.overdueCents, 12550);
+  assert.equal(summarizeLinkedCapital([record()], portfolio).overdueCents, 10000);
   assert.equal(result.unavailable, 1);
+});
+
+test("ramos sem capital atual ficam inativos e voltam a ativos com nova exposição", () => {
+  const scoped = record();
+  const zero = index([row(1, { Pgto: "2026-09-29" })]);
+  assert.equal(summarizeLinkedCapital([scoped], zero).inactive, true);
+  assert.equal(summarizeLinkedCapital([scoped], index([])).inactive, true);
+  assert.equal(summarizeLinkedCapital([scoped], index([row(1)])).inactive, false);
+  const other = record({ id: "other", sacadoKey: portfolioEntityKey("Outro sacado"), buyer: "Outro sacado" });
+  const mixed = index([row(1, { Pgto: "2026-09-29" }), row(2, { Sacado: "Outro sacado" })]);
+  assert.equal(summarizeLinkedCapital([scoped], mixed).inactive, true);
+  assert.equal(summarizeLinkedCapital([scoped, other], mixed).inactive, false);
+});
+
+test("consulta incompleta e vínculo desconhecido não são tratados como capital zero", () => {
+  for (const status of ["loading", "error"]) {
+    assert.equal(summarizeLinkedCapital([record()], { status, cedentes: [] }).inactive, false);
+  }
+  const portfolio = index([]);
+  assert.equal(summarizeLinkedCapital([], portfolio).inactive, false);
+  assert.equal(summarizeLinkedCapital([record({ scope: "" })], portfolio).inactive, false);
+  assert.equal(summarizeLinkedCapital([record(), record({ id: "legacy", scope: "" })], portfolio).inactive, false);
 });
 
 test("visualização só por cedente agrupa folhas do mesmo ramo sem perder vínculos", () => {

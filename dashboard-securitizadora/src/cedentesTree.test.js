@@ -92,11 +92,19 @@ test("não duplica a mesma parcela em destinos exclusivos", () => {
   assert.equal(findDuplicateParcel([original], original), false);
 });
 
-test("exploração do catálogo revela todos os setores sem criar parcelas ou saldos", () => {
+test("famílias sem classificações ficam ocultas, inclusive ao mostrar setores vazios", () => {
   const tree = buildTree([], { showEmpty: true });
-  assert.equal(flattenTree(tree).filter((node) => node.kind === "sector").length, 30);
+  assert.equal(tree.children.length, 0);
   assert.equal(tree.recordIds.length, 0);
   assert.equal(flattenTree(tree).filter((node) => node.kind === "record").length, 0);
+  for (const showEmpty of [false, true]) {
+    const populated = buildTree([sample()], { showEmpty });
+    assert.deepEqual(populated.children.map((node) => node.code), ["FAM-A"]);
+    assert.equal(populated.children[0].recordIds.length, 1);
+    assert.equal(flattenTree(populated).filter((node) => node.kind === "sector").length, showEmpty ? 6 : 1);
+  }
+  const partial = sample({ family: "FAM-B", sector: "", purpose: "", application: "" });
+  assert.deepEqual(buildTree([partial]).children.map((node) => node.code), ["FAM-B"]);
 });
 
 test("layout mantém nós legíveis, sem sobreposição, inclusive em classificações parciais", () => {
@@ -111,7 +119,7 @@ test("layout mantém nós legíveis, sem sobreposição, inclusive em classifica
   }
   assert.equal(layout.nodes.find((node) => node.id === "record/test-1").depth, 5);
   const collapsed = layoutTree(tree, new Set(tree.children.map((node) => node.id)));
-  assert.equal(collapsed.nodes.length, 9);
+  assert.equal(collapsed.nodes.length, 3);
 });
 
 test("leitura local preserva erros de armazenamento e não aceita registros fictícios", () => {

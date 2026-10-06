@@ -136,11 +136,17 @@ export function availablePortfolioScopes(portfolio, records, editingId = "") {
 
 export function summarizeLinkedCapital(records, portfolio) {
   let capitalCents = 0;
+  let overdueCents = 0;
   let unavailable = 0;
+  let missing = 0;
   const counted = new Set();
   for (const record of records) {
     const resolved = resolvePortfolioScope(record, portfolio);
-    if (resolved.status !== "ready") { unavailable += 1; continue; }
+    if (resolved.status !== "ready") {
+      unavailable += 1;
+      if (resolved.status === "missing") missing += 1;
+      continue;
+    }
     const cedente = portfolio.cedentes.find((item) => item.key === record.cedenteKey);
     const buyers = record.scope === "cedente" ? cedente.buyers : cedente.buyers.filter((buyer) => buyer.key === record.sacadoKey);
     for (const buyer of buyers) {
@@ -148,7 +154,11 @@ export function summarizeLinkedCapital(records, portfolio) {
       if (counted.has(key)) continue;
       counted.add(key);
       capitalCents += buyer.capitalCents;
+      overdueCents += buyer.overdueCents;
     }
   }
-  return { capitalCents, unavailable, linked: records.length - unavailable };
+  // Uma carteira carregada confirma saldo zero ou ausência do vínculo atual.
+  // Falha de consulta e cadastros antigos sem vínculo não comprovam saldo zero.
+  const inactive = portfolio.status === "ready" && records.length > 0 && capitalCents === 0 && unavailable === missing;
+  return { capitalCents, overdueCents, unavailable, linked: records.length - unavailable, inactive };
 }
