@@ -2,7 +2,7 @@ import { APPLICATIONS, ATTRIBUTES, CAPEX_REASONS, CATALOG_VERSION, CHANNELS, DIR
 import { scopeConflict } from "./cedentesPortfolio.js";
 
 export const NODE_WIDTH = 202;
-export const NODE_HEIGHT = 164;
+export const NODE_HEIGHT = 180;
 export const COLUMN_GAP = 44;
 const ROW_GAP = 22;
 

@@ -75,6 +75,7 @@ export function CedentesTreeView({ cloud, refreshCloud, portfolio, refreshPortfo
   const selectedRecords = records.filter((record) => selected.recordIds.includes(record.id));
   const detailRecord = selected.kind === "record" ? selectedRecords.find((record) => record.id === detailRecordId) || (selectedRecords.length === 1 ? selectedRecords[0] : null) : null;
   const capitalByNode = useMemo(() => new Map(allNodes.map((node) => [node.id, summarizeLinkedCapital(records.filter((record) => node.recordIds.includes(record.id)), portfolio)])), [allNodes, records, portfolio]);
+  const graphCapital = capitalByNode.get(tree.id);
   const selectedNode = layout.nodes.find((node) => node.id === selected.id);
   const selectedPath = new Set([selected.id, ...(selectedNode?.ancestors || [])]);
   const visibleRecords = records.filter((record) => activeFamily === "all" || record.family === activeFamily);
@@ -170,6 +171,7 @@ export function CedentesTreeView({ cloud, refreshCloud, portfolio, refreshPortfo
             const label = node.kind === "record" && hideValues ? "Cedente oculto" : node.label;
             const balance = capitalByNode.get(node.id);
             const overduePercentage = hideValues ? "•••%" : balance.capitalCents > 0 ? overduePercentFormatter.format(balance.overdueCents / balance.capitalCents) : "—";
+            const overdueGraphPercentage = hideValues ? "•••%" : graphCapital.capitalCents > 0 ? overduePercentFormatter.format(balance.overdueCents / graphCapital.capitalCents) : "—";
             const inactive = node.kind !== "root" && balance.inactive;
             const capitalLabel = balance.inactive ? (balance.linked ? "Sem capital em aberto" : "Sem capital vinculado") : balance.linked ? `${formatCapital(balance.capitalCents, hideValues)}${balance.unavailable ? " · parcial" : ""}` : portfolio.status === "loading" ? "Carregando capital…" : portfolio.status === "error" ? "Capital indisponível" : "Capital não vinculado";
             const buyerLabel = node.kind === "record" ? (node.record.scope === "cedente" ? "Todos os sacados" : hideValues ? "Sacado oculto" : node.record.buyer || "Sacado não identificado") : "";
@@ -179,7 +181,7 @@ export function CedentesTreeView({ cloud, refreshCloud, portfolio, refreshPortfo
                 {node.kind === "record" && showBuyers && <small className="ct-node-buyer">{buyerLabel}</small>}
                 {(node.kind !== "record" || (!showBuyers && node.recordIds.length > 1)) && <small>{node.recordIds.length} {node.recordIds.length === 1 ? "classificação" : "classificações"}</small>}
                 {node.recordIds.length > 0 && <small className="ct-node-capital">{capitalLabel}</small>}
-                {balance.linked > 0 && <small className="ct-node-overdue">Vencido: {formatCapital(balance.overdueCents, hideValues)} ({overduePercentage}){balance.unavailable ? " · parcial" : ""}</small>}
+                {balance.linked > 0 && <small className="ct-node-overdue">Vencido: {formatCapital(balance.overdueCents, hideValues)} (setor: {overduePercentage}, total: {overdueGraphPercentage}){balance.unavailable || graphCapital.unavailable ? " · parcial" : ""}</small>}
               </button>
               {node.children.length > 0 && <button className="ct-node-toggle" aria-label={`${collapsed.has(node.id) ? "Expandir" : "Recolher"} ${label}`} aria-expanded={!collapsed.has(node.id)} onClick={() => toggleNode(node.id)}>{collapsed.has(node.id) ? "+" : "−"}</button>}
             </div>;
