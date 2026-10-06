@@ -10,6 +10,10 @@
 .risk-delay-chart text { font-size: 13px; fill: #64748b; }
 .risk-delay-chart circle { cursor: pointer; }
 .risk-delay-chart circle:focus { outline: 2px solid #312e81; outline-offset: 3px; }
+.risk-delay-hit-area { cursor: crosshair; }
+.risk-delay-hover { pointer-events: none; }
+.risk-delay-chart .risk-delay-tooltip-date { fill: #e5e7eb; }
+.risk-delay-chart .risk-delay-tooltip-value { fill: #fff; font-weight: 600; }
 .risk-delay-history summary { cursor: pointer; font-size: 13px; color: #475569; }
 @media (max-width: 640px) {
   .risk-delay-heading { flex-direction: column; gap: 10px; }
