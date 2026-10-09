@@ -717,9 +717,9 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
     endIso: addDays(currentWeek.startIso, -1),
   }), [currentWeek]);
   const monthStartIso = useMemo(() => `${todayIso.slice(0, 8)}01`, [todayIso]);
-  const previousMonthStartIso = useMemo(() => {
+  const threeMonthStartIso = useMemo(() => {
     const date = parseIsoDate(monthStartIso);
-    date.setMonth(date.getMonth() - 1);
+    date.setMonth(date.getMonth() - 2);
     return formatIsoDate(date);
   }, [monthStartIso]);
 
@@ -796,10 +796,10 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
         isOpen(row)
       );
     });
-    const inadimplentesMesAtualEAnterior = validRows.filter((row) => {
+    const inadimplentesUltimos3Meses = validRows.filter((row) => {
       const vctoOperacional = getVctoOperacional(row);
       return (
-        vctoOperacional >= previousMonthStartIso &&
+        vctoOperacional >= threeMonthStartIso &&
         vctoOperacional < todayIso &&
         isOpen(row)
       );
@@ -813,7 +813,7 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
     const totalQuitadosEmAtraso = quitadosEmAtraso.reduce((acc, row) => acc + row.Entrada, 0);
     const totalVencemHoje = vencemHoje.reduce((acc, row) => acc + row.Entrada, 0);
     const totalVencemNaSemana = vencemNaSemana.reduce((acc, row) => acc + row.Entrada, 0);
-    const totalInadimplentesMesAtualEAnterior = inadimplentesMesAtualEAnterior.reduce((acc, row) => acc + row.Entrada, 0);
+    const totalInadimplentesUltimos3Meses = inadimplentesUltimos3Meses.reduce((acc, row) => acc + row.Entrada, 0);
     const taxaMediaPonderada = volumeOperado > 0
       ? operacoesOntem.reduce((acc, row) => acc + row["Tx.Efet"] * row.Entrada, 0) / volumeOperado
       : 0;
@@ -860,7 +860,7 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
     const operacoesSemanaPassadaAgrupadas = buildCedenteGroups(operacoesSemanaPassada);
     const vencemHojeAgrupados = buildCedenteGroups(vencemHoje);
     const vencemNaSemanaAgrupados = buildCedenteGroups(vencemNaSemana);
-    const inadimplentesMesAtualEAnteriorAgrupados = buildCedenteGroups(inadimplentesMesAtualEAnterior);
+    const inadimplentesUltimos3MesesAgrupados = buildCedenteGroups(inadimplentesUltimos3Meses);
 
     return {
       inadimplenciaOntem: inadimplenciaOntemAgrupada.rows,
@@ -870,7 +870,7 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
       operacoesSemanaPassada: operacoesSemanaPassadaAgrupadas.rows,
       vencemHoje: vencemHojeAgrupados.rows,
       vencemNaSemana: vencemNaSemanaAgrupados.rows,
-      inadimplentesMesAtualEAnterior: inadimplentesMesAtualEAnteriorAgrupados.rows,
+      inadimplentesUltimos3Meses: inadimplentesUltimos3MesesAgrupados.rows,
       gruposInadimplenciaOntem: inadimplenciaOntemAgrupada.groups,
       gruposQuitadosOntem: quitadosOntemAgrupados.groups,
       gruposQuitadosEmAtraso: quitadosEmAtrasoAgrupados.groups,
@@ -878,7 +878,7 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
       gruposOperacoesSemanaPassada: operacoesSemanaPassadaAgrupadas.groups,
       gruposVencemHoje: vencemHojeAgrupados.groups,
       gruposVencemNaSemana: vencemNaSemanaAgrupados.groups,
-      gruposInadimplentesMesAtualEAnterior: inadimplentesMesAtualEAnteriorAgrupados.groups,
+      gruposInadimplentesUltimos3Meses: inadimplentesUltimos3MesesAgrupados.groups,
       volumeOperado,
       volumeOperadoSemanaPassada,
       desagioOperado,
@@ -887,10 +887,10 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
       totalQuitadosEmAtraso,
       totalVencemHoje,
       totalVencemNaSemana,
-      totalInadimplentesMesAtualEAnterior,
+      totalInadimplentesUltimos3Meses,
       taxaMediaPonderada,
     };
-  }, [rows, resumoPeriod, todayDueDateIso, currentWeek, previousWeek, previousMonthStartIso, todayIso]);
+  }, [rows, resumoPeriod, todayDueDateIso, currentWeek, previousWeek, threeMonthStartIso, todayIso]);
 
   if (loading) {
     return (
@@ -929,7 +929,7 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
     : `Títulos em aberto com vencimento operacional em ${formatDate(todayDueDateIso)} por ajuste de fim de semana ou feriado.`;
   const vencemNaSemanaSubtitle = `Títulos em aberto a vencer entre ${formatDate(todayIso)} e ${formatDate(currentWeek.endIso)}, limitados à semana atual.`;
   const operacoesSemanaPassadaSubtitle = `Títulos emitidos entre ${formatDate(previousWeek.startIso)} e ${formatDate(previousWeek.endIso)}, agrupados por cedente.`;
-  const inadimplentesMesAtualEAnteriorSubtitle = `Títulos em aberto com vencimento operacional entre ${formatDate(previousMonthStartIso)} e ${formatDate(addDays(todayIso, -1))}.`;
+  const inadimplentesUltimos3MesesSubtitle = `Mês atual e dois anteriores: títulos em aberto com vencimento operacional entre ${formatDate(threeMonthStartIso)} e ${formatDate(addDays(todayIso, -1))}.`;
   const renderCedenteGroups = (groups, color, showWeightedRate = false) => (
     <CedenteGroupedMorningTables
       groups={groups}
@@ -1141,21 +1141,21 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
       </MorningSection>
 
       <MorningSection
-        title="Inadimplentes do Mês Atual e Anterior"
-        subtitle={inadimplentesMesAtualEAnteriorSubtitle}
-        rows={resumo.inadimplentesMesAtualEAnterior}
+        title="Inadimplentes dos Últimos 3 Meses"
+        subtitle={inadimplentesUltimos3MesesSubtitle}
+        rows={resumo.inadimplentesUltimos3Meses}
         hideValues={hideValues}
         accent="#b91c1c"
         order={6}
         collapsible
         onNavigateToMicro={onNavigateToMicro}
-        tableContent={renderCedenteGroups(resumo.gruposInadimplentesMesAtualEAnterior, "#b91c1c")}
+        tableContent={renderCedenteGroups(resumo.gruposInadimplentesUltimos3Meses, "#b91c1c")}
       >
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px" }}>
           <SummaryMetric
             label="Total Inadimplente"
-            value={formatMoney(resumo.totalInadimplentesMesAtualEAnterior, hideValues)}
-            sublabel={`${resumo.inadimplentesMesAtualEAnterior.length} título(s) em aberto`}
+            value={formatMoney(resumo.totalInadimplentesUltimos3Meses, hideValues)}
+            sublabel={`${resumo.inadimplentesUltimos3Meses.length} título(s) em aberto`}
             color="#b91c1c"
           />
         </div>
