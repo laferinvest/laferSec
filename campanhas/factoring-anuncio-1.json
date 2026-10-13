@@ -1,0 +1,147 @@
+{
+  "campaign": "Pesquisa | Factoring | B2B | MG e SP",
+  "status": "PAUSED",
+  "ad_group": "Factoring para empresas",
+  "ad_type": "Responsive search ad",
+  "final_url": "https://www.lafersec.com.br/enterprise-factoring-ads.html",
+  "path_1": "factoring",
+  "path_2": "empresas",
+  "headlines": [
+    "Procurando Factoring?",
+    "Alternativa ao Factoring",
+    "Factoring Para Sua Empresa?",
+    "Antecipe Seus Recebíveis",
+    "Compra de Duplicatas B2B",
+    "Venda a Prazo, Receba Antes",
+    "Sem Mínimo Por Operação",
+    "Sua Empresa Vende a Prazo?",
+    "Fatura R$ 200 Mil/Mês ou Mais?",
+    "Atendimento em MG e SP",
+    "Duplicatas de Produtos",
+    "Duplicatas de Serviços",
+    "Consulte Taxas e Condições",
+    "Solicite Uma Proposta",
+    "Lafer Invest Securitizadora"
+  ],
+  "descriptions": [
+    "Securitizadora B2B. Alternativa ao factoring para quem fatura desde R$ 200 mil/mês.",
+    "Compramos duplicatas de produtos e serviços em MG e SP. Não trabalhamos com cheques.",
+    "Transforme vendas a prazo em capital de giro. Sem valor mínimo por operação.",
+    "Solicite uma proposta à Lafer. Taxas, prazo e aprovação sujeitos à análise da operação."
+  ],
+  "pinned_description": {
+    "number": 1,
+    "position": 1
+  },
+  "sitelinks": [
+    {
+      "text": "Solicitar Proposta",
+      "description_1": "Prepare sua solicitação",
+      "description_2": "Continue pelo WhatsApp da Lafer",
+      "fragment": "solicitar-proposta",
+      "final_url": "https://www.lafersec.com.br/enterprise-factoring-ads.html#solicitar-proposta"
+    },
+    {
+      "text": "Quem Pode Antecipar",
+      "description_1": "Empresas B2B de MG e SP",
+      "description_2": "Faturamento desde R$ 200 mil/mês",
+      "fragment": "quem-pode-antecipar",
+      "final_url": "https://www.lafersec.com.br/enterprise-factoring-ads.html#quem-pode-antecipar"
+    },
+    {
+      "text": "Como Funciona",
+      "description_1": "Veja as etapas da antecipação",
+      "description_2": "Da análise à compra dos recebíveis",
+      "fragment": "como-funciona",
+      "final_url": "https://www.lafersec.com.br/enterprise-factoring-ads.html#como-funciona"
+    },
+    {
+      "text": "Recebíveis Aceitos",
+      "description_1": "Duplicatas de produtos e serviços",
+      "description_2": "Não trabalhamos com cheques",
+      "fragment": "recebiveis-aceitos",
+      "final_url": "https://www.lafersec.com.br/enterprise-factoring-ads.html#recebiveis-aceitos"
+    },
+    {
+      "text": "Compare as Modalidades",
+      "description_1": "Entenda as diferenças na operação",
+      "description_2": "Conheça a alternativa da Lafer",
+      "fragment": "factoring-ou-securitizacao",
+      "final_url": "https://www.lafersec.com.br/enterprise-factoring-ads.html#factoring-ou-securitizacao"
+    },
+    {
+      "text": "Conheça a Lafer Invest",
+      "description_1": "Saiba quem compra seus recebíveis",
+      "description_2": "Veja nossos dados e contatos",
+      "fragment": "sobre-a-lafer",
+      "final_url": "https://www.lafersec.com.br/enterprise-factoring-ads.html#sobre-a-lafer"
+    }
+  ],
+  "callouts": [
+    "Empresas B2B de MG e SP",
+    "Duplicatas Comerciais",
+    "Produtos e Serviços",
+    "Sem Mínimo Por Operação",
+    "Sujeito à Análise"
+  ],
+  "keywords_exact": [
+    "factoring",
+    "factoring para empresas",
+    "empresa de factoring",
+    "factoring online",
+    "factoring recebíveis",
+    "factoring duplicatas"
+  ],
+  "keywords_phrase": [
+    "factoring para empresas",
+    "empresa de factoring",
+    "factoring online"
+  ],
+  "negative_keywords_phrase": [
+    "curso de factoring",
+    "como abrir uma factoring",
+    "como montar uma factoring",
+    "software para factoring",
+    "sistema para factoring",
+    "vaga de emprego",
+    "trabalhe conosco",
+    "empréstimo pessoal",
+    "empréstimo para cpf",
+    "consignado",
+    "antecipação fgts",
+    "cheque",
+    "cheques",
+    "recebíveis de cartão",
+    "maquininha"
+  ],
+  "negative_keywords_exact": [
+    "o que é factoring",
+    "significado de factoring"
+  ],
+  "target_states": [
+    "Minas Gerais",
+    "São Paulo"
+  ],
+  "location_option": "PRESENCE",
+  "language": "pt",
+  "search_partners": false,
+  "display_network": false,
+  "daily_budget_brl": null,
+  "bidding_strategy": null,
+  "final_url_suffix": "utm_source=google&utm_medium=cpc&utm_campaign=factoring_b2b_mg_sp&utm_content=anuncio_1&utm_term={keyword}",
+  "auto_tagging_required": true,
+  "conversion_primary": "Contato B2B qualificado e confirmado pelo atendimento; importar do CRM/registro comercial",
+  "conversion_secondary": [
+    "lafer_whatsapp_open",
+    "lafer_phone_open",
+    "lafer_email_open",
+    "lafer_proposal_prepared"
+  ],
+  "launch_pending": [
+    "Publicar os arquivos no domínio e conferir HTTPS, URLs e AdsBot.",
+    "Definir orçamento e lances com histórico da conta.",
+    "Revisar a verificação financeira e informações comerciais na conta.",
+    "Configurar/importar as conversões qualificadas na conta, validando a atribuição.",
+    "Confirmar práticas internas de retenção, compartilhamento e atendimento aos direitos da política."
+  ]
+}
