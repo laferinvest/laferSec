@@ -33,3 +33,7 @@ Data: 13/10/2026.
 Na raiz do projeto: `node --test tests/factoring-ads.test.cjs`.
 
 O pacote `lafer-factoring-anuncio-1.zip` contém somente os arquivos públicos necessários à nova página. Campanha, instruções e testes permanecem fora do pacote.
+
+## Ajuste de tipografia — 13/10/2026
+
+Tipografia equilibrada: conteúdo principal de 16 px no computador e 15 px no celular, com peso 500; títulos e destaques em peso 700. Textos principais pretos em fundos claros, controles e avisos legíveis, sem negrito generalizado. Verificação visual no computador e em 390 px; largura também conferida em 320 px, sem transbordamento horizontal. A política utiliza o mesmo estilo. Pacote de publicação atualizado.
