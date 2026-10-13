@@ -128,7 +128,7 @@ test('MG and SP product/service B2B requests prepare an encoded draft, never cla
       const result = app.prepareProposal({ state, revenue: 'from200', buyers: 'business', receivable });
       const url = new URL(result.url);
       assert.equal(url.origin, 'https://wa.me');
-      assert.equal(url.pathname, '/5535998252372');
+      assert.equal(url.pathname, '/5535997735926');
       assert.equal(url.searchParams.get('text'), result.message);
       assert.match(result.guidance, /não representa aprovação/);
       assert.match(result.message, /R\$ 200 mil/);

@@ -55,7 +55,7 @@
     return {
       message: message,
       guidance: notes.length ? notes.join(' ') + ' Se quiser esclarecer o enquadramento da sua empresa, converse com a equipe.' : 'Confira a mensagem abaixo e continue no WhatsApp. A equipe analisará os recebíveis e informará as condições; esta etapa não representa aprovação.',
-      url: 'https://wa.me/5535998252372?text=' + encodeURIComponent(message)
+      url: 'https://wa.me/5535997735926?text=' + encodeURIComponent(message)
     };
   }
 
