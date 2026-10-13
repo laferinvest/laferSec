@@ -50,3 +50,5 @@ strong,b{font-weight:700}
 }
 @media(max-width:380px){.header-inner{gap:8px}.brand{font-size:1rem}.brand span{font-size:.5rem}.header-cta{padding-inline:9px}}
 @media print{.section-navy p,.section-navy .eyebrow,.section-navy .step-number,.section-navy a,.process-list p,.process-footer p{color:var(--ink)}}
+
+.whatsapp-icon{width:21px;height:21px;flex:0 0 21px;color:#128c7e}

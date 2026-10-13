@@ -141,7 +141,7 @@ test('unsupported profiles get accurate service guidance and still have a human-
   assert.match(result.guidance, /Minas Gerais e São Paulo/);
   assert.match(result.guidance, /faturamento mensal mínimo/);
   assert.match(result.guidance, /Não compramos cheques/);
-  assert.match(result.message, /tirar uma dúvida/);
+  assert.match(result.message, /saber mais sobre as suas operações e taxas/);
   assert.ok(result.url.startsWith('https://wa.me/'));
 });
 

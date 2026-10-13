@@ -45,14 +45,12 @@
     if (input.buyers === 'consumer') notes.push('Compramos apenas recebíveis de vendas para outras empresas.');
     if (input.receivable === 'checks' || input.receivable === 'other') notes.push('Trabalhamos apenas com duplicatas comerciais de produtos e serviços. Não compramos cheques.');
     var message = [
-      'Olá, equipe Lafer! Gostaria de ' + (notes.length ? 'tirar uma dúvida sobre os critérios de atendimento.' : 'uma proposta para antecipação de duplicatas comerciais B2B.'),
+      'Olá, equipe Lafer! Gostaria de saber mais sobre as suas operações e taxas.',
       '',
       'Estado da empresa: ' + labels.state[input.state],
       'Faturamento mensal: ' + labels.revenue[input.revenue],
       'Minha empresa vende para: ' + labels.buyers[input.buyers],
-      'Recebíveis: ' + labels.receivable[input.receivable],
-      '',
-      'Vim pela página de antecipação de recebíveis da Lafer.'
+      'Recebíveis: ' + labels.receivable[input.receivable]
     ].join('\n');
     return {
       message: message,
