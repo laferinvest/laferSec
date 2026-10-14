@@ -20,7 +20,8 @@ strong,b{font-weight:700}
 .hero-qualifier{font-size:.9375rem}
 .hero .hero-note,.hero-conditions,.provider-note{font-size:.8125rem;line-height:1.65}
 .hero-conditions{max-width:530px}
-.hero .eyebrow,.eyebrow,.form-kicker{font-size:.7rem;font-weight:600;letter-spacing:.1em}
+.hero .eyebrow,.eyebrow{font-size:.8rem;font-weight:600;letter-spacing:.1em}
+.form-kicker{font-size:.7rem;font-weight:600;letter-spacing:.1em}
 .button,.hero .button,.proposal-panel .button{font-size:.875rem;font-weight:600}
 .brand span{font-size:.625rem;font-weight:500;letter-spacing:.22em}
 .field label{font-size:.875rem;font-weight:600}
@@ -35,7 +36,7 @@ strong,b{font-weight:700}
   h2{font-size:1.75rem;font-weight:700}
   .hero-description,.section-intro>p:not(.eyebrow),.split-heading>p,.process-list p,.receivable-types p,details p,.comparison-intro>p:last-child,.proposal-copy>p:not(.eyebrow),.privacy-content p,.privacy-content li{font-size:.9375rem}
   .hero-promise{font-size:1.25rem;font-weight:500}
-  .hero .eyebrow{font-size:.625rem;letter-spacing:.075em}
+  .hero .eyebrow{font-size:.71875rem;letter-spacing:.075em}
   .hero-qualifier{font-size:.875rem}
   .hero .hero-note,.hero-conditions,.provider-note{font-size:.75rem}
   .brand span{font-size:.5625rem}
@@ -52,3 +53,8 @@ strong,b{font-weight:700}
 @media print{.section-navy p,.section-navy .eyebrow,.section-navy .step-number,.section-navy a,.process-list p,.process-footer p{color:var(--ink)}}
 
 .whatsapp-icon{width:21px;height:21px;flex:0 0 21px;color:#128c7e}
+
+.hero-advantage{margin-top:22px;padding-top:16px;border-top:1px solid var(--line);max-width:565px;color:var(--ink)}
+.hero-advantage-title{font-size:1rem;font-weight:500;line-height:1.6;letter-spacing:-.015em}
+.hero-advantage-title strong{font-size:1.25rem;font-weight:700;color:var(--navy)}
+@media(max-width:520px){.hero-advantage{margin-top:18px;padding-top:14px}.hero-advantage-title{font-size:.9375rem}.hero-advantage-title strong{font-size:1.1875rem}}

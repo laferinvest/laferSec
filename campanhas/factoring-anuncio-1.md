@@ -82,7 +82,7 @@ Revisar os termos reais para não excluir consultas comerciais válidas. Não ne
 - Pesquisa Google; parceiros inicialmente desativados. Sem Rede de Display.
 - Localização: Minas Gerais e São Paulo; opção Presença, não interesse na região.
 - Idioma: português. Sem restrições demográficas inventadas para tentar inferir faturamento empresarial.
-- Usar a página dedicada como destino. Rever AI Max, expansão de URL, personalização de texto e recursos automáticos antes de ativar; não permitir que recuperem promessas antigas de 0% IOF ou 30 minutos.
+- Usar a página dedicada como destino. Rever AI Max, expansão de URL, personalização de texto e recursos automáticos antes de ativar; não permitir que recuperem promessas de liberação em 30 minutos ou ampliem a informação de ausência de cobrança de IOF na Lafer para uma isenção geral de tributos ou garantia de menor taxa.
 - Autotagging ativado na conta; sufixo de URL: utm_source=google&utm_medium=cpc&utm_campaign=factoring_b2b_mg_sp&utm_content=anuncio_1&utm_term={keyword}
 - Orçamento e lances: pendentes do orçamento disponível e do histórico de conversões confiáveis. Não há um CPA/CPC universal indicado.
 - Com mensuração comercial confiável, avaliar Maximizar conversões; definir CPA alvo apenas com suporte nos dados. Caso não haja, usar uma estratégia inicial com limites de gasto claros para coleta controlada de dados, sem otimizar para rolagem/tempo.
