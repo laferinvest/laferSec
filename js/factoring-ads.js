@@ -15,7 +15,7 @@
   var LIVE_HOSTS = ['lafersec.com.br', 'www.lafersec.com.br'];
   var labels = {
     state: { MG: 'Minas Gerais', SP: 'São Paulo', other: 'Outro estado' },
-    revenue: { under: 'Abaixo de R$ 200 mil', from200: 'De R$ 200 mil a R$ 1 milhão', over1m: 'Acima de R$ 1 milhão' },
+    revenue: { under: 'Abaixo de R$ 200 mil', from200: 'De R$ 200 mil a R$ 1 milhão', from1m: 'De R$ 1 milhão a R$ 5 milhões', from5m: 'De R$ 5 milhões a R$ 10 milhões', over10m: 'Acima de R$ 10 milhões' },
     buyers: { business: 'Outras empresas', both: 'Empresas e pessoas físicas', consumer: 'Somente pessoas físicas' },
     receivable: { products: 'Duplicatas comerciais de produtos', services: 'Duplicatas comerciais de serviços', both: 'Duplicatas de produtos e serviços', checks: 'Cheques', other: 'Outro tipo de recebível' }
   };

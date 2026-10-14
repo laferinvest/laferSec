@@ -21,6 +21,7 @@ function harness(saved, hostname = 'www.lafersec.com.br', blocked = false, optio
   const phone = element({ contact: 'phone', placement: 'footer' });
   const email = element({ contact: 'email', placement: 'about' });
   const cta = element({ cta: 'hero' });
+  const aboutCta = element({ cta: 'about' });
   const elements = {
     'cookie-banner': element(),
     'cookie-dialog': { ...element(), open: false, showModal() { this.open = true; }, close() { this.open = false; if (this.handlers.close) this.handlers.close(); } },
@@ -49,7 +50,7 @@ function harness(saved, hostname = 'www.lafersec.com.br', blocked = false, optio
     createElement() { return {}; },
     getElementById(id) { return elements[id] || null; },
     querySelectorAll(selector) {
-      return ({ '[data-consent]': [accept, reject], '[data-cookie-settings]': [settings], '[data-contact]': [contact, directProposal, phone, email], '[data-cta]': [cta] })[selector] || [];
+      return ({ '[data-consent]': [accept, reject], '[data-cookie-settings]': [settings], '[data-contact]': [contact, directProposal, phone, email], '[data-cta]': [cta, aboutCta] })[selector] || [];
     }
   };
   Object.defineProperty(doc, 'cookie', { get: () => '_ga=test; _gcl_aw=test; necessary=keep', set: value => expiredCookies.push(value) });
@@ -73,7 +74,7 @@ function harness(saved, hostname = 'www.lafersec.com.br', blocked = false, optio
     }
   };
   app.init(win);
-  return { win, scripts, elements, accept, reject, settings, contact, directProposal, phone, email, cta, stored, sessionStored, expiredCookies, navigations, timers, flushTimers() { const callbacks = [...timers.values()]; timers.clear(); callbacks.forEach(callback => callback()); }, get reloads() { return reloads; }, commands: () => win.dataLayer.map(args => Array.from(args)) };
+  return { win, scripts, elements, accept, reject, settings, contact, directProposal, phone, email, cta, aboutCta, stored, sessionStored, expiredCookies, navigations, timers, flushTimers() { const callbacks = [...timers.values()]; timers.clear(); callbacks.forEach(callback => callback()); }, get reloads() { return reloads; }, commands: () => win.dataLayer.map(args => Array.from(args)) };
 }
 
 test('no optional tags before consent; rejection remains usable and persists', () => {
@@ -310,7 +311,11 @@ test('editing a proposal clears the previous draft and does not emit a WhatsApp 
 test('actual landing contact links and CTA targets match the event classifications', () => {
   const html = fs.readFileSync(path.join(root, 'enterprise-factoring-ads.html'), 'utf8');
   const contacts = [...html.matchAll(/<a\b[^>]*\bdata-contact="[^"]+"[^>]*>/g)].map(m => m[0]);
-  assert.equal(contacts.length, 6);
+  assert.equal(contacts.length, 2);
+  assert.ok(contacts.every(contact => contact.includes('data-placement="footer"')));
+  assert.ok(!/<a\b[^>]*href="https:\/\/wa\.me\//.test(html), 'No WhatsApp bypass before the triage form');
+  assert.ok(!html.includes('Prefere falar diretamente?'));
+  assert.ok(html.includes('href="mailto:adm@lafersec.com.br"'));
   for (const contact of contacts) {
     const kind = contact.match(/data-contact="([^"]+)"/)[1];
     const href = contact.match(/href="([^"]+)"/)[1];
@@ -318,7 +323,8 @@ test('actual landing contact links and CTA targets match the event classificatio
     assert.equal(kind, href.startsWith('https://wa.me/') ? 'whatsapp' : href.startsWith('tel:') ? 'phone' : 'email');
   }
   const ctas = [...html.matchAll(/<a\b[^>]*\bdata-cta="[^"]+"[^>]*>/g)].map(m => m[0]);
-  assert.equal(ctas.length, 6);
+  assert.equal(ctas.length, 7);
+  assert.ok(ctas.some(cta => cta.includes('data-cta="about"')));
   assert.ok(ctas.every(cta => cta.includes('href="#solicitar-proposta"')));
 });
 
@@ -484,4 +490,37 @@ test('granting advertising after analytics adds click attribution to subsequent 
   assert.equal(new URL(events[1][2].page_location).searchParams.get('gclid'), 'AD_CLICK');
   assert.equal(h.commands().filter(c => c[1] === 'page_view').length, 1);
   assert.equal(h.scripts.length, 1);
+});
+
+test('all revenue ranges offered by the triage form reach the WhatsApp draft correctly without becoming analytics parameters', () => {
+  const html = fs.readFileSync(path.join(root, 'enterprise-factoring-ads.html'), 'utf8');
+  const select = html.match(/<select id="company-revenue"[^>]*>(.*?)<\/select>/)[1];
+  const ranges = [...select.matchAll(/<option value="([^"]+)">([^<]+)<\/option>/g)];
+  assert.deepEqual(ranges.map(m => m[1]), ['under', 'from200', 'from1m', 'from5m', 'over10m']);
+  for (const [, value, label] of ranges) {
+    const h = harness(null, 'www.lafersec.com.br', false, { form: true });
+    h.accept.click();
+    h.elements['company-revenue'].value = value;
+    h.elements['proposal-form'].handlers.submit({ preventDefault() {} });
+    const preview = h.elements['message-preview'].textContent;
+    assert.ok(preview.includes('Faturamento mensal: ' + label), value);
+    h.elements['open-whatsapp'].click();
+    const event = h.commands().find(c => c[1] === 'lafer_whatsapp_open');
+    assert.equal(event[2].contact_flow, 'form');
+    assert.ok(!JSON.stringify(event).includes(label));
+    event[2].event_callback();
+    assert.equal(new URL(h.navigations[0]).searchParams.get('text'), preview);
+  }
+  assert.throws(() => app.prepareProposal({ state: 'MG', revenue: 'over1m', buyers: 'business', receivable: 'products' }));
+});
+
+test('the about CTA is a triage navigation event and cannot count as a WhatsApp conversion', () => {
+  const h = harness(null, 'www.lafersec.com.br', false, { form: true });
+  h.accept.click();
+  h.aboutCta.click();
+  assert.equal(h.commands().filter(c => c[1] === 'lafer_whatsapp_open').length, 0);
+  const event = h.commands().find(c => c[1] === 'lafer_cta_click');
+  assert.equal(event[2].placement, 'about');
+  assert.equal(h.sessionStored.size, 0);
+  assert.equal(h.navigations.length, 0);
 });

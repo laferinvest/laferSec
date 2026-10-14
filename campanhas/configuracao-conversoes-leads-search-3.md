@@ -22,6 +22,8 @@ Referência curta, associação ao clique e importação de cedentes qualificado
 
 ## Registros visuais
 
+Reverificação posterior em 14/10/2026, a pedido do usuário sobre o aviso de acompanhamento: a recomendação da Leads-Search-3 informou expressamente que uma ação foi adicionada, mas nenhuma conversão está sendo registrada. A lista confirmou WhatsApp — landing factoring como GA4, Principal, Uma, com zero conversões. As configurações confirmaram novamente Específicas da campanha: WhatsApp da landing. Nesse momento a campanha já estava Ativada, com orçamento de R$ 50/dia e CPA de R$ 20; o agente não alterou status, orçamento ou metas e não criou ação duplicada. O aviso não comprova ausência da configuração nem comprova funcionamento da atribuição; depende da verificação dos resultados reais. Evidências: previews/ads-aviso-sem-conversoes.jpg e previews/leads-search-3-acompanhamento-confirmado.jpg.
+
 Correção local posterior, em 14/10/2026: a landing deixou de descartar os identificadores de anúncios da URL enviada à medição quando há consentimento para anúncios. Parâmetros UTM e o sinal de depuração também são preservados conforme o consentimento para estatísticas. A alteração foi feita no código e exige nova publicação do pacote do site; não altera a ação de conversão nem ativa a campanha. Essa preservação não cria associação no CRM nem comprova atribuição de uma conversão real.
 
 - previews/ga4-whatsapp-evento-principal.jpg
