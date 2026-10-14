@@ -106,7 +106,13 @@ As IDs públicas já existentes no site foram reaproveitadas: GA4 G-3Q66N7J22G e
 | lafer_phone_open | Clique no telefone | Conversão secundária |
 | lafer_email_open | Clique no e-mail | Conversão secundária |
 
+Os eventos de contato incluem `contact_flow=direct` para os links diretos e `contact_flow=form` para o WhatsApp aberto após preparar o formulário. Isso distingue os dois caminhos sem enviar as respostas. Para comparar esses caminhos nos relatórios padrão do GA4, registrar `placement` e `contact_flow` como dimensões personalizadas de escopo de evento.
+
+No WhatsApp do formulário, aguardar o processamento do evento antes da navegação, com limite de 800 ms e abertura garantida caso a tag esteja bloqueada. Sem consentimento para estatísticas ou na prévia local, abrir imediatamente. Evitar disparos duplicados enquanto a abertura está pendente.
+
 Nenhum desses eventos comprova envio da mensagem, atendimento, aprovação ou operação fechada. Nenhum evento "qualified_lead" é disparado pelo formulário.
+
+Referência de atendimento: a mensagem do formulário e os dois links diretos da landing recebem `Referência: LAF-XXXXXXXXXX`, com dez caracteres aleatórios. A referência é gerada na primeira interação de contato e reutilizada na mesma aba por `sessionStorage`; não contém respostas ou GCLID. Sem armazenamento de sessão, permanece apenas no documento aberto. Os eventos personalizados não enviam essa referência, mas a medição aprimorada de cliques de saída do GA4 pode registrar o endereço do link direto, incluindo a referência, após consentimento para estatísticas. Não existe ainda uma base no servidor relacionando referência, clique e qualificação. Portanto, essa etapa identifica a mensagem para o atendimento, sem viabilizar por si só uma importação offline. O contato estático continua funcionando sem JavaScript, sem geração de referência.
 
 **A conversão primária recomendada é um contato comercial qualificado confirmado pelo atendimento**, com estado MG/SP, faturamento mínimo, vendas B2B e duplicatas elegíveis. Importar o estágio comercial do CRM/registro de atendimento e validar atribuição. O clique no WhatsApp, sozinho, não permite associar com segurança um fechamento posterior. A integração de contatos/offline, os identificadores de atribuição e a base legal precisam ser definidos e testados na conta antes de otimizar para esse objetivo. Não foi criado um endpoint de CRM fictício nem um rótulo de conversão Ads inventado.
 

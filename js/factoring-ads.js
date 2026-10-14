@@ -8,6 +8,8 @@
 
   var CONSENT_KEY = 'lafer_privacy_v1';
   var CONSENT_DAYS = 180;
+  var REFERENCE_KEY = 'lafer_contact_reference_v1';
+  var REFERENCE_PATTERN = /^LAF-[2-9A-HJ-NP-Z]{10}$/;
   var ANALYTICS_ID = 'G-3Q66N7J22G';
   var ADS_ID = 'AW-17741205271';
   var LIVE_HOSTS = ['lafersec.com.br', 'www.lafersec.com.br'];
@@ -35,7 +37,32 @@
     };
   }
 
-  function prepareProposal(input) {
+  function createContactReference(cryptoApi) {
+    var alphabet = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+    var bytes = new Uint8Array(10);
+    try {
+      if (!cryptoApi || typeof cryptoApi.getRandomValues !== 'function') throw new Error('Unavailable');
+      cryptoApi.getRandomValues(bytes);
+    } catch (_) {
+      // A contact reference is not a password or an authentication token.
+      for (var i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+    }
+    return 'LAF-' + Array.from(bytes, function (byte) { return alphabet[byte & 31]; }).join('');
+  }
+
+  function withContactReference(message, reference) {
+    if (!REFERENCE_PATTERN.test(reference)) throw new Error('Referência de atendimento inválida.');
+    return message.replace(/\n*Referência: LAF-[2-9A-HJ-NP-Z]{10}\s*$/, '') + '\n\nReferência: ' + reference;
+  }
+
+  function whatsappWithReference(href, reference) {
+    var url = new URL(href);
+    if (url.origin !== 'https://wa.me' || url.pathname !== '/5535997735926') throw new Error('Destino de atendimento inválido.');
+    url.searchParams.set('text', withContactReference(url.searchParams.get('text') || '', reference));
+    return url.toString();
+  }
+
+  function prepareProposal(input, reference) {
     Object.keys(labels).forEach(function (key) {
       if (!Object.prototype.hasOwnProperty.call(labels[key], input[key])) throw new Error('Selecione todas as informações da empresa.');
     });
@@ -52,6 +79,7 @@
       'Minha empresa vende para: ' + labels.buyers[input.buyers],
       'Recebíveis: ' + labels.receivable[input.receivable]
     ].join('\n');
+    if (reference) message = withContactReference(message, reference);
     return {
       message: message,
       guidance: notes.length ? notes.join(' ') + ' Se quiser esclarecer o enquadramento da sua empresa, converse com a equipe.' : 'Confira a mensagem abaixo e continue no WhatsApp. A equipe analisará os recebíveis e informará as condições; esta etapa não representa aprovação.',
@@ -69,7 +97,22 @@
     var advertisingConfigured = false;
     var live = LIVE_HOSTS.indexOf(win.location.hostname) !== -1;
     var prepared = null;
+    var whatsappOpening = false;
     var lastConsentOpener = null;
+    var contactReference = null;
+
+    function getContactReference() {
+      if (contactReference) return contactReference;
+      try {
+        var savedReference = win.sessionStorage.getItem(REFERENCE_KEY);
+        if (REFERENCE_PATTERN.test(savedReference)) contactReference = savedReference;
+      } catch (_) { /* Contact preparation also works with browser storage blocked. */ }
+      if (!contactReference) {
+        contactReference = createContactReference(win.crypto);
+        try { win.sessionStorage.setItem(REFERENCE_KEY, contactReference); } catch (_) {}
+      }
+      return contactReference;
+    }
 
     // Use the existing public measurement IDs, without the legacy GTM timer/scroll conversions.
     // No Google script or measurement request is made until an optional purpose is accepted.
@@ -111,9 +154,16 @@
     }
 
     // Never send the form answers, WhatsApp message, contact data or a "qualified lead" event.
-    function track(name, placement) {
-      if (!live || !choice || !choice.analytics) return;
-      gtag('event', name, { send_to: ANALYTICS_ID, page_location: win.location.origin + win.location.pathname, placement: placement });
+    function track(name, placement, flow, onProcessed) {
+      if (!live || !choice || !choice.analytics) return false;
+      var params = { send_to: ANALYTICS_ID, page_location: win.location.origin + win.location.pathname, placement: placement };
+      if (flow) params.contact_flow = flow;
+      if (onProcessed) {
+        params.event_callback = onProcessed;
+        params.event_timeout = 800;
+      }
+      gtag('event', name, params);
+      return true;
     }
 
     function clearMeasurementCookies() {
@@ -173,7 +223,10 @@
       link.addEventListener('click', function () { track('lafer_cta_click', link.dataset.cta); });
     });
     doc.querySelectorAll('[data-contact]').forEach(function (link) {
-      link.addEventListener('click', function () { track('lafer_' + link.dataset.contact + '_open', link.dataset.placement); });
+      link.addEventListener('click', function () {
+        if (link.dataset.contact === 'whatsapp') link.setAttribute('href', whatsappWithReference(link.getAttribute('href'), getContactReference()));
+        track('lafer_' + link.dataset.contact + '_open', link.dataset.placement, 'direct');
+      });
     });
 
     var form = doc.getElementById('proposal-form');
@@ -184,7 +237,7 @@
       form.addEventListener('submit', function (event) {
         event.preventDefault();
         if (!form.reportValidity()) return;
-        prepared = prepareProposal({ state: doc.getElementById('company-state').value, revenue: doc.getElementById('company-revenue').value, buyers: doc.getElementById('company-buyers').value, receivable: doc.getElementById('receivable-type').value });
+        prepared = prepareProposal({ state: doc.getElementById('company-state').value, revenue: doc.getElementById('company-revenue').value, buyers: doc.getElementById('company-buyers').value, receivable: doc.getElementById('receivable-type').value }, getContactReference());
         doc.getElementById('message-preview').textContent = prepared.message;
         doc.getElementById('result-guidance').textContent = prepared.guidance;
         form.hidden = true;
@@ -200,10 +253,23 @@
         doc.getElementById('company-state').focus();
       });
       doc.getElementById('open-whatsapp').addEventListener('click', function () {
-        if (!prepared) return;
-        track('lafer_whatsapp_open', 'proposal');
+        if (!prepared || whatsappOpening) return;
+        whatsappOpening = true;
+        var destination = prepared.url;
+        var navigated = false;
+        var fallback = null;
+        function openWhatsApp() {
+          if (navigated) return;
+          navigated = true;
+          if (fallback !== null) win.clearTimeout(fallback);
+          whatsappOpening = false;
+          win.location.assign(destination);
+        }
         // A button avoids exposing the prepared message to automatic outbound-link analytics.
-        win.location.assign(prepared.url);
+        // Give the tag time to process the event before leaving, with a fallback if it is blocked.
+        if (track('lafer_whatsapp_open', 'proposal', 'form', openWhatsApp)) {
+          if (!navigated) fallback = win.setTimeout(openWhatsApp, 800);
+        } else openWhatsApp();
       });
     }
 
@@ -216,5 +282,5 @@
     }
   }
 
-  return { init: init, readConsent: readConsent, consentSignals: consentSignals, prepareProposal: prepareProposal, consentKey: CONSENT_KEY };
+  return { init: init, readConsent: readConsent, consentSignals: consentSignals, prepareProposal: prepareProposal, createContactReference: createContactReference, withContactReference: withContactReference, whatsappWithReference: whatsappWithReference, consentKey: CONSENT_KEY, referenceKey: REFERENCE_KEY };
 });
