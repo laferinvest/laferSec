@@ -37,6 +37,21 @@
     };
   }
 
+  function measurementLocation(location, choice) {
+    // Keep attribution/debugging parameters, never copy arbitrary query data or fragments.
+    var incoming = new URLSearchParams(location.search || '');
+    var retained = new URLSearchParams();
+    var keys = [];
+    if (choice && choice.analytics) keys = keys.concat(['utm_source', 'utm_medium', 'utm_campaign', 'utm_id', 'utm_term', 'utm_content', '_dbg']);
+    if (choice && choice.advertising) keys = keys.concat(['gclid', 'gbraid', 'wbraid', 'dclid', 'gad_source', 'gad_campaignid']);
+    keys.forEach(function (key) {
+      var value = incoming.get(key);
+      if (value) retained.set(key, value);
+    });
+    var query = retained.toString();
+    return location.origin + location.pathname + (query ? '?' + query : '');
+  }
+
   function createContactReference(cryptoApi) {
     var alphabet = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
     var bytes = new Uint8Array(10);
@@ -133,7 +148,7 @@
         script.src = 'https://www.googletagmanager.com/gtag/js?id=' + (choice.analytics ? ANALYTICS_ID : ADS_ID);
         doc.head.appendChild(script);
       }
-      var cleanLocation = win.location.origin + win.location.pathname;
+      var attributedLocation = measurementLocation(win.location, choice);
       if (choice.analytics && !analyticsConfigured) {
         analyticsConfigured = true;
         gtag('config', ANALYTICS_ID, {
@@ -142,21 +157,21 @@
           allow_ad_personalization_signals: false,
           cookie_expires: CONSENT_DAYS * 86400,
           cookie_update: false,
-          page_location: cleanLocation,
+          page_location: attributedLocation,
           page_referrer: ''
         });
-        gtag('event', 'page_view', { send_to: ANALYTICS_ID, page_location: cleanLocation, page_title: doc.title, page_referrer: '' });
+        gtag('event', 'page_view', { send_to: ANALYTICS_ID, page_location: attributedLocation, page_title: doc.title, page_referrer: '' });
       }
       if (choice.advertising && !advertisingConfigured) {
         advertisingConfigured = true;
-        gtag('config', ADS_ID, { allow_ad_personalization_signals: false, page_location: cleanLocation });
+        gtag('config', ADS_ID, { allow_ad_personalization_signals: false, page_location: attributedLocation });
       }
     }
 
     // Never send the form answers, WhatsApp message, contact data or a "qualified lead" event.
     function track(name, placement, flow, onProcessed) {
       if (!live || !choice || !choice.analytics) return false;
-      var params = { send_to: ANALYTICS_ID, page_location: win.location.origin + win.location.pathname, placement: placement };
+      var params = { send_to: ANALYTICS_ID, page_location: measurementLocation(win.location, choice), placement: placement };
       if (flow) params.contact_flow = flow;
       if (onProcessed) {
         params.event_callback = onProcessed;

@@ -90,19 +90,22 @@ Revisar os termos reais para não excluir consultas comerciais válidas. Não ne
 
 ## Mensuração implementada na página
 
+Em 14/10/2026, o evento lafer_whatsapp_open foi marcado como principal na propriedade prop1 e importado no Google Ads como WhatsApp — landing factoring, categoria Contato, ação Principal, contagem Uma. A Leads-Search-3 passou a usar exclusivamente a meta personalizada WhatsApp da landing. Campanha mantida pausada. Registro: configuracao-conversoes-leads-search-3.md. A confirmação de atribuição pelos primeiros resultados e a integração de qualificação offline continuam pendentes.
+
 As IDs públicas já existentes no site foram reaproveitadas: GA4 G-3Q66N7J22G e Google Ads AW-17741205271. A nova página utiliza a tag direta com consentimento; não carrega o contêiner GTM-K2QRH89T. Isso evita herdar os gatilhos de rolagem e tempo da landing antiga. Não instalar o contêiner também nesta página, pois isso poderá duplicar eventos e ignorar suas escolhas de consentimento.
 
 - Cookies opcionais recusados por padrão; duas finalidades independentes; consentimento de personalização de anúncios sempre negado.
 - Nenhuma tag externa é carregada antes da autorização correspondente.
 - Somente os domínios lafersec.com.br e www.lafersec.com.br podem carregar medição. A prévia local não envia testes para a conta.
 - As respostas do formulário, a faixa de faturamento e a mensagem preparada não entram nos eventos analíticos. Não há dados pessoais nos parâmetros personalizados.
+- Correção de atribuição em 14/10/2026: a URL de medição preserva gclid, gbraid, wbraid, dclid, gad_source e gad_campaignid somente com consentimento para anúncios. Com estatísticas permitidas, preserva os parâmetros UTM padronizados e o sinal _dbg do Tag Assistant. Outros parâmetros da URL e fragmentos são descartados. A preservação se aplica à configuração das tags, ao page_view e aos eventos de contato; os identificadores não entram na mensagem do WhatsApp. Publicar os arquivos atualizados para aplicar a correção no domínio real.
 - A página não grava respostas do formulário. Abre uma mensagem preparada no WhatsApp por ação explícita do visitante.
 
 | Evento GA4 | Significado | Uso na campanha |
 |---|---|---|
 | lafer_cta_click | Clique para a seção de solicitação | Diagnóstico; não conversão primária |
 | lafer_proposal_prepared | Mensagem preparada no formulário | Conversão secundária, se desejado |
-| lafer_whatsapp_open | Intenção de abrir atendimento | Conversão secundária |
+| lafer_whatsapp_open | Intenção de abrir atendimento | Principal na meta WhatsApp da landing da Leads-Search-3; não comprova lead qualificado |
 | lafer_phone_open | Clique no telefone | Conversão secundária |
 | lafer_email_open | Clique no e-mail | Conversão secundária |
 

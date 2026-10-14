@@ -59,7 +59,7 @@ function harness(saved, hostname = 'www.lafersec.com.br', blocked = false, optio
   let nextTimer = 0;
   const win = {
     document: doc,
-    location: { hostname, origin: 'https://' + hostname, pathname: '/enterprise-factoring-ads.html', reload() { reloads++; }, assign(url) { navigations.push(url); } },
+    location: { hostname, origin: 'https://' + hostname, pathname: '/enterprise-factoring-ads.html', search: options.search || '', hash: options.hash || '', reload() { reloads++; }, assign(url) { navigations.push(url); } },
     setTimeout(callback) { const id = ++nextTimer; timers.set(id, callback); return id; },
     clearTimeout(id) { timers.delete(id); },
     crypto: require('node:crypto').webcrypto,
@@ -204,7 +204,8 @@ test('ad lengths, sitelink targets and static page dependencies are ready for up
     for (const match of html.matchAll(/(?:href|src)="([^"]+)"/g)) {
       const url = match[1];
       if (/^(https?:|mailto:|tel:)/.test(url)) continue;
-      const [file, fragment] = url.split('#');
+      const [fileAndQuery, fragment] = url.split('#');
+      const file = fileAndQuery.split('?')[0];
       const target = file ? fs.readFileSync(path.join(root, file)) : Buffer.from(html);
       if (fragment) assert.ok(target.toString().includes('id="' + fragment + '"'), page + ' -> ' + url);
     }
@@ -381,7 +382,7 @@ test('blocked session storage and malformed stored references never break contac
   assert.equal(blocked.scripts.length, 0);
 });
 
-test('custom analytics events do not include the reference, WhatsApp message or click identifiers', () => {
+test('without an ad click, custom analytics events include no reference, WhatsApp message or invented click identifier', () => {
   const h = harness(null, 'www.lafersec.com.br', false, { form: true });
   h.accept.click();
   h.contact.click();
@@ -390,4 +391,97 @@ test('custom analytics events do not include the reference, WhatsApp message or 
   const payload = JSON.stringify(h.commands());
   assert.ok(!payload.includes(h.sessionStored.get(app.referenceKey)));
   assert.ok(!/Referência|gclid|gbraid|wbraid/.test(payload));
+});
+
+test('consented ad attribution survives the initial pageview and both WhatsApp flows without copying unrelated URL data', () => {
+  const ids = { gclid: 'AbC-_123.4+5', gbraid: 'GBRAID_test', wbraid: 'WBRAID_test', dclid: 'DCLID_test', gad_source: '1', gad_campaignid: '123456' };
+  const utms = { utm_source: 'google', utm_medium: 'cpc', utm_campaign: 'factoring_b2b_mg_sp', utm_id: 'campaign_1', utm_term: 'antecipação duplicatas', utm_content: 'anuncio_1' };
+  const search = '?' + new URLSearchParams({ ...ids, ...utms, _dbg: '1', email: 'test@example.com', phone: 'PRIVATE_PHONE', text: 'PRIVATE_MESSAGE', state: 'PRIVATE_STATE', reference: 'PRIVATE_REFERENCE' });
+  const h = harness(null, 'www.lafersec.com.br', false, { form: true, search, hash: '#PRIVATE_FRAGMENT' });
+  assert.equal(h.scripts.length, 0);
+  h.accept.click();
+  h.contact.click();
+  h.elements['proposal-form'].handlers.submit({ preventDefault() {} });
+  h.elements['open-whatsapp'].click();
+  const commands = h.commands().filter(c => c[0] === 'config' || c[0] === 'event');
+  assert.equal(commands.filter(c => c[0] === 'config').length, 2);
+  assert.equal(commands.filter(c => c[1] === 'page_view').length, 1);
+  assert.deepEqual(commands.filter(c => c[1] === 'lafer_whatsapp_open').map(c => c[2].contact_flow), ['direct', 'form']);
+  for (const command of commands) {
+    const url = new URL(command[2].page_location);
+    assert.equal(url.origin, 'https://www.lafersec.com.br');
+    assert.equal(url.pathname, '/enterprise-factoring-ads.html');
+    assert.equal(url.hash, '');
+    for (const [key, value] of Object.entries({ ...ids, ...utms, _dbg: '1' })) assert.equal(url.searchParams.get(key), value);
+    for (const key of ['email', 'phone', 'text', 'state', 'reference']) assert.equal(url.searchParams.has(key), false);
+  }
+  assert.ok(!/PRIVATE_|test@example.com/.test(JSON.stringify(commands)));
+  assert.ok(!JSON.stringify(commands).includes(h.sessionStored.get(app.referenceKey)));
+  assert.equal(h.win.location.search, search, 'Do not rewrite the browser URL');
+  const message = new URL(h.contact.getAttribute('href')).searchParams.get('text');
+  assert.ok(!/AbC-|GBRAID|WBRAID|DCLID/.test(message), 'Ad identifiers do not enter WhatsApp messages');
+});
+
+test('analytics-only measurement keeps campaign/debug parameters but omits advertising identifiers', () => {
+  const h = harness(null, 'www.lafersec.com.br', false, { search: '?gclid=AD_CLICK&gbraid=GB&wbraid=WB&dclid=DC&gad_source=1&gad_campaignid=2&utm_source=google&utm_medium=cpc&_dbg=1&email=PRIVATE_EMAIL' });
+  h.elements['consent-analytics'].checked = true;
+  h.elements['save-consent'].click();
+  h.directProposal.click();
+  assert.deepEqual(h.commands().filter(c => c[0] === 'config').map(c => c[1]), ['G-3Q66N7J22G']);
+  for (const command of h.commands().filter(c => c[0] === 'config' || c[0] === 'event')) {
+    const url = new URL(command[2].page_location);
+    assert.equal(url.searchParams.get('utm_source'), 'google');
+    assert.equal(url.searchParams.get('_dbg'), '1');
+    for (const key of ['gclid', 'gbraid', 'wbraid', 'dclid', 'gad_source', 'gad_campaignid', 'email']) assert.equal(url.searchParams.has(key), false);
+  }
+});
+
+test('advertising-only consent preserves click identifiers without creating a GA4 conversion', () => {
+  const h = harness(null, 'www.lafersec.com.br', false, { search: '?gclid=AD_CLICK&wbraid=WB&utm_source=google&_dbg=1&text=PRIVATE_MESSAGE' });
+  h.elements['consent-advertising'].checked = true;
+  h.elements['save-consent'].click();
+  h.contact.click();
+  const configs = h.commands().filter(c => c[0] === 'config');
+  assert.deepEqual(configs.map(c => c[1]), ['AW-17741205271']);
+  const url = new URL(configs[0][2].page_location);
+  assert.equal(url.searchParams.get('gclid'), 'AD_CLICK');
+  assert.equal(url.searchParams.get('wbraid'), 'WB');
+  for (const key of ['utm_source', '_dbg', 'text']) assert.equal(url.searchParams.has(key), false);
+  assert.equal(h.commands().filter(c => c[0] === 'event').length, 0);
+});
+
+test('ad identifiers do not trigger measurement when optional cookies are refused or on localhost', () => {
+  for (const hostname of ['www.lafersec.com.br', '127.0.0.1']) {
+    const h = harness(null, hostname, false, { form: true, search: '?gclid=AD_CLICK&_dbg=1' });
+    if (hostname === '127.0.0.1') h.accept.click();
+    else h.reject.click();
+    h.contact.click();
+    h.elements['proposal-form'].handlers.submit({ preventDefault() {} });
+    h.elements['open-whatsapp'].click();
+    assert.equal(h.scripts.length, 0);
+    assert.equal(h.commands().filter(c => c[0] === 'config' || c[0] === 'event').length, 0);
+    assert.equal(h.navigations.length, 1);
+  }
+});
+
+test('saved consent preserves a new ad click from the first measured visit', () => {
+  const h = harness({ version: 1, analytics: true, advertising: true, savedAt: Date.now() }, 'www.lafersec.com.br', false, { search: '?gclid=NewCaseSensitiveClick&utm_campaign=factoring' });
+  const pageview = h.commands().find(c => c[1] === 'page_view');
+  assert.equal(new URL(pageview[2].page_location).searchParams.get('gclid'), 'NewCaseSensitiveClick');
+  assert.equal(h.scripts.length, 1);
+});
+
+test('granting advertising after analytics adds click attribution to subsequent contact events without duplicate pageviews', () => {
+  const h = harness(null, 'www.lafersec.com.br', false, { search: '?gclid=AD_CLICK&email=PRIVATE_EMAIL' });
+  h.elements['consent-analytics'].checked = true;
+  h.elements['save-consent'].click();
+  h.contact.click();
+  h.elements['consent-advertising'].checked = true;
+  h.elements['save-consent'].click();
+  h.directProposal.click();
+  const events = h.commands().filter(c => c[1] === 'lafer_whatsapp_open');
+  assert.equal(new URL(events[0][2].page_location).searchParams.has('gclid'), false);
+  assert.equal(new URL(events[1][2].page_location).searchParams.get('gclid'), 'AD_CLICK');
+  assert.equal(h.commands().filter(c => c[1] === 'page_view').length, 1);
+  assert.equal(h.scripts.length, 1);
 });
