@@ -311,10 +311,15 @@ test('editing a proposal clears the previous draft and does not emit a WhatsApp 
 test('actual landing contact links and CTA targets match the event classifications', () => {
   const html = fs.readFileSync(path.join(root, 'enterprise-factoring-ads.html'), 'utf8');
   const contacts = [...html.matchAll(/<a\b[^>]*\bdata-contact="[^"]+"[^>]*>/g)].map(m => m[0]);
-  assert.equal(contacts.length, 2);
-  assert.ok(contacts.every(contact => contact.includes('data-placement="footer"')));
-  assert.ok(!/<a\b[^>]*href="https:\/\/wa\.me\//.test(html), 'No WhatsApp bypass before the triage form');
-  assert.ok(!html.includes('Prefere falar diretamente?'));
+  assert.equal(contacts.length, 3);
+  const directWhatsApp = contacts.filter(contact => contact.includes('data-contact="whatsapp"'));
+  assert.equal(directWhatsApp.length, 1);
+  assert.ok(directWhatsApp[0].includes('data-placement="proposal"'));
+  const destination = new URL(directWhatsApp[0].match(/href="([^"]+)"/)[1]);
+  assert.equal(destination.pathname, '/5535997735926');
+  assert.equal(destination.searchParams.get('text'), 'Bom dia, equipe Lafer. Gostaria de obter mais informações sobre as suas taxas e operações');
+  assert.ok(contacts.filter(contact => !contact.includes('data-contact="whatsapp"')).every(contact => contact.includes('data-placement="footer"')));
+  assert.ok(html.includes('Prefere falar diretamente?'));
   assert.ok(html.includes('href="mailto:adm@lafersec.com.br"'));
   for (const contact of contacts) {
     const kind = contact.match(/data-contact="([^"]+)"/)[1];
