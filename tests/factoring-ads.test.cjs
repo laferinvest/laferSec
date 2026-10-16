@@ -60,7 +60,7 @@ function harness(saved, hostname = 'www.lafersec.com.br', blocked = false, optio
   let nextTimer = 0;
   const win = {
     document: doc,
-    location: { hostname, origin: 'https://' + hostname, pathname: '/enterprise-factoring-ads.html', search: options.search || '', hash: options.hash || '', reload() { reloads++; }, assign(url) { navigations.push(url); } },
+    location: { hostname, origin: 'https://' + hostname, pathname: options.pathname || '/enterprise-factoring-ads.html', search: options.search || '', hash: options.hash || '', reload() { reloads++; }, assign(url) { navigations.push(url); } },
     setTimeout(callback) { const id = ++nextTimer; timers.set(id, callback); return id; },
     clearTimeout(id) { timers.delete(id); },
     crypto: require('node:crypto').webcrypto,
@@ -197,7 +197,7 @@ test('ad lengths, sitelink targets and static page dependencies are ready for up
     assert.ok(landing.includes('id="' + s.fragment + '"'), s.fragment);
     assert.equal(new URL(s.final_url).pathname, '/enterprise-factoring-ads.html');
   });
-  for (const page of ['enterprise-factoring-ads.html', 'politica-de-privacidade.html']) {
+  for (const page of ['enterprise-factoring-ads.html', 'enterprise-securitizadora-ads.html', 'politica-de-privacidade.html']) {
     const html = fs.readFileSync(path.join(root, page), 'utf8');
     assert.equal((html.match(/<h1\b/g) || []).length, 1);
     const ids = [...html.matchAll(/\bid="([^"]+)"/g)].map(m => m[1]);
@@ -528,4 +528,54 @@ test('the about CTA is a triage navigation event and cannot count as a WhatsApp 
   assert.equal(event[2].placement, 'about');
   assert.equal(h.sessionStored.size, 0);
   assert.equal(h.navigations.length, 0);
+});
+
+test('the securitizadora landing keeps the form contract, commercial disclosures and a single direct WhatsApp contact', () => {
+  const html = fs.readFileSync(path.join(root, 'enterprise-securitizadora-ads.html'), 'utf8').replace(/<!--[\s\S]*?-->/g, '');
+  assert.ok(!html.includes('id="perguntas-frequentes"'));
+  assert.ok(html.includes('id="desconto-de-boleto"'));
+  assert.ok(html.includes('href="mailto:adm@lafersec.com.br"'));
+  assert.ok(html.includes('https://www.lafersec.com.br/enterprise-securitizadora-ads.html'));
+  const schema = JSON.parse(html.match(/<script type="application\/ld\+json">\s*([\s\S]*?)<\/script>/)[1]);
+  assert.equal(schema['@type'], 'FinancialService');
+  assert.equal(schema.telephone, '+5535997735926');
+  assert.equal(schema.email, 'adm@lafersec.com.br');
+  const inputs = {};
+  for (const [field, id] of Object.entries({ state: 'company-state', revenue: 'company-revenue', buyers: 'company-buyers', receivable: 'receivable-type' })) {
+    const select = html.match(new RegExp('<select id="' + id + '"[^>]*required[^>]*>(.*?)</select>'));
+    assert.ok(select, id);
+    inputs[field] = [...select[1].matchAll(/<option value="([^"]+)">/g)].map(m => m[1]);
+  }
+  for (const revenue of inputs.revenue) assert.doesNotThrow(() => app.prepareProposal({ state: 'MG', revenue, buyers: 'business', receivable: 'products' }));
+  for (const receivable of inputs.receivable) assert.doesNotThrow(() => app.prepareProposal({ state: 'MG', revenue: 'from200', buyers: 'business', receivable }));
+  const whatsappLinks = [...html.matchAll(/<a\b[^>]*data-contact="whatsapp"[^>]*>/g)].map(m => m[0]);
+  assert.equal(whatsappLinks.length, 1);
+  assert.ok(whatsappLinks[0].includes('data-placement="proposal"'));
+  const direct = new URL(whatsappLinks[0].match(/href="([^"]+)"/)[1]);
+  assert.equal(direct.pathname, '/5535997735926');
+  assert.equal(direct.searchParams.get('text'), 'Bom dia, equipe Lafer. Gostaria de obter mais informações sobre as suas taxas e operações');
+});
+
+test('the new landing preserves its own attribution URL and the shared event for direct and prepared WhatsApp contacts', () => {
+  const pathname = '/enterprise-securitizadora-ads.html';
+  const h = harness(null, 'www.lafersec.com.br', false, { form: true, pathname, search: '?gclid=SEC_CLICK&utm_content=securitizadora&email=PRIVATE_EMAIL' });
+  h.accept.click();
+  h.directProposal.click();
+  h.elements['company-revenue'].value = 'from5m';
+  h.elements['proposal-form'].handlers.submit({ preventDefault() {} });
+  h.elements['open-whatsapp'].click();
+  const contacts = h.commands().filter(c => c[1] === 'lafer_whatsapp_open');
+  assert.deepEqual(contacts.map(c => c[2].contact_flow), ['direct', 'form']);
+  for (const command of h.commands().filter(c => c[0] === 'event' || c[0] === 'config')) {
+    const url = new URL(command[2].page_location);
+    assert.equal(url.pathname, pathname);
+    assert.equal(url.searchParams.get('gclid'), 'SEC_CLICK');
+    assert.equal(url.searchParams.get('utm_content'), 'securitizadora');
+    assert.equal(url.searchParams.has('email'), false);
+  }
+  assert.equal(h.commands().filter(c => c[1] === 'page_view').length, 1);
+  assert.ok(!/PRIVATE_EMAIL|Faturamento mensal|De R\$ 5 milhões/.test(JSON.stringify(contacts)));
+  contacts[1][2].event_callback();
+  assert.equal(h.navigations.length, 1);
+  assert.match(new URL(h.navigations[0]).searchParams.get('text'), /De R\$ 5 milhões a R\$ 10 milhões/);
 });

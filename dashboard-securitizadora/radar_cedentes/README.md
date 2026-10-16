@@ -299,8 +299,9 @@ Fundos.NET/B3 ───────────┼→ normalização do CNPJ →
 Prospectos/ofertas ──────┘
 ```
 
-Fundos.NET/B3 e prospectos ainda não foram implementados nem tiveram seus
-endpoints validados nesta etapa. Neles, scripts devem descobrir/baixar os
+O coletor de informes de CRI/CRA do Fundos.NET foi implementado em 15/10/2026,
+conforme descrito abaixo. Prospectos ainda não foram implementados. Neles,
+scripts devem descobrir/baixar os
 documentos e tentar extrair o texto. OCR e IA podem ajudar em PDFs complexos;
 a extração deve conservar página, trecho, papel e contexto. Uma ocorrência
 de CNPJ perto da palavra "cedente" não basta, e uma empresa prevista como
@@ -319,3 +320,69 @@ histórico da evidência CVM. Os registros originais e suas fontes permanecem em
 Para os três cadastros no exterior, `data/localizacao_complementos.json`
 documenta as fontes da cidade e da divisão administrativa equivalente ao estado,
 sem substituir o registro original da consulta cadastral.
+
+## Cedentes de CRI/CRA divulgados pelo Fundos.NET
+
+`python -m radar_cedentes.securitizadoras --ano 2026` lê os informes de
+securitizadoras enviados pelo Fundos.NET e consolidados em dados abertos pela
+CVM. Fontes: `securit-doc-inf_mensal_cri` e `securit-doc-inf_mensal_cra` no
+portal da CVM, arquivos anuais `inf_mensal_cri_2026.zip` e
+`inf_mensal_cra_2026.zip`. A extração usa as tabelas `cedente_devedor`,
+exclusivamente as linhas `Tipo=Cedente`; `CNPJ_Emissora` identifica somente a
+securitizadora e jamais é usado como CNPJ do lead. A união com a tabela `geral`
+usa emissora, código do certificado, competência e versão. CPF, identificador
+inválido, fundo/classe e outra natureza jurídica não entram na lista de empresas.
+Empresas que só apresentam percentual zero/ausente ficam fora da exportação.
+
+O percentual dessas tabelas é uma fração: `1` representa `100%`. Sua escala é
+conferida contra o campo `CedentesRepresentamMais20Porcento` do XML original,
+com tolerância de 1e-10 para a representação decimal do consolidado. Isso é
+diferente dos pontos percentuais usados no coletor FIDC. Não se usa o quadro
+de devedores nem limites contratuais como prova de cessão.
+
+`python -m radar_cedentes.fnet_documentos --completo` consulta os metadados
+públicos de informes de CRI/CRA do Fundos.NET, tipos 86/81, com paginação de 200
+registros, e confere XMLs originais. O vínculo exige código da operação,
+competência, versão no índice, CNPJ da emissora e CNPJ do cedente no bloco
+específico de cedentes. Os originais ficam em `data/fnet/originais`, com hash.
+Falhas temporárias individuais mantêm como fonte o CSV oficial preservado,
+sem inventar link de documento. A paginação e os cadastros têm cache e limite
+global de requisições. As evidências também ficam na tabela SQLite
+`evidencias_securitizadoras` e nos arquivos JSON de `data/fnet`.
+
+`python -m radar_cedentes.securitizadoras_export` prepara a lista empresarial
+deduplicada por CNPJ completo e uma evidência por empresa para a planilha.
+O histórico completo de aparições é preservado. O recorte de 2026 disponível
+em 15/10/2026 contém CRI de janeiro a setembro e CRA de janeiro a agosto.
+Os endereços e capitais são cadastrais, consultados em outubro de 2026.
+Esta etapa cobre os informes mensais estruturados de CRI/CRA; não é uma
+varredura de todos os PDFs, relatórios e documentos já publicados pela B3.
+
+## Recorte comercial solicitado pelo usuário
+
+O objetivo comercial é localizar indústrias que antecipam recebíveis das
+próprias vendas: duplicatas e faturas cedidas a FIDCs/securitizadoras. A lista
+de CRI/CRA acima não está qualificada para esse objetivo. CNAE industrial ou
+um nome de indústria na emissão não comprova cessão dos seus recebíveis.
+Uma nota comercial emitida pela indústria é dívida da indústria. Cessão
+fiduciária em garantia também não deve ser confundida automaticamente com
+antecipação de carteira de vendas. Páginas que oferecem antecipar títulos
+"contra" determinada empresa identificam um sacado, não necessariamente um cedente.
+
+`ots_investigacao` preserva os informes de Outros Títulos de Securitização
+de 2023 a 2026, e `ots_comerciais` cruza o CNPJ explicitamente declarado
+`Tipo=Cedente` com o contexto da emissão, competência e versão. Só admite
+lastro explicitamente descrito como duplicatas, créditos mercantis ou notas
+fiscais; casos genéricos ou de dívida sem prova de carteira comercial não
+entram automaticamente. Na pesquisa em 15/10/2026, os 5.173 informes gerais
+continham 24 CNPJs distintos nos campos de cedente, e o único confirmado
+pelo cruzamento estrito de lastro e CNPJ foi Guerra Implementos Rodoviários
+S/A, 31.008.318/0001-42, lastro em duplicatas. Isso não significa que não
+existam outros cedentes: identifica somente o que esses dados comprovam.
+
+A comprovação documental adicional está na página 15 do PDF Fundos.NET
+1071579, nota 7: duplicatas comerciais endossadas pela Guerra. O CNPJ do
+cedente vem do informe mensal, e não do cabeçalho do PDF, cujo CNPJ é o da
+securitizadora. A data do relatório auditado (30/09/2025) é distinta da
+competência do registro cadastral de cedente escolhido (03/2026).
+`ots_confirmado` prepara a exportação com essas duas evidências separadas.
