@@ -82,8 +82,8 @@ export default function App() {
     if (tab === "cedentesTree" || tab === "risk") setAnalysisView(tab);
     if (tab === "micro" && typeof window !== "undefined") {
       const width = window.innerWidth;
-      const mobile = width < 640;
-      const tablet = width >= 640 && width < 1824;
+      const mobile = width < 1024;
+      const tablet = width >= 1024 && width < 1824;
       setIsMobile(mobile);
       setIsTablet(tablet);
       setIsSidebarOpen(!mobile);
@@ -126,6 +126,7 @@ export default function App() {
 
   return (
     <div
+      className={`app-shell ${activeTab === "micro" && session ? "app-with-filters" : ""}`}
       style={{
         fontFamily: "'Inter', system-ui, Arial, sans-serif",
         minHeight: "100vh",
@@ -135,7 +136,7 @@ export default function App() {
         boxSizing: "border-box",
       }}
     >
-      <div style={{ width: "90%", maxWidth: "1400px", margin: "0 auto" }}>
+      <div className="app-container" style={{ width: "90%", maxWidth: "1400px", margin: "0 auto" }}>
         {!session ? (
           <div>
             <div style={{ marginBottom: 32 }}>
@@ -155,7 +156,7 @@ export default function App() {
             <div
               style={{
                 background: "#fff",
-                padding: "40px",
+                padding: "clamp(20px, 5vw, 40px)",
                 borderRadius: "12px",
                 boxShadow:
                   "0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)",
@@ -291,7 +292,7 @@ export default function App() {
             <div
               style={{
                 background: "#fff",
-                padding: "40px",
+                padding: "clamp(20px, 5vw, 40px)",
                 borderRadius: "12px",
                 boxShadow:
                   "0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)",
@@ -327,8 +328,8 @@ export default function App() {
           </div>
         ) : (
           <div>
-            <div style={slideStyle}>
-              <div
+            <div className="app-heading" style={slideStyle}>
+              <div className="app-header"
                 style={{
                   display: "flex",
                   flexWrap: "wrap",
@@ -367,7 +368,7 @@ export default function App() {
                   Sair do sistema
                 </button>
               </div>
-              <div
+              <nav aria-label="Abas do dashboard" className="app-tabs"
                 style={{
                   display: "flex",
                   gap: "16px",
@@ -446,7 +447,7 @@ export default function App() {
                 >
                   Análise de NF
                 </button>
-              </div>
+              </nav>
             </div>
 
             {isAnalysisActive && (

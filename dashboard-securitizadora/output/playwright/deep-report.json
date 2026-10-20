@@ -1,0 +1,95 @@
+{
+  "audits": [
+    {
+      "name": "risk-320-Visão-Geral",
+      "width": 320,
+      "scrollWidth": 320
+    },
+    {
+      "name": "risk-320-Limites-e-Alertas",
+      "width": 320,
+      "scrollWidth": 320
+    },
+    {
+      "name": "risk-320-Rating-Interno",
+      "width": 320,
+      "scrollWidth": 320
+    },
+    {
+      "name": "limits-dialog-320",
+      "width": 320,
+      "scrollWidth": 320
+    },
+    {
+      "name": "wizard-search-320",
+      "width": 320,
+      "scrollWidth": 320
+    },
+    {
+      "name": "wizard-family-320",
+      "width": 320,
+      "scrollWidth": 320
+    },
+    {
+      "name": "risk-390-Visão-Geral",
+      "width": 390,
+      "scrollWidth": 390
+    },
+    {
+      "name": "risk-390-Limites-e-Alertas",
+      "width": 390,
+      "scrollWidth": 390
+    },
+    {
+      "name": "risk-390-Rating-Interno",
+      "width": 390,
+      "scrollWidth": 390
+    },
+    {
+      "name": "limits-dialog-390",
+      "width": 390,
+      "scrollWidth": 390
+    },
+    {
+      "name": "wizard-search-390",
+      "width": 390,
+      "scrollWidth": 390
+    },
+    {
+      "name": "wizard-family-390",
+      "width": 390,
+      "scrollWidth": 390
+    },
+    {
+      "name": "risk-768-Visão-Geral",
+      "width": 768,
+      "scrollWidth": 768
+    },
+    {
+      "name": "risk-768-Limites-e-Alertas",
+      "width": 768,
+      "scrollWidth": 768
+    },
+    {
+      "name": "risk-768-Rating-Interno",
+      "width": 768,
+      "scrollWidth": 768
+    },
+    {
+      "name": "limits-dialog-768",
+      "width": 768,
+      "scrollWidth": 768
+    },
+    {
+      "name": "wizard-search-768",
+      "width": 768,
+      "scrollWidth": 768
+    },
+    {
+      "name": "wizard-family-768",
+      "width": 768,
+      "scrollWidth": 768
+    }
+  ],
+  "errors": []
+}

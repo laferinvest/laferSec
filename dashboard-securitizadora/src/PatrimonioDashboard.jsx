@@ -98,7 +98,7 @@ function LineChart({
 
   if (!data || data.length === 0) {
     return (
-      <div style={chartBoxStyle}>
+      <div className="mobile-panel" style={chartBoxStyle}>
         <h3 style={chartTitleStyle}>{title}</h3>
         <p style={chartSubtitleStyle}>{subtitle}</p>
         <div style={{ color: "#6b7280", fontSize: 14 }}>Sem dados suficientes.</div>
@@ -295,7 +295,7 @@ const renderOutsideSelectionMask = () => {
 };
 
   return (
-    <div style={chartBoxStyle}>
+    <div className="mobile-panel" style={chartBoxStyle}>
       <h3 style={chartTitleStyle}>{title}</h3>
       <p style={chartSubtitleStyle}>{subtitle}</p>
 
@@ -813,8 +813,7 @@ const handleChartRangeSelect = useCallback(({ start, end, source }) => {
             padding: isMobile ? "16px" : "24px",
           }}
         >
-          <div
-            style={{
+          <div className="mobile-wrap" style={{
               display: "flex",
               justifyContent: "space-between",
               alignItems: "flex-start",

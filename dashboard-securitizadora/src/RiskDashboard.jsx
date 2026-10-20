@@ -835,6 +835,7 @@ function RiskLimitsModal({ limits, patrimonio, saving, error, onClose, onSave })
               : null;
             const renderInput = (field, accessibleLabel) => (
               <label>
+                <span className="risk-threshold-label" aria-hidden="true">{accessibleLabel}</span>
                 <span className="risk-sr-only">{accessibleLabel} para {definition.configLabel || definition.label}</span>
                 <div className="risk-number-field">
                   {inputUnit === "currency" && <b>R$</b>}

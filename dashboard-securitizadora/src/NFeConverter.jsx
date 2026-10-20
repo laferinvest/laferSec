@@ -485,8 +485,7 @@ function Toggle({
   const bloqueado = saving || disabled;
 
   return (
-    <div
-      style={{
+    <div className="mobile-wrap" style={{
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
@@ -995,7 +994,7 @@ export default function NFeConverter() {
   const isDisabled = loading || files.length === 0;
 
   return (
-    <div
+    <div className="nfe-converter"
       style={{
         background: "#fff",
         padding: "32px",
@@ -1003,7 +1002,8 @@ export default function NFeConverter() {
         boxShadow: "0 8px 20px rgba(0,0,0,0.06)",
         width: "70%",
         maxWidth: "1400px",
-        minWidth: "600px",
+        minWidth: 0,
+        boxSizing: "border-box",
         margin: "0 auto",
         border: "1px solid #e5e7eb",
       }}
@@ -1310,8 +1310,7 @@ export default function NFeConverter() {
                           overflow: "hidden",
                         }}
                       >
-                        <div
-                          style={{
+                        <div className="mobile-wrap" style={{
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "space-between",

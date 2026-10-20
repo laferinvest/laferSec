@@ -1,3 +1,4 @@
+import SearchableSelect from "./SearchableSelect";
 import React, { useEffect, useMemo, useState, useRef } from "react";
 import { supabase } from "./supabaseClient";
 import { applyPortfolioStatuses, isValidPortfolioRow } from "./portfolioRiskRules";
@@ -1009,9 +1010,9 @@ function EvolutionCharts({ rows, dateFilter, setDateFilter, setBorderoFilter, se
     setDctoFilter(null);
   };
 
-const chartBoxStyle = { flex: "0 1 calc(50% - 12px)", minWidth: "320px", maxWidth: "100%", background: "#fff", padding: "20px", borderRadius: "10px", border: "1px solid #e5e7eb", boxShadow: "0 4px 12px rgba(0,0,0,0.05)", boxSizing: "border-box" };
+const chartBoxStyle = { flex: "0 1 calc(50% - 12px)", minWidth: "min(100%, 320px)", maxWidth: "100%", background: "#fff", padding: "20px", borderRadius: "10px", border: "1px solid #e5e7eb", boxShadow: "0 4px 12px rgba(0,0,0,0.05)", boxSizing: "border-box" };
 return (
-    <div style={{ background: "#fff", padding: "24px", borderRadius: "12px", boxShadow: "0 8px 20px rgba(0, 0, 0, 0.06)", border: "1px solid #e5e7eb" }}>
+    <div className="mobile-panel" style={{ background: "#fff", padding: "24px", borderRadius: "12px", boxShadow: "0 8px 20px rgba(0, 0, 0, 0.06)", border: "1px solid #e5e7eb" }}>
       <div onClick={() => setIsCollapsed(!isCollapsed)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", userSelect: "none" }}>
         <div>
            <h2 style={{ margin: 0, fontSize: "16px", fontWeight: "700", color: "#374151" }}>Análise Gráfica Evolutiva</h2>
@@ -1026,11 +1027,11 @@ return (
       <CollapsePanel isCollapsed={isCollapsed}>
         <div style={{ paddingTop: "24px" }}>
           <div style={{ display: "flex", flexWrap: "wrap", gap: "24px", marginBottom: "24px" }}>
-            <div style={chartBoxStyle}>
+            <div className="mobile-panel" style={chartBoxStyle}>
               <h3 style={{ margin: "0 0 16px 0", color: "#111827", fontSize: "16px", fontWeight: "600" }}>
                 Evolução de Valores <span style={{fontSize: "12px", color:"#9ca3af", fontWeight: "400"}}>(Emissão)</span>
               </h3>
-              <div style={{ position: "relative", width: "100%", height: "auto" }}>
+              <div className="evolution-chart-scroll" style={{ position: "relative", width: "100%", height: "auto" }}>
                 <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} style={{ width: "100%", height: "auto", overflow: "visible" }}>
                   <defs><linearGradient id="gradientArea1" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#4f46e5" stopOpacity="0.4" /><stop offset="100%" stopColor="#4f46e5" stopOpacity="0.0" /></linearGradient></defs>
                   {renderHighlight(points1, 'emis', '79, 70, 229')}
@@ -1072,7 +1073,7 @@ return (
               </div>
             </div>
 
-            <div style={chartBoxStyle}>
+            <div className="mobile-panel" style={chartBoxStyle}>
               <div style={{ marginBottom: "12px" }}>
                 <div>
                   <h3 style={{ margin: 0, color: "#111827", fontSize: "16px", fontWeight: "600" }}>
@@ -1080,7 +1081,7 @@ return (
                   </h3>
                 </div>
               </div>
-              <div style={{ position: "relative", width: "100%", height: "auto" }}>
+              <div className="evolution-chart-scroll" style={{ position: "relative", width: "100%", height: "auto" }}>
                 <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} style={{ width: "100%", height: "auto", overflow: "visible" }}>
                   <defs><linearGradient id="gradientArea5" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={trendColor5} stopOpacity="0.25" /><stop offset="100%" stopColor={trendColor5} stopOpacity="0.0" /></linearGradient></defs>
                   {renderHighlight(points5, 'emis', trendRgb5)}
@@ -1135,7 +1136,7 @@ return (
               <h3 style={{ margin: "0 0 16px 0", color: "#111827", fontSize: "16px", fontWeight: "600" }}>
                 Evolução da Taxa Média <span style={{fontSize: "12px", color:"#9ca3af", fontWeight: "400"}}>(Emissão)</span>
               </h3>
-              <div style={{ position: "relative", width: "100%", height: "auto" }}>
+              <div className="evolution-chart-scroll" style={{ position: "relative", width: "100%", height: "auto" }}>
                 <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} style={{ width: "100%", height: "auto", overflow: "visible" }}>
                   <defs><linearGradient id="gradientArea3" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#10b981" stopOpacity="0.4" /><stop offset="100%" stopColor="#10b981" stopOpacity="0.0" /></linearGradient></defs>
                   {renderHighlight(points3, 'emis', '16, 185, 129')}
@@ -1181,7 +1182,7 @@ return (
               <h3 style={{ margin: "0 0 16px 0", color: "#111827", fontSize: "16px", fontWeight: "600" }}>
                 Percentual de Atraso <span style={{fontSize: "12px", color:"#9ca3af", fontWeight: "400"}}>(Vencimento)</span>
               </h3>
-              <div style={{ position: "relative", width: "100%", height: "auto" }}>
+              <div className="evolution-chart-scroll" style={{ position: "relative", width: "100%", height: "auto" }}>
                 <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} style={{ width: "100%", height: "auto", overflow: "visible" }}>
                   <defs><linearGradient id="gradientArea2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#ef4444" stopOpacity="0.3" /><stop offset="100%" stopColor="#ef4444" stopOpacity="0.0" /></linearGradient></defs>
                   {renderHighlight(points2, 'vcto', '239, 68, 68')}
@@ -1227,7 +1228,7 @@ return (
               <h3 style={{ margin: "0 0 16px 0", color: "#111827", fontSize: "16px", fontWeight: "600" }}>
                 Evolução de Atraso Médio <span style={{fontSize: "12px", color:"#9ca3af", fontWeight: "400"}}>(Vencimento)</span>
               </h3>
-              <div style={{ position: "relative", width: "100%", height: "auto" }}>
+              <div className="evolution-chart-scroll" style={{ position: "relative", width: "100%", height: "auto" }}>
                 <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} style={{ width: "100%", height: "auto", overflow: "visible" }}>
                   <defs><linearGradient id="gradientArea7" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#ea580c" stopOpacity="0.32" /><stop offset="100%" stopColor="#ea580c" stopOpacity="0.0" /></linearGradient></defs>
                   {renderHighlight(points7, 'vcto', '234, 88, 12')}
@@ -1278,7 +1279,7 @@ return (
               <h3 style={{ margin: "0 0 16px 0", color: "#111827", fontSize: "16px", fontWeight: "600" }}>
                 Evolução do Deságio <span style={{fontSize: "12px", color:"#9ca3af", fontWeight: "400"}}>(Emissão)</span>
               </h3>
-              <div style={{ position: "relative", width: "100%", height: "auto" }}>
+              <div className="evolution-chart-scroll" style={{ position: "relative", width: "100%", height: "auto" }}>
                 <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} style={{ width: "100%", height: "auto", overflow: "visible" }}>
                   <defs><linearGradient id="gradientArea4" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#f59e0b" stopOpacity="0.4" /><stop offset="100%" stopColor="#f59e0b" stopOpacity="0.0" /></linearGradient></defs>
                   {renderHighlight(points4, 'emis', '245, 158, 11')}
@@ -1324,7 +1325,7 @@ return (
               <h3 style={{ margin: "0 0 16px 0", color: "#111827", fontSize: "16px", fontWeight: "600" }}>
                 Pagamentos a Cair <span style={{fontSize: "12px", color:"#9ca3af", fontWeight: "400"}}>(Vencimento)</span>
               </h3>
-              <div style={{ position: "relative", width: "100%", height: "auto" }}>
+              <div className="evolution-chart-scroll" style={{ position: "relative", width: "100%", height: "auto" }}>
                 <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} style={{ width: "100%", height: "auto", overflow: "visible" }}>
                   <defs><linearGradient id="gradientArea6" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#0ea5e9" stopOpacity="0.85" /><stop offset="100%" stopColor="#38bdf8" stopOpacity="0.55" /></linearGradient></defs>
                   <line x1={paddingX} y1={paddingTop} x2={svgWidth - paddingRight} y2={paddingTop} stroke="#f3f4f6" strokeWidth="1" />
@@ -1614,7 +1615,7 @@ function DashboardInsights({ processedRows, insightFilter, setInsightFilter, set
   };
 
 return (
-    <div style={{ background: "#fff", padding: "24px", borderRadius: "12px", boxShadow: "0 8px 20px rgba(0, 0, 0, 0.06)", border: "1px solid #e5e7eb" }}>
+    <div className="mobile-panel" style={{ background: "#fff", padding: "24px", borderRadius: "12px", boxShadow: "0 8px 20px rgba(0, 0, 0, 0.06)", border: "1px solid #e5e7eb" }}>
       <div onClick={() => setIsCollapsed(!isCollapsed)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", userSelect: "none" }}>
         <h2 style={{ margin: 0, fontSize: "16px", fontWeight: "700", color: "#374151" }}>Visão Geral (Insights)</h2>
         <span style={{ background: "transparent", border: "1px solid #d1d5db", padding: "4px 10px", borderRadius: "6px", color: "#4b5563", fontSize: "12px", fontWeight: "600", display: "flex", alignItems: "center", gap: "6px" }}>
@@ -1625,7 +1626,7 @@ return (
 
       <CollapsePanel isCollapsed={isCollapsed}>
         <div style={{ paddingTop: "24px" }}>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "32px", alignItems: "center" }}>
+          <div className="insights-layout" style={{ display: "flex", flexWrap: "wrap", gap: "32px", alignItems: "center" }}>
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "12px" }}>
               <div style={{ width: "170px", height: "170px", position: "relative" }}>
                 <svg viewBox="-1.1 -1.1 2.2 2.2" style={{ transform: 'rotate(-90deg)', overflow: 'visible', width: '100%', height: '100%', filter: 'drop-shadow(0px 4px 6px rgba(0,0,0,0.15))' }} onMouseLeave={() => {setTooltip({show: false}); setHoveredSlice(null);}}>
@@ -1649,14 +1650,14 @@ return (
                 <span style={{ fontSize: "16px", fontWeight: "700", color: "#111827" }}>{fmtM(stats.values.total)}</span>
               </div>
             </div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "16px", flex: 1, alignItems: "stretch" }}>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "16px", flex: "3 1 560px" }}>
+            <div className="insights-cards" style={{ display: "flex", flexWrap: "wrap", gap: "16px", flex: 1, alignItems: "stretch" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 180px), 1fr))", gap: "16px", flex: "3 1 560px" }}>
                 {renderCard('liquidado', "#22c55e", "Liquidado em dia", stats.counts.liquidado, stats.values.liquidado, null, stats.desagioValues.liquidado, null, "Prazo Médio", capitalQuitado, "do capital quitado", titulosQuitados)}
                 {renderCard('liquidadoAtraso', "#f59e0b", "Liquidado c/ atraso", stats.counts.liquidadoAtraso, stats.values.liquidadoAtraso, stats.avgDelays.liquidadoAtraso, stats.desagioValues.liquidadoAtraso, null, "Prazo Médio", capitalQuitado, "do capital quitado", titulosQuitados)}
                 {renderCard('recompra', "#8b5cf6", "Recompra", stats.counts.recompra, stats.values.recompra, stats.avgDelays.recompra, stats.desagioValues.recompra, null, "Prazo Médio", capitalQuitado, "do capital quitado", titulosQuitados)}
               </div>
               <div style={{ width: "3px", minWidth: "3px", alignSelf: "stretch", background: "linear-gradient(180deg, transparent 0%, #94a3b8 12%, #64748b 50%, #94a3b8 88%, transparent 100%)", borderRadius: "999px", boxShadow: "0 0 0 1px rgba(100,116,139,0.12), 0 8px 18px rgba(15,23,42,0.16)", minHeight: "160px", margin: "0 6px" }} />
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "16px", flex: "2 1 360px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 180px), 1fr))", gap: "16px", flex: "2 1 360px" }}>
                 {renderCard('aVencer', "#94a3b8", "A vencer", stats.counts.aVencer, stats.values.aVencer, null, stats.desagioValues.aVencer, stats.prazoMedioAVencer, "Dias p/ Vencer", capitalAberto, "do capital em aberto", titulosAbertos)}
                 {renderCard('atraso', "#ef4444", "Em atraso", stats.counts.atraso, stats.values.atraso, stats.avgDelays.atraso, stats.desagioValues.atraso, null, "Prazo Médio", capitalAberto, "do capital em aberto", titulosAbertos)}
               </div>
@@ -1892,12 +1893,12 @@ function SacadoConcentrationCard({
               </div>
 
               {!card.enriched.length ? (
-                <div style={{ padding: "28px 20px", textAlign: "center", color: "#6b7280", border: "1px dashed #d1d5db", borderRadius: "12px", background: "#fafafa" }}>
+                <div className="mobile-panel" style={{ padding: "28px 20px", textAlign: "center", color: "#6b7280", border: "1px dashed #d1d5db", borderRadius: "12px", background: "#fafafa" }}>
                   Não há capital em aberto por sacado para este cedente.
                 </div>
               ) : (
-                <div style={{ display: "grid", gridTemplateColumns: "minmax(280px, 360px) minmax(0, 1fr)", gap: "24px", alignItems: "stretch" }}>
-                  <div style={{ border: "1px solid #e5e7eb", borderRadius: "14px", background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", padding: "22px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: 400 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "var(--concentration-columns, minmax(280px, 360px) minmax(0, 1fr))", gap: "24px", alignItems: "stretch" }}>
+                  <div className="mobile-panel" style={{ border: "1px solid #e5e7eb", borderRadius: "14px", background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", padding: "22px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: 400 }}>
                     <div style={{ width: "100%", display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", marginBottom: "18px" }}>
                       <div style={{ fontSize: 10, color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", lineHeight: 1.2 }}>Capital em aberto</div>
                       <div style={{ fontSize: 28, color: "#111827", fontWeight: 800, lineHeight: 1.1, marginTop: 6, letterSpacing: "-0.02em", wordBreak: "break-word" }}>
@@ -1956,7 +1957,7 @@ function SacadoConcentrationCard({
                   </div>
 
                   <div style={{ border: "1px solid #e5e7eb", borderRadius: "14px", overflow: "hidden", background: "#fff" }}>
-                    <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 170px 110px", gap: "12px", padding: "14px 16px", background: "#f8fafc", borderBottom: "1px solid #e5e7eb", fontSize: 12, color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                    <div className="buyer-ranking-heading" style={{ display: "grid", gridTemplateColumns: "var(--buyer-columns, minmax(0, 1fr) 170px 110px)", gap: "12px", padding: "14px 16px", background: "#f8fafc", borderBottom: "1px solid #e5e7eb", fontSize: 12, color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}>
                       <div>Sacado</div>
                       <div style={{ textAlign: "right" }}>Capital em aberto</div>
                       <div style={{ textAlign: "right" }}>%</div>
@@ -1969,6 +1970,7 @@ function SacadoConcentrationCard({
 
                         return (
                           <div
+                            className="buyer-ranking-row"
                             key={`${item.cedente}-${item.sacado}-row`}
                             onClick={(e) => {
                               e.stopPropagation();
@@ -1978,7 +1980,7 @@ function SacadoConcentrationCard({
                             onMouseLeave={() => setHoveredKey(null)}
                             style={{
                               display: "grid",
-                              gridTemplateColumns: "minmax(0, 1fr) 170px 110px",
+                              gridTemplateColumns: "var(--buyer-columns, minmax(0, 1fr) 170px 110px)",
                               gap: "12px",
                               alignItems: "center",
                               padding: "14px 16px",
@@ -2003,10 +2005,10 @@ function SacadoConcentrationCard({
                                 {formatarNomeSacado(item.sacado, hideValues)}
                               </span>
                             </div>
-                            <div style={{ textAlign: "right", color: "#111827", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
+                            <div data-mobile-label="Capital em aberto" style={{ textAlign: "right", color: "#111827", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
                               {fmtM(item.valor)}
                             </div>
-                            <div style={{ textAlign: "right", color: active ? "#312e81" : "#475569", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
+                            <div data-mobile-label="Participação" style={{ textAlign: "right", color: active ? "#312e81" : "#475569", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
                               {hideValues ? "-" : `${item.pct.toFixed(2).replace(".", ",")}%`}
                             </div>
                           </div>
@@ -2492,7 +2494,7 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
             </table>
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 24px', background: '#fff', borderTop: '1px solid #e5e7eb', alignItems: 'center' }}>
+          <div className="mobile-pagination" style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 24px', background: '#fff', borderTop: '1px solid #e5e7eb', alignItems: 'center' }}>
              <span style={{ fontSize: '13px', color: '#6b7280' }}>
                Mostrando {sortedRows.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0} a {Math.min(currentPage * itemsPerPage, sortedRows.length)} de {sortedRows.length} registos
              </span>
@@ -2502,7 +2504,7 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
              </div>
           </div>
           
-          <div style={{ 
+          <div className="mobile-wrap" style={{ 
             padding: "18px 24px", 
             background: "#f8fafc", 
             borderTop: "2px solid #cbd5e1", 
@@ -2548,66 +2550,9 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
 
 // DROPDOWN CUSTOMIZADO
 function CustomDropdown({ value, options, onChange, placeholder, formatOption = (opt) => opt }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [isMobileDevice, setIsMobileDevice] = useState(false);
-  const wrapperRef = useRef(null);
-
-  useEffect(() => {
-    const checkMobile = () => setIsMobileDevice(window.innerWidth < 640);
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
-
-  useEffect(() => {
-    function handleClickOutside(event) { if (wrapperRef.current && !wrapperRef.current.contains(event.target)) { setIsOpen(false); setSearchTerm(""); } }
-    document.addEventListener("mousedown", handleClickOutside); return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  const normalizedSearchTerm = useMemo(() => normalizarChave(searchTerm), [searchTerm]);
-  const filteredOptions = useMemo(() => {
-    if (!isOpen) return [];
-    if (!normalizedSearchTerm) return options;
-    return options.filter((opt) => {
-      const raw = String(opt || "");
-      const formatted = String(formatOption(opt) || "");
-      return normalizarChave(raw).includes(normalizedSearchTerm) || normalizarChave(formatted).includes(normalizedSearchTerm);
-    });
-  }, [options, normalizedSearchTerm, isOpen, formatOption]);
-  const handleKeyDown = (e) => { if (e.key === 'Enter') { e.preventDefault(); if (isOpen && filteredOptions.length > 0) { onChange(filteredOptions[0]); setSearchTerm(""); setIsOpen(false); } } };
-  const displayValue = isOpen ? searchTerm : formatOption(value);
-  const selectedPlaceholder = isOpen && value ? formatOption(value) : placeholder;
-
-  // Em mobile, usa select nativo para evitar que o teclado virtual cause resize e feche o sidebar
-  if (isMobileDevice) {
-    return (
-      <div style={{ position: "relative", width: "100%" }}>
-        <select
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          style={{ width: "100%", padding: "11px", paddingRight: "32px", borderRadius: "6px", border: "1px solid #d1d5db", background: "#fff", fontSize: "14px", color: value ? "#111827" : "#9ca3af", outline: "none", boxSizing: "border-box", appearance: "none", WebkitAppearance: "none" }}
-        >
-          <option value="">{placeholder}</option>
-          {options.map(opt => <option key={opt} value={opt}>{formatOption(opt)}</option>)}
-        </select>
-        <div style={{ position: "absolute", right: "12px", top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: "#6b7280", fontSize: "12px" }}>▼</div>
-      </div>
-    );
-  }
-
-  return (
-    <div ref={wrapperRef} style={{ position: "relative", width: "100%" }}>
-      <input type="text" value={displayValue} onChange={(e) => { setSearchTerm(e.target.value); setIsOpen(true); }} onFocus={() => { setIsOpen(true); setSearchTerm(""); }} onKeyDown={handleKeyDown} placeholder={selectedPlaceholder} style={{ width: "100%", padding: "11px", paddingRight: "32px", borderRadius: "6px", border: "1px solid #d1d5db", background: "#fff", fontSize: "14px", color: "#111827", outline: "none", boxSizing: "border-box", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} />
-      <div style={{ position: "absolute", right: "12px", top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: "#6b7280", fontSize: "12px" }}>▼</div>
-      {isOpen && (
-        <div style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: "4px", background: "#fff", border: "1px solid #d1d5db", borderRadius: "8px", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1)", zIndex: 50, maxHeight: "250px", overflowY: "auto" }}>
-          {value && <div onClick={() => { onChange(""); setSearchTerm(""); setIsOpen(false); }} style={{ padding: "10px 12px", cursor: "pointer", borderBottom: "1px solid #e5e7eb", fontSize: "14px", color: "#dc2626", fontStyle: "italic" }}>-- Limpar Seleção --</div>}
-          {filteredOptions.length > 0 ? filteredOptions.map(opt => <div key={opt} onClick={() => { onChange(opt); setSearchTerm(""); setIsOpen(false); }} style={{ padding: "10px 12px", cursor: "pointer", borderBottom: "1px solid #f3f4f6", fontSize: "14px", color: "#374151" }} onMouseOver={(e) => e.currentTarget.style.background = "#eff6ff"} onMouseOut={(e) => e.currentTarget.style.background = "#fff"}>{formatOption(opt)}</div>) : <div style={{ padding: "10px 12px", fontSize: "14px", color: "#6b7280" }}>Nenhum encontrado</div>}
-        </div>
-      )}
-    </div>
-  );
+  return <SearchableSelect value={value} onChange={onChange} placeholder={placeholder}
+    selectedLabel={value ? formatOption(value) : ""}
+    options={options.map((option) => ({ value: option, label: formatOption(option), searchText: option }))} />;
 }
 
 function EconomicGroupDropdown({
@@ -2620,237 +2565,15 @@ function EconomicGroupDropdown({
   cedenteOptions,
   loading
 }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
-  const wrapperRef = useRef(null);
-
-  useEffect(() => {
-    function handleClickOutside(event) {
-      if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
-        setIsOpen(false);
-        setSearchTerm("");
-      }
-    }
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  const selectedGroup = groups.find((group) => group.label === value);
-  const normalizedSearch = normalizarChave(searchTerm);
-  const filteredGroups = groups.filter((group) =>
-    !normalizedSearch || normalizarChave(group.label).includes(normalizedSearch)
-  );
-
-  const closeAndRun = (callback) => {
-    setIsOpen(false);
-    setSearchTerm("");
-    callback();
-  };
-
-  return (
-    <div ref={wrapperRef} style={{ position: "relative", width: "100%" }}>
-      <input
-        type="text"
-        readOnly
-        value={loading ? "Carregando grupos..." : selectedGroup?.label || ""}
-        placeholder="Selecione o Grupo..."
-        onClick={() => setIsOpen((open) => !open)}
-        aria-haspopup="listbox"
-        aria-expanded={isOpen}
-        style={{
-          width: "100%",
-          padding: "11px",
-          paddingRight: "32px",
-          borderRadius: "6px",
-          border: "1px solid #d1d5db",
-          background: "#fff",
-          color: "#111827",
-          fontSize: "14px",
-          outline: "none",
-          boxSizing: "border-box",
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap"
-        }}
-      />
-
-      <div aria-hidden="true" style={{ position: "absolute", right: "12px", top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: "#6b7280", fontSize: "12px" }}>▼</div>
-
-      {isOpen && (
-        <div
-          style={{
-            position: "absolute",
-            top: "100%",
-            left: 0,
-            right: 0,
-            marginTop: "6px",
-            background: "#fff",
-            border: "1px solid #e5e7eb",
-            borderRadius: "10px",
-            boxShadow: "0 12px 28px rgba(15, 23, 42, 0.16)",
-            zIndex: 80,
-            overflow: "hidden"
-          }}
-        >
-          <div style={{ padding: "10px", borderBottom: "1px solid #eef2f7", background: "#f8fafc" }}>
-            <div style={{ position: "relative" }}>
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                aria-hidden="true"
-                style={{ position: "absolute", left: "10px", top: "10px", color: "#94a3b8" }}
-              >
-                <circle cx="11" cy="11" r="7" />
-                <line x1="16.5" y1="16.5" x2="21" y2="21" />
-              </svg>
-              <input
-                autoFocus
-                value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder="Buscar grupo..."
-                style={{
-                  width: "100%",
-                  padding: "8px 10px 8px 34px",
-                  border: "1px solid #dbe3ee",
-                  borderRadius: "7px",
-                  background: "#fff",
-                  color: "#111827",
-                  fontSize: "13px",
-                  outline: "none",
-                  boxSizing: "border-box"
-                }}
-              />
-            </div>
-          </div>
-
-          <div role="listbox" style={{ maxHeight: "230px", overflowY: "auto", padding: "4px 0" }}>
-            {value && (
-              <div
-                role="option"
-                onClick={() => closeAndRun(() => onChange(""))}
-                style={{ padding: "9px 12px", color: "#dc2626", fontSize: "13px", cursor: "pointer", borderBottom: "1px solid #f1f5f9" }}
-              >
-                Limpar seleção
-              </div>
-            )}
-
-            {!loading && filteredGroups.map((group) => {
-              const isSelected = group.label === value;
-              const memberCount = cedenteOptions.length > 0
-                ? cedenteOptions.filter((cedente) =>
-                    clientePertenceAoGrupoEconomico(cedente, group)
-                  ).length
-                : group.prefixos.length;
-              return (
-                <div
-                  key={group.id || group.label}
-                  role="option"
-                  aria-selected={isSelected}
-                  onClick={() => closeAndRun(() => onChange(group.label))}
-                  className="economic-group-option"
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "minmax(0, 1fr) auto",
-                    gap: "8px",
-                    alignItems: "center",
-                    padding: "9px 8px 9px 12px",
-                    background: isSelected ? "#eef2ff" : "#fff",
-                    cursor: "pointer"
-                  }}
-                >
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ color: isSelected ? "#4338ca" : "#334155", fontSize: "13px", fontWeight: isSelected ? 700 : 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {group.label}
-                    </div>
-                    <div style={{ marginTop: "2px", color: "#94a3b8", fontSize: "11px" }}>
-                      {memberCount} {memberCount === 1 ? "cedente" : "cedentes"}
-                    </div>
-                  </div>
-
-                  <div style={{ display: "flex", gap: "3px" }}>
-                    <button
-                      type="button"
-                      title={`Editar ${group.label}`}
-                      aria-label={`Editar ${group.label}`}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        closeAndRun(() => onEdit(group));
-                      }}
-                      className="economic-group-icon-button"
-                    >
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                        <path d="M12 20h9" />
-                        <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z" />
-                      </svg>
-                    </button>
-                    <button
-                      type="button"
-                      title={`Excluir ${group.label}`}
-                      aria-label={`Excluir ${group.label}`}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        closeAndRun(() => onDelete(group));
-                      }}
-                      className="economic-group-icon-button economic-group-delete-button"
-                    >
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                        <polyline points="3 6 5 6 21 6" />
-                        <path d="M19 6l-1 14H6L5 6m3 0V4h8v2m-6 4v6m4-6v6" />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-
-            {!loading && filteredGroups.length === 0 && (
-              <div style={{ padding: "18px 12px", textAlign: "center", color: "#64748b", fontSize: "13px" }}>
-                Nenhum grupo encontrado
-              </div>
-            )}
-
-            {loading && (
-              <div style={{ padding: "18px 12px", textAlign: "center", color: "#64748b", fontSize: "13px" }}>
-                Carregando...
-              </div>
-            )}
-          </div>
-
-          <button
-            type="button"
-            onClick={() => closeAndRun(onCreate)}
-            style={{
-              width: "100%",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "7px",
-              padding: "11px 12px",
-              border: 0,
-              borderTop: "1px solid #e5e7eb",
-              background: "#f8fafc",
-              color: "#4f46e5",
-              fontSize: "13px",
-              fontWeight: 700,
-              cursor: "pointer"
-            }}
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" aria-hidden="true">
-              <line x1="12" y1="5" x2="12" y2="19" />
-              <line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
-            Criar novo grupo
-          </button>
-        </div>
-      )}
-    </div>
-  );
+  return <SearchableSelect value={value} onChange={onChange} label="Grupo Econômico"
+    placeholder={loading ? "Carregando grupos..." : "Digite o grupo econômico…"} disabled={loading}
+    options={groups.map((group) => ({ value: group.label, label: group.label, group,
+      detail: `${cedenteOptions.length ? cedenteOptions.filter((cedente) => clientePertenceAoGrupoEconomico(cedente, group)).length : group.prefixos.length} cedente(s)` }))}
+    renderActions={(option, close) => <div className="economic-group-actions">
+      <button type="button" className="economic-group-icon-button" aria-label={`Editar ${option.label}`} onClick={() => { close(); onEdit(option.group); }}>✎</button>
+      <button type="button" className="economic-group-icon-button economic-group-delete-button" aria-label={`Excluir ${option.label}`} onClick={() => { close(); onDelete(option.group); }}>×</button>
+    </div>}
+    footer={(close) => <button type="button" className="economic-group-create" onClick={() => { close(); onCreate(); }}>+ Novo grupo econômico</button>} />;
 }
 
 function EconomicGroupModal({
@@ -2921,6 +2644,7 @@ function EconomicGroupModal({
 
   return (
     <div
+      className="economic-group-backdrop"
       role="dialog"
       aria-modal="true"
       aria-labelledby="economic-group-modal-title"
@@ -2953,7 +2677,7 @@ function EconomicGroupModal({
           boxShadow: "0 24px 70px rgba(15, 23, 42, 0.28)"
         }}
       >
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "20px", padding: "22px 24px 18px", borderBottom: "1px solid #e5e7eb" }}>
+        <div className="mobile-wrap" style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "20px", padding: "22px 24px 18px", borderBottom: "1px solid #e5e7eb" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
             <div style={{ width: "36px", height: "36px", borderRadius: "10px", display: "grid", placeItems: "center", background: "#eef2ff", color: "#4f46e5" }}>
               <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -3006,7 +2730,7 @@ function EconomicGroupModal({
             }}
           />
 
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", marginTop: "20px", marginBottom: "7px" }}>
+          <div className="mobile-wrap" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", marginTop: "20px", marginBottom: "7px" }}>
             <label htmlFor="economic-group-member-search" style={{ color: "#334155", fontSize: "13px", fontWeight: 700 }}>
               Cedentes do grupo
             </label>
@@ -3113,6 +2837,7 @@ function EconomicGroupDeleteDialog({ group, deleting, error, onClose, onConfirm 
 
   return (
     <div
+      className="economic-group-backdrop"
       role="alertdialog"
       aria-modal="true"
       aria-labelledby="delete-economic-group-title"
@@ -3121,7 +2846,7 @@ function EconomicGroupDeleteDialog({ group, deleting, error, onClose, onConfirm 
       }}
       style={{ position: "fixed", inset: 0, zIndex: 12000, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px", background: "rgba(15, 23, 42, 0.55)", backdropFilter: "blur(3px)" }}
     >
-      <div style={{ width: "min(440px, 100%)", padding: "24px", borderRadius: "16px", background: "#fff", border: "1px solid #e5e7eb", boxShadow: "0 24px 70px rgba(15, 23, 42, 0.28)" }}>
+      <div className="mobile-panel" style={{ width: "min(440px, 100%)", padding: "24px", borderRadius: "16px", background: "#fff", border: "1px solid #e5e7eb", boxShadow: "0 24px 70px rgba(15, 23, 42, 0.28)" }}>
         <div style={{ width: "42px", height: "42px", display: "grid", placeItems: "center", borderRadius: "12px", background: "#fef2f2", color: "#dc2626", marginBottom: "16px" }}>
           <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <polyline points="3 6 5 6 21 6" />
@@ -3154,10 +2879,10 @@ function EconomicGroupDeleteDialog({ group, deleting, error, onClose, onConfirm 
 
 function getMicroSidebarLayout() {
   const width = typeof window !== "undefined" ? window.innerWidth : 1024;
-  const mobile = width < 640;
+  const mobile = width < 1024;
   return {
     mobile,
-    tablet: width >= 640 && width < 1824,
+    tablet: width >= 1024 && width < 1824,
     open: !mobile,
   };
 }
@@ -3222,7 +2947,10 @@ export default function MicroDashboard({ session, onSidebarToggle, hideValues, s
   };
 
   useEffect(() => {
+    let previousWidth;
     const handleResize = () => {
+      if (window.innerWidth === previousWidth) return;
+      previousWidth = window.innerWidth;
       const { mobile, tablet, open } = getMicroSidebarLayout();
       setIsMobile(mobile);
       setIsTablet(tablet);
@@ -4230,7 +3958,7 @@ return {
 
 return (
     // NOVO LAYOUT: Container Root flexível englobando todo o dashboard
-    <div style={{ display: "flex", width: "100%", position: "relative", alignItems: "flex-start", minHeight: "100vh", marginLeft: (!isMobile && !isTablet && isSidebarOpen) ? "150px" : "0px", marginRight: (!isMobile && !isTablet && isSidebarOpen) ? "-150px" : "0px", paddingLeft: (isTablet && isSidebarOpen) ? "300px" : "0px", transition: "margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1), margin-right 0.3s cubic-bezier(0.4, 0, 0.2, 1), padding-left 0.3s cubic-bezier(0.4, 0, 0.2, 1)", boxSizing: "border-box" }}>
+    <div className="micro-dashboard" style={{ display: "flex", width: "100%", position: "relative", alignItems: "flex-start", minHeight: "100vh", marginLeft: (!isMobile && !isTablet && isSidebarOpen) ? "150px" : "0px", marginRight: (!isMobile && !isTablet && isSidebarOpen) ? "-150px" : "0px", paddingLeft: (isTablet && isSidebarOpen) ? "300px" : "0px", transition: "margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1), margin-right 0.3s cubic-bezier(0.4, 0, 0.2, 1), padding-left 0.3s cubic-bezier(0.4, 0, 0.2, 1)", boxSizing: "border-box" }}>
       <style>
         {`
           .table-row-liquidado { background: rgba(34, 197, 94, 0.08); }
@@ -4299,9 +4027,9 @@ return (
           .economic-group-primary-button:disabled,
           .economic-group-danger-button:disabled,
           .economic-group-modal-close:disabled { opacity: 0.55; cursor: not-allowed; }
-          .kpi-grid { grid-template-columns: repeat(3, minmax(260px, 1fr)); }
+          .kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
           @media (max-width: 900px) {
-            .kpi-grid { grid-template-columns: repeat(2, minmax(240px, 1fr)); }
+            .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
           }
           @media (max-width: 640px) {
             .kpi-grid { grid-template-columns: 1fr; }
@@ -4379,17 +4107,13 @@ return (
         </div>
       )}
 
-      {/* OVERLAY MOBILE: Fecha o menu se clicado fora */}
-      {isMobile && isSidebarOpen && (
-        <div
-          onClick={() => setIsSidebarOpen(false)}
-          style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.5)", zIndex: 9998 }}
-        />
-      )}
-
       {/* BOTÃO HAMBURGER FIXO À ESQUERDA (TIPO GEMINI) */}
       <button
         onClick={() => handleSidebarToggle(!isSidebarOpen, isMobile, isTablet)}
+        className="filter-toggle"
+        aria-label={isSidebarOpen ? "Fechar filtros" : "Abrir filtros"}
+        aria-expanded={isSidebarOpen}
+        aria-controls="analysis-filters"
         title={isSidebarOpen ? "Fechar Menu" : "Abrir Menu"}
         style={{
           position: "fixed",
@@ -4425,8 +4149,9 @@ return (
         )}
       </button>
 
+      {isMobile && isSidebarOpen && <button className="filter-backdrop" aria-label="Fechar filtros" onClick={() => handleSidebarToggle(false, isMobile, isTablet)} />}
       {/* --- SIDEBAR LATERAL FIXA (FILTROS) --- */}
-      <aside style={{
+      <aside id="analysis-filters" className="analysis-filters" aria-label="Filtros de análise" inert={!isSidebarOpen} style={{
         position: "fixed",
         top: 0,
         left: isSidebarOpen ? 0 : "-300px",
@@ -4451,7 +4176,7 @@ return (
         <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
           <div>
             <label style={{ display: "block", marginBottom: 6, fontSize: "13px", fontWeight: "600", color: "#374151" }}>Cedente</label>
-            <CustomDropdown value={clienteSelecionado} onChange={(v) => { setClienteSelecionado(v); if (v) setGrupoSelecionado(""); }} options={clientesDisponiveis} placeholder="Selecione o Cedente..." formatOption={(opt) => formatarNomeCedente(opt, hideValues)} />
+            <CustomDropdown value={clienteSelecionado} onChange={(v) => { setClienteSelecionado(v); if (v) setGrupoSelecionado(""); }} options={clientesDisponiveis} placeholder="Digite o cedente…" formatOption={(opt) => formatarNomeCedente(opt, hideValues)} />
           </div>
           <div>
             <label style={{ display: "block", marginBottom: 6, fontSize: "13px", fontWeight: "600", color: "#374151" }}>Grupo Econômico</label>
@@ -4468,7 +4193,7 @@ return (
           </div>
           <div>
             <label style={{ display: "block", marginBottom: 6, fontSize: "13px", fontWeight: "600", color: "#374151" }}>Sacado</label>
-            <CustomDropdown value={sacadoSelecionado} onChange={setSacadoSelecionado} options={sacadosDisponiveis} placeholder="Selecione o Sacado..." formatOption={(opt) => formatarNomeSacado(opt, hideValues)} />
+            <CustomDropdown value={sacadoSelecionado} onChange={setSacadoSelecionado} options={sacadosDisponiveis} placeholder="Digite o sacado…" formatOption={(opt) => formatarNomeSacado(opt, hideValues)} />
           </div>
           <button onClick={limparFiltroEntidades} disabled={!hasEntityFilter} style={{ padding: "10px", borderRadius: "8px", border: "1px solid #d1d5db", background: (!hasEntityFilter) ? "#f9fafb" : "#fff", color: (!hasEntityFilter) ? "#9ca3af" : "#ef4444", fontWeight: "600", fontSize: "13px", cursor: (!hasEntityFilter) ? "not-allowed" : "pointer", transition: "all 0.2s" }}>
             Limpar Nomes
@@ -4627,7 +4352,7 @@ return (
             boxSizing: "border-box"
         }}>
           {/* Top Bar de Controlo de View */}
-          <div style={{ background: "#fff", padding: "16px 24px", borderRadius: "12px", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)", border: "1px solid #e5e7eb", display: "flex", justifyContent: "space-between", flexWrap: "wrap", alignItems: "center", gap: "16px" }}>
+          <div className="mobile-wrap" style={{ background: "#fff", padding: "16px 24px", borderRadius: "12px", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)", border: "1px solid #e5e7eb", display: "flex", justifyContent: "space-between", flexWrap: "wrap", alignItems: "center", gap: "16px" }}>
             <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
             <button
               onClick={() => {
@@ -4711,7 +4436,7 @@ return (
                 }}>
 
                 {/* INFO 0: Risco Atual */}
-                <div style={{ order: 1, background: "linear-gradient(180deg, #ffffff 0%, #ffffff 100%)", borderTop: "3px solid #16a34a", padding: "20px 16px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                <div className="mobile-panel" style={{ order: 1, background: "linear-gradient(180deg, #ffffff 0%, #ffffff 100%)", borderTop: "3px solid #16a34a", padding: "20px 16px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
                     <div style={{ background: "rgba(22, 163, 74, 0.10)", padding: "6px", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}>
                       <svg width="16" height="16" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
@@ -4734,7 +4459,7 @@ return (
                 </div>
 
                 {/* INFO 1: Taxa Média */}
-                <div style={{ order: 5, background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #4f46e5", padding: "20px 16px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                <div className="mobile-panel" style={{ order: 5, background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #4f46e5", padding: "20px 16px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
                     <div style={{ background: "rgba(79, 70, 229, 0.1)", padding: "6px", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}>
                       <svg width="16" height="16" fill="none" stroke="#4f46e5" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M23 6l-9.5 9.5-5-5L1 18"/><path d="M17 6h6v6"/></svg>
@@ -4760,7 +4485,7 @@ return (
                 </div>
 
                 {/* INFO 2: Ticket Médio */}
-                <div style={{ order: 6, background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #0ea5e9", padding: "20px 16px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                <div className="mobile-panel" style={{ order: 6, background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #0ea5e9", padding: "20px 16px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
                     <div style={{ background: "rgba(14, 165, 233, 0.1)", padding: "6px", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}>
                       <svg width="16" height="16" fill="none" stroke="#0ea5e9" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
@@ -4799,7 +4524,7 @@ return (
                 </div>
 
                 {/* INFO 3: Prazo Médio */}
-                <div style={{ order: 2, background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #10b981", padding: "20px 16px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                <div className="mobile-panel" style={{ order: 2, background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #10b981", padding: "20px 16px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
                     <div style={{ background: "rgba(16, 185, 129, 0.1)", padding: "6px", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}>
                       <svg width="16" height="16" fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
@@ -4816,7 +4541,7 @@ return (
                 </div>
 
               {/* INFO 5: Receitas Financeiras */}
-              <div style={{ order: 4, background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #f59e0b", padding: "20px 16px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+              <div className="mobile-panel" style={{ order: 4, background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #f59e0b", padding: "20px 16px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
                   <div style={{ background: "rgba(245, 158, 11, 0.1)", padding: "6px", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}>
                     <svg width="16" height="16" fill="none" stroke="#f59e0b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
@@ -4856,7 +4581,7 @@ return (
               </div>
 
               {/* INFO 7: Últimas Taxas */}
-              <div style={{ order: 3, background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #7c3aed", padding: "20px 16px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+              <div className="mobile-panel" style={{ order: 3, background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #7c3aed", padding: "20px 16px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
                   <div style={{ background: "rgba(124, 58, 237, 0.1)", padding: "6px", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}>
                     <svg width="16" height="16" fill="none" stroke="#7c3aed" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
@@ -4952,7 +4677,7 @@ return (
             </div>
 
             {(!hasAnyFilter && !loading) ? (
-              <div style={{ padding: "40px 20px", textAlign: "center", color: "#6b7280", background: "#fff", borderRadius: "12px", border: "1px dashed #d1d5db", boxShadow: "0 1px 3px 0 rgba(0,0,0,0.1)" }}>
+              <div className="mobile-panel" style={{ padding: "40px 20px", textAlign: "center", color: "#6b7280", background: "#fff", borderRadius: "12px", border: "1px dashed #d1d5db", boxShadow: "0 1px 3px 0 rgba(0,0,0,0.1)" }}>
                 <p style={{ margin: 0, fontSize: "15px", fontWeight: "500" }}>Tabela oculta na Visão Geral para otimizar o desempenho.</p>
                 <p style={{ margin: "8px 0 0 0", fontSize: "13px" }}>Selecione um <strong>Cedente</strong>, <strong>Sacado</strong> ou filtre na barra lateral para carregar os registos detalhados.</p>
               </div>

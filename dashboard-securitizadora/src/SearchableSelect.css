@@ -1,0 +1,18 @@
+.searchable-select { position: relative; width: 100%; min-width: 0; text-transform: none; letter-spacing: normal; font-weight: 400; }
+.searchable-select-control { position: relative; }
+.searchable-select .searchable-select-control input { width: 100%; min-width: 0; box-sizing: border-box; min-height: 44px; padding: 11px 44px 11px 11px; border: 1px solid #d1d5db; border-radius: 7px; background: #fff; color: #111827; font: inherit; font-size: 14px; text-overflow: ellipsis; }
+.searchable-select .searchable-select-control input:focus { outline: 2px solid #818cf8; outline-offset: 1px; }
+.searchable-select input:disabled { background: #f8fafc; color: #94a3b8; cursor: not-allowed; }
+.searchable-select-clear, .searchable-select-icon { position: absolute; right: 1px; top: 1px; width: 42px; height: calc(100% - 2px); display: grid; place-items: center; color: #64748b; }
+.searchable-select-clear { border: 0; background: transparent; font-size: 24px; cursor: pointer; border-radius: 6px; }
+.searchable-select-icon { pointer-events: none; font-size: 24px; }
+.searchable-select-menu { position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 100; background: #fff; border: 1px solid #d1d5db; border-radius: 8px; box-shadow: 0 8px 24px #0f172a20; overflow: hidden; }
+.searchable-select-options { max-height: 260px; max-height: min(260px, 35dvh); overflow-y: auto; overscroll-behavior-y: contain; }
+.searchable-select-row { display: flex; align-items: center; border-bottom: 1px solid #f1f5f9; }
+.searchable-select .searchable-select-option { flex: 1; min-width: 0; border: 0; border-radius: 0; padding: 12px; min-height: 44px; background: #fff; color: #334155; text-align: left; font: inherit; font-size: 14px; cursor: pointer; overflow-wrap: anywhere; }
+.searchable-select-option > span, .searchable-select-option > small { display: block; margin: 0; font: inherit; color: inherit; }
+.searchable-select-option > small { color: #64748b; font-size: 12px; margin-top: 4px; }
+.searchable-select .searchable-select-option:hover, .searchable-select .searchable-select-option.is-active { background: #eef2ff; }
+.searchable-select .searchable-select-option:disabled { color: #94a3b8; cursor: not-allowed; }
+.searchable-select-empty { padding: 14px 12px; color: #64748b; font-size: 14px; }
+@media (max-width: 767px) { .searchable-select .searchable-select-control input { font-size: 16px; } }

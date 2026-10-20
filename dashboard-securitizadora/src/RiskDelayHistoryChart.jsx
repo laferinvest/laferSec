@@ -1,3 +1,4 @@
+import SearchableSelect from "./SearchableSelect";
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "./supabaseClient";
 import { isRiskCedenteVisible, loadRiskDelayCedentes, loadRiskDelayHistory } from "./riskDelayHistory";
@@ -112,12 +113,9 @@ export default function RiskDelayHistoryChart({ hidden, cedentes = [] }) {
       <div className="risk-delay-filters"><label>Período <select value={range} onChange={(event) => setRange(event.target.value)}>
         <option value="30">30 dias</option><option value="60">60 dias</option><option value="90">90 dias</option><option value="all">Todo o histórico</option>
       </select></label>
-      <label>Carteira / cedente <select value={activeCedenteKey} onChange={(event) => {
-        setCedenteKey(event.target.value); setHistory([]); setLoading(true); setError("");
-      }}>
-        <option value="">Carteira</option>
-        {options.map((item) => <option key={item.cedente_key} value={item.cedente_key}>{item.cedente}</option>)}
-      </select></label></div>
+      <div className="risk-delay-entity"><span>Carteira / cedente</span><SearchableSelect label="Carteira / cedente" value={activeCedenteKey} onChange={(key) => {
+        setCedenteKey(key); setHistory([]); setLoading(true); setError("");
+      }} placeholder="Carteira — digite um cedente…" options={options.map((item) => ({value: item.cedente_key, label: item.cedente}))} /></div></div>
     </div>
     {cedentesError && <p role="alert">Não foi possível carregar a lista completa de cedentes. <button className="risk-config-button" onClick={() => setRevision((value) => value + 1)}>Tentar novamente</button></p>}
     {loading ? <p role="status">Carregando histórico…</p> : error ? <div role="alert"><p>Não foi possível carregar o histórico: {error}</p>

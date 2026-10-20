@@ -2449,7 +2449,7 @@ auditoria.finalRows = finalRows.map((item) => ({ ...item }));
   return (
     <div style={{ display: "grid", gap: "24px", maxWidth: "820px", margin: "0 auto" }}>
       {false && (
-      <div style={cardStyle}>
+      <div className="mobile-panel" style={cardStyle}>
         <h2 style={{ marginTop: 0, color: "#111827", fontSize: "20px" }}>Atualização de Dados</h2>
         <p style={{ color: "#6b7280", fontSize: "14px", marginBottom: "20px" }}>
           Selecione todos os arquivos de dados do Borderô e/ou dados de Taxas.
@@ -2534,7 +2534,7 @@ auditoria.finalRows = finalRows.map((item) => ({ ...item }));
       </div>
       )}
 
-      <div style={cardStyle}>
+      <div className="mobile-panel" style={cardStyle}>
         <h2 style={{ marginTop: 0, color: "#111827", fontSize: "20px" }}>Atualização de Dados</h2>
         <p style={{ color: "#6b7280", fontSize: "14px", marginBottom: "20px" }}>
           Caminho para Download do Excel de Títulos: Financeiro -&gt; Títulos -&gt; Clica em Pesquisar -&gt; Gerar Planilha
@@ -2599,7 +2599,7 @@ auditoria.finalRows = finalRows.map((item) => ({ ...item }));
         )}
       </div>
 
-      <div style={cardStyle}>
+      <div className="mobile-panel" style={cardStyle}>
         <h2 style={{ marginTop: 0, color: "#111827", fontSize: "20px" }}>Marcar Recomprados</h2>
         <p style={{ color: "#6b7280", fontSize: "14px", marginBottom: "20px" }}>
           Faça upload do Excel com DCTO e VCTO. O sistema procura na tabela secInfo pelo mesmo Dcto e mesmo Vcto e muda o Status para Recomprado.
@@ -2700,7 +2700,7 @@ auditoria.finalRows = finalRows.map((item) => ({ ...item }));
         )}
       </div>
 
-      <div style={cardStyle}>
+      <div className="mobile-panel" style={cardStyle}>
         <div style={{ marginBottom: "20px" }}>
           <h2 style={{ margin: 0, color: "#111827", fontSize: "20px" }}>Criar Snapshot da Securitizadora</h2>
           <p style={{ color: "#6b7280", fontSize: "14px", margin: "8px 0 0 0" }}>
@@ -2708,7 +2708,7 @@ auditoria.finalRows = finalRows.map((item) => ({ ...item }));
           </p>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "16px", marginBottom: "20px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))", gap: "16px", marginBottom: "20px" }}>
           <div style={{ background: "#f8fafc", border: "1px solid #e5e7eb", borderRadius: "10px", padding: "16px" }}>
             <div style={{ fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.04em", color: "#6b7280", fontWeight: 700, marginBottom: "8px" }}>Data</div>
             <div style={{ fontSize: "22px", fontWeight: 700, color: "#111827" }}>{snapshotDate.split("-").reverse().join("/")}</div>
@@ -2827,7 +2827,7 @@ auditoria.finalRows = finalRows.map((item) => ({ ...item }));
         )}
       </div>
 
-      <div style={cardStyle}>
+      <div className="mobile-panel" style={cardStyle}>
         <h2 style={{ marginTop: 0, color: "#111827", fontSize: "20px" }}>
           Exportações
         </h2>

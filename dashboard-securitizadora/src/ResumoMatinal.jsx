@@ -380,7 +380,7 @@ function WeeklyDueBarChart({
 }) {
   if (!groups.length) {
     return (
-      <div style={{ padding: "42px 18px", color: "#6b7280", fontSize: "14px", textAlign: "center", border: "1px dashed #d1d5db", borderRadius: "8px", background: "#f9fafb" }}>
+      <div className="mobile-panel" style={{ padding: "42px 18px", color: "#6b7280", fontSize: "14px", textAlign: "center", border: "1px dashed #d1d5db", borderRadius: "8px", background: "#f9fafb" }}>
         {emptyMessage}
       </div>
     );
@@ -493,7 +493,7 @@ const getMicroFilterForCell = (row, columnKey) => {
 function MorningTable({ rows, hideValues, onNavigateToMicro }) {
   if (!rows.length) {
     return (
-      <div style={{ padding: "22px 18px", color: "#6b7280", fontSize: "14px", textAlign: "center", border: "1px dashed #d1d5db", borderRadius: "8px", background: "#f9fafb" }}>
+      <div className="mobile-panel" style={{ padding: "22px 18px", color: "#6b7280", fontSize: "14px", textAlign: "center", border: "1px dashed #d1d5db", borderRadius: "8px", background: "#f9fafb" }}>
         Sem títulos para este bloco.
       </div>
     );
@@ -573,7 +573,7 @@ function CedenteGroupedMorningTables({ groups, hideValues, onNavigateToMicro, co
     <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
       {groups.map((group) => (
         <section key={group.key} style={{ border: "1px solid #e5e7eb", borderRadius: "8px", overflow: "hidden", background: "#fff" }}>
-          <div style={{ padding: "14px 16px", background: "#f9fafb", borderBottom: "1px solid #e5e7eb", display: "flex", justifyContent: "space-between", gap: "14px", alignItems: "center", flexWrap: "wrap" }}>
+          <div className="mobile-wrap" style={{ padding: "14px 16px", background: "#f9fafb", borderBottom: "1px solid #e5e7eb", display: "flex", justifyContent: "space-between", gap: "14px", alignItems: "center", flexWrap: "wrap" }}>
             <div>
               <h3 style={{ margin: 0, color: "#111827", fontSize: "15px", fontWeight: 800 }}>
                 {hideValues ? "Cedente oculto" : group.label}
@@ -894,7 +894,7 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
 
   if (loading) {
     return (
-      <div style={{ background: "#fff", padding: "40px", borderRadius: "12px", border: "1px solid #e5e7eb", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1)", textAlign: "center", color: "#6b7280", fontSize: "15px", fontWeight: 600 }}>
+      <div className="mobile-panel" style={{ background: "#fff", padding: "40px", borderRadius: "12px", border: "1px solid #e5e7eb", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1)", textAlign: "center", color: "#6b7280", fontSize: "15px", fontWeight: 600 }}>
         Carregando resumo matinal...
       </div>
     );
@@ -942,7 +942,7 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
 
   return (
     <main style={{ display: "flex", flexDirection: "column", gap: "24px", paddingBottom: "24px" }}>
-      <div style={{ background: "#fff", padding: "22px 24px", borderRadius: "12px", border: "1px solid #e5e7eb", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)", display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "center", flexWrap: "wrap" }}>
+      <div className="mobile-panel mobile-wrap" style={{ background: "#fff", padding: "22px 24px", borderRadius: "12px", border: "1px solid #e5e7eb", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)", display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "center", flexWrap: "wrap" }}>
         <div>
           <h1 style={{ margin: 0, color: "#111827", fontSize: "26px", fontWeight: 800, letterSpacing: "-0.02em" }}>
             Resumo Matinal
@@ -982,7 +982,7 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
           />
         )}
       >
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))", gap: "12px" }}>
           <SummaryMetric
             label="Crédito Total a Vencer"
             value={formatMoney(resumo.totalVencemNaSemana, hideValues)}
@@ -1011,7 +1011,7 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
           />
         )}
       >
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))", gap: "12px" }}>
           <SummaryMetric
             label="Volume Total Negociado"
             value={formatMoney(resumo.volumeOperadoSemanaPassada, hideValues)}
@@ -1033,7 +1033,7 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
         onNavigateToMicro={onNavigateToMicro}
         tableContent={renderCedenteGroups(resumo.gruposInadimplenciaOntem, "#ef4444")}
       >
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))", gap: "12px" }}>
           <SummaryMetric
             label="Total Inadimplente"
             value={formatMoney(resumo.totalInadimplenciaOntem, hideValues)}
@@ -1054,7 +1054,7 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
         onNavigateToMicro={onNavigateToMicro}
         tableContent={renderCedenteGroups(resumo.gruposQuitadosOntem, "#22c55e")}
       >
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))", gap: "12px" }}>
           <SummaryMetric
             label="Total Quitado"
             value={formatMoney(resumo.totalQuitadosOntem, hideValues)}
@@ -1075,7 +1075,7 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
         onNavigateToMicro={onNavigateToMicro}
         tableContent={renderCedenteGroups(resumo.gruposQuitadosEmAtraso, "#f59e0b")}
       >
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))", gap: "12px" }}>
           <SummaryMetric
             label="Total Quitado em Atraso"
             value={formatMoney(resumo.totalQuitadosEmAtraso, hideValues)}
@@ -1097,7 +1097,7 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
         onNavigateToMicro={onNavigateToMicro}
         tableContent={renderCedenteGroups(resumo.gruposOperacoesOntem, "#4f46e5", true)}
       >
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))", gap: "12px" }}>
           <SummaryMetric
             label="Volume Total Operado"
             value={formatMoney(resumo.volumeOperado, hideValues)}
@@ -1130,7 +1130,7 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
         onNavigateToMicro={onNavigateToMicro}
         tableContent={renderCedenteGroups(resumo.gruposVencemHoje, "#0ea5e9")}
       >
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))", gap: "12px" }}>
           <SummaryMetric
             label="Total a Vencer"
             value={formatMoney(resumo.totalVencemHoje, hideValues)}
@@ -1151,7 +1151,7 @@ export default function ResumoMatinal({ hideValues = false, onNavigateToMicro })
         onNavigateToMicro={onNavigateToMicro}
         tableContent={renderCedenteGroups(resumo.gruposInadimplentesUltimos3Meses, "#b91c1c")}
       >
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))", gap: "12px" }}>
           <SummaryMetric
             label="Total Inadimplente"
             value={formatMoney(resumo.totalInadimplentesUltimos3Meses, hideValues)}

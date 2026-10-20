@@ -725,7 +725,7 @@ function MacroDetailedTable({ rows, focus, setFocus, setSelectedSlice, hideValue
       </div>
       
       {/* Controlos de Paginação */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', background: '#fff', borderTop: '1px solid #e5e7eb', alignItems: 'center', borderRadius: "0 0 8px 8px" }}>
+      <div className="mobile-pagination" style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', background: '#fff', borderTop: '1px solid #e5e7eb', alignItems: 'center', borderRadius: "0 0 8px 8px" }}>
           <span style={{ fontSize: '13px', color: '#6b7280' }}>
             Mostrando {sortedRows.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0} a {Math.min(currentPage * itemsPerPage, sortedRows.length)} de {sortedRows.length} registos
           </span>
@@ -1527,11 +1527,11 @@ const negotiationDesEncTop5Percent = currentNegotiationStats.sorted.length
   });
 
   if (loading) {
-    return <div style={{ padding: "60px", textAlign: "center", color: "#4f46e5", fontWeight: "600", background: "#fff", borderRadius: "12px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>Carregando dados Macro...</div>;
+    return <div className="mobile-panel" style={{ padding: "60px", textAlign: "center", color: "#4f46e5", fontWeight: "600", background: "#fff", borderRadius: "12px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>Carregando dados Macro...</div>;
   }
 
   return (
-    <div style={{ background: "#fff", padding: "32px", borderRadius: "12px", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1)" }}>
+    <div className="macro-dashboard" style={{ background: "#fff", padding: "32px", borderRadius: "12px", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1)" }}>
       {/* OTIMIZAÇÃO CSS: Bloco de estilo global para os eventos de Hover do MacroDashboard */}
       <style>
         {`
@@ -1559,13 +1559,13 @@ const negotiationDesEncTop5Percent = currentNegotiationStats.sorted.length
       </style>
 
       {/* Cabeçalho Macro */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "32px", flexWrap: "wrap", gap: "16px" }}>
+      <div className="mobile-wrap" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "32px", flexWrap: "wrap", gap: "16px" }}>
         <div>
           <h2 style={{ margin: "0 0 8px 0", color: "#111827", fontSize: "22px" }}>Carteira e Concentração</h2>
           <p style={{ margin: 0, color: "#6b7280", fontSize: "15px" }}>Concentração de Capital em títulos <strong>Em Aberto</strong> (A Vencer e Em Atraso).</p>
         </div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "10px" }}>
-          <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+          <div className="macro-focus-controls" style={{ display: "flex", gap: "12px", alignItems: "center" }}>
             <button
               onClick={() => setHideValues(v => !v)}
               title={hideValues ? "Mostrar valores" : "Ocultar valores"}
@@ -1596,21 +1596,21 @@ const negotiationDesEncTop5Percent = currentNegotiationStats.sorted.length
       </div>
 
       {stats.totalVal === 0 ? (
-        <div style={{ padding: "40px", textAlign: "center", color: "#9ca3af", background: "#f9fafb", borderRadius: "8px", border: "1px dashed #d1d5db" }}>
+        <div className="mobile-panel" style={{ padding: "40px", textAlign: "center", color: "#9ca3af", background: "#f9fafb", borderRadius: "8px", border: "1px dashed #d1d5db" }}>
           Nenhum título em aberto para análise no momento.
         </div>
       ) : (
         <>
           {/* Container superior: Volume negociado */}
-          <section style={{ background: "#f3f4f6", borderRadius: "20px", padding: "20px", marginBottom: "28px", border: "1px solid #e5e7eb" }}>
-            <div style={{
+          <section className="mobile-panel" style={{ background: "#f3f4f6", borderRadius: "20px", padding: "20px", marginBottom: "28px", border: "1px solid #e5e7eb" }}>
+            <div className="mobile-panel" style={{
               background: "#ffffff",
               borderRadius: "18px",
               padding: "24px",
               border: "1px solid #e5e7eb",
               boxShadow: "0 10px 25px rgba(15, 23, 42, 0.06)"
             }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "16px", flexWrap: "wrap", marginBottom: "20px" }}>
+              <div className="mobile-wrap" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "16px", flexWrap: "wrap", marginBottom: "20px" }}>
                 <div>
                   <h3 style={{ margin: "0 0 6px 0", color: "#1f2937", fontSize: "26px", fontWeight: "800", letterSpacing: "-0.02em" }}>
                     Volume de Negociação
@@ -1627,14 +1627,14 @@ const negotiationDesEncTop5Percent = currentNegotiationStats.sorted.length
               </div>
 
               {currentNegotiationStats.totalVal === 0 ? (
-                <div style={{ padding: "32px", textAlign: "center", color: "#9ca3af", background: "#f9fafb", borderRadius: "14px", border: "1px dashed #d1d5db" }}>
+                <div className="mobile-panel" style={{ padding: "32px", textAlign: "center", color: "#9ca3af", background: "#f9fafb", borderRadius: "14px", border: "1px dashed #d1d5db" }}>
                   Nenhum volume negociado encontrado para o período selecionado.
                 </div>
               ) : (
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "28px", alignItems: "stretch" }}>
-                  <div style={{
+                  <div className="mobile-panel" style={{
                     flex: "0 0 390px",
-                    minWidth: "300px",
+                    minWidth: "min(100%, 300px)",
                     maxWidth: "100%",
                     border: "1px solid #d1d5db",
                     borderRadius: "18px",
@@ -1707,13 +1707,13 @@ const negotiationDesEncTop5Percent = currentNegotiationStats.sorted.length
 
                   <div style={{
                     flex: "1 1 560px",
-                    minWidth: "320px",
+                    minWidth: "min(100%, 320px)",
                     border: "1px solid #d1d5db",
                     borderRadius: "18px",
                     overflow: "hidden",
                     background: "#ffffff"
                   }}>
-                    <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 240px 240px", background: "#f3f4f6", color: "#526581", fontSize: "13px", fontWeight: "800", textTransform: "uppercase", letterSpacing: "0.04em", borderBottom: "1px solid #d1d5db" }}>
+                    <div className="volume-ranking-heading" style={{ display: "grid", gridTemplateColumns: "var(--volume-columns, minmax(0, 1fr) 240px 240px)", background: "#f3f4f6", color: "#526581", fontSize: "13px", fontWeight: "800", textTransform: "uppercase", letterSpacing: "0.04em", borderBottom: "1px solid #d1d5db" }}>
                       <div style={{ padding: "16px 20px" }}>{focus === 'cedente' ? 'Cedente' : 'Sacado'}</div>
                       <div style={{ padding: "16px 20px", textAlign: "right" }}>Volume Negociado</div>
                       <div style={{ padding: "16px 20px", textAlign: "right" }}>Deságio + Encargos</div>
@@ -1724,12 +1724,13 @@ const negotiationDesEncTop5Percent = currentNegotiationStats.sorted.length
                       const color = pieSlice?.color || '#94a3b8';
                       return (
                         <div
+                          className="volume-ranking-row"
                           key={slice.name}
                           onMouseEnter={() => setHoveredNegotiationSlice(slice.name)}
                           onMouseLeave={() => setHoveredNegotiationSlice(null)}
                           style={{
                             display: "grid",
-                            gridTemplateColumns: "minmax(0, 1fr) 240px 240px",
+                            gridTemplateColumns: "var(--volume-columns, minmax(0, 1fr) 240px 240px)",
                             alignItems: "center",
                             borderBottom: globalIndex === negotiationTableItems.length - 1 ? "none" : "1px solid #e5e7eb",
                             background: hoveredNegotiationSlice === slice.name || hoveredNegotiationDesEncSlice === slice.name ? "#eff6ff" : "#fff",
@@ -1756,7 +1757,7 @@ const negotiationDesEncTop5Percent = currentNegotiationStats.sorted.length
                       );
                     })}
                     {negotiationTableItems.length > negotiationItemsPerPage && (
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', padding: '14px 16px', borderTop: '1px solid #e5e7eb', background: '#fff' }}>
+                      <div className="mobile-pagination" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', padding: '14px 16px', borderTop: '1px solid #e5e7eb', background: '#fff' }}>
                         <span style={{ fontSize: '13px', color: '#6b7280' }}>
                           Mostrando {(negotiationPageSafe - 1) * negotiationItemsPerPage + 1} a {Math.min(negotiationPageSafe * negotiationItemsPerPage, negotiationTableItems.length)} de {negotiationTableItems.length} entradas
                         </span>
@@ -1785,8 +1786,8 @@ const negotiationDesEncTop5Percent = currentNegotiationStats.sorted.length
           </section>
 
           {/* Container inferior: concentração de capital em aberto */}
-          <section style={{ background: "#f8fafc", borderRadius: "20px", padding: "20px", marginBottom: "32px", border: "1px solid #e5e7eb" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "16px", flexWrap: "wrap", marginBottom: "20px" }}>
+          <section className="mobile-panel" style={{ background: "#f8fafc", borderRadius: "20px", padding: "20px", marginBottom: "32px", border: "1px solid #e5e7eb" }}>
+            <div className="mobile-wrap" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "16px", flexWrap: "wrap", marginBottom: "20px" }}>
               <div>
                 <h3 style={{ margin: "0 0 6px 0", color: "#1f2937", fontSize: "26px", fontWeight: "800", letterSpacing: "-0.02em" }}>
                   Concentração por {focus === 'cedente' ? 'Cedente' : 'Sacado'}
@@ -1798,9 +1799,9 @@ const negotiationDesEncTop5Percent = currentNegotiationStats.sorted.length
             </div>
 
             <div style={{ display: "flex", flexWrap: "wrap", gap: "28px", alignItems: "stretch" }}>
-              <div style={{
+              <div className="mobile-panel" style={{
                 flex: "0 0 390px",
-                minWidth: "300px",
+                minWidth: "min(100%, 300px)",
                 maxWidth: "100%",
                 border: "1px solid #d1d5db",
                 borderRadius: "18px",
@@ -1844,13 +1845,13 @@ const negotiationDesEncTop5Percent = currentNegotiationStats.sorted.length
 
               <div style={{
                 flex: "1 1 520px",
-                minWidth: "320px",
+                minWidth: "min(100%, 320px)",
                 border: "1px solid #d1d5db",
                 borderRadius: "18px",
                 overflow: "hidden",
                 background: "#ffffff"
               }}>
-                <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 220px 120px", background: "#f3f4f6", color: "#526581", fontSize: "13px", fontWeight: "800", textTransform: "uppercase", letterSpacing: "0.04em", borderBottom: "1px solid #d1d5db" }}>
+                <div className="capital-ranking-heading" style={{ display: "grid", gridTemplateColumns: "var(--capital-columns, minmax(0, 1fr) 220px 120px)", background: "#f3f4f6", color: "#526581", fontSize: "13px", fontWeight: "800", textTransform: "uppercase", letterSpacing: "0.04em", borderBottom: "1px solid #d1d5db" }}>
                   <div style={{ padding: "16px 20px" }}>{focus === 'cedente' ? 'Cedente' : 'Sacado'}</div>
                   <div style={{ padding: "16px 20px", textAlign: "right" }}>Risco em Aberto</div>
                   <div style={{ padding: "16px 20px", textAlign: "right" }}>% do PL</div>
@@ -1863,13 +1864,14 @@ const negotiationDesEncTop5Percent = currentNegotiationStats.sorted.length
                   const isActive = selectedSlice === slice.name;
                   return (
                     <div
+                      className="capital-ranking-row"
                       key={slice.name}
                       onClick={() => handleSliceClick(slice.name)}
                       onMouseEnter={() => setHoveredSlice(slice.name)}
                       onMouseLeave={() => setHoveredSlice(null)}
                       style={{
                         display: "grid",
-                        gridTemplateColumns: "minmax(0, 1fr) 220px 120px",
+                        gridTemplateColumns: "var(--capital-columns, minmax(0, 1fr) 220px 120px)",
                         alignItems: "center",
                         borderBottom: globalIndex === capitalTableItems.length - 1 ? "none" : "1px solid #e5e7eb",
                         background: isActive ? "#eef2ff" : hoveredSlice === slice.name ? "#eff6ff" : "#fff",
@@ -1888,7 +1890,7 @@ const negotiationDesEncTop5Percent = currentNegotiationStats.sorted.length
                   );
                 })}
                 {capitalTableItems.length > capitalItemsPerPage && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', padding: '14px 16px', borderTop: '1px solid #e5e7eb', background: '#fff' }}>
+                  <div className="mobile-pagination" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', padding: '14px 16px', borderTop: '1px solid #e5e7eb', background: '#fff' }}>
                     <span style={{ fontSize: '13px', color: '#6b7280' }}>
                       Mostrando {(capitalPageSafe - 1) * capitalItemsPerPage + 1} a {Math.min(capitalPageSafe * capitalItemsPerPage, capitalTableItems.length)} de {capitalTableItems.length} entradas
                     </span>
@@ -1920,14 +1922,14 @@ const negotiationDesEncTop5Percent = currentNegotiationStats.sorted.length
               background: "#d1d5db",
               borderRadius: "12px",
               display: "grid",
-              gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+              gridTemplateColumns: "var(--macro-kpi-columns, repeat(4, minmax(0, 1fr)))",
               gap: "1px",
               boxShadow: "0 8px 18px rgba(0, 0, 0, 0.08)",
               marginBottom: "32px",
               border: "1px solid #d1d5db",
               overflow: "hidden"
             }}>
-              <div style={{ background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #7c3aed", padding: "20px 16px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+              <div className="mobile-panel" style={{ background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #7c3aed", padding: "20px 16px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
                   <div style={{ background: "rgba(124, 58, 237, 0.1)", padding: "6px", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}>
                     <svg width="16" height="16" fill="none" stroke="#7c3aed" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M12 2v20"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7H14a3.5 3.5 0 0 1 0 7H7"/></svg>
@@ -1944,7 +1946,7 @@ const negotiationDesEncTop5Percent = currentNegotiationStats.sorted.length
                 </div>
               </div>
 
-              <div style={{ background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #4f46e5", padding: "20px 16px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+              <div className="mobile-panel" style={{ background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #4f46e5", padding: "20px 16px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
                   <div style={{ background: "rgba(79, 70, 229, 0.1)", padding: "6px", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}>
                     <svg width="16" height="16" fill="none" stroke="#4f46e5" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M23 6l-9.5 9.5-5-5L1 18"/><path d="M17 6h6v6"/></svg>
@@ -1959,7 +1961,7 @@ const negotiationDesEncTop5Percent = currentNegotiationStats.sorted.length
                 </div>
               </div>
 
-              <div style={{ background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #0ea5e9", padding: "20px 16px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+              <div className="mobile-panel" style={{ background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #0ea5e9", padding: "20px 16px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
                   <div style={{ background: "rgba(14, 165, 233, 0.1)", padding: "6px", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}>
                     <svg width="16" height="16" fill="none" stroke="#0ea5e9" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
@@ -1982,7 +1984,7 @@ const negotiationDesEncTop5Percent = currentNegotiationStats.sorted.length
                 </div>
               </div>
 
-              <div style={{ background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #06b6d4", padding: "20px 16px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+              <div className="mobile-panel" style={{ background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #06b6d4", padding: "20px 16px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
                   <div style={{ background: "rgba(6, 182, 212, 0.1)", padding: "6px", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}>
                     <svg width="16" height="16" fill="none" stroke="#06b6d4" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
@@ -2006,7 +2008,7 @@ const negotiationDesEncTop5Percent = currentNegotiationStats.sorted.length
                 </div>
               </div>
 
-              <div style={{ background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #10b981", padding: "20px 16px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+              <div className="mobile-panel" style={{ background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #10b981", padding: "20px 16px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
                   <div style={{ background: "rgba(16, 185, 129, 0.1)", padding: "6px", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}>
                     <svg width="16" height="16" fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
@@ -2022,7 +2024,7 @@ const negotiationDesEncTop5Percent = currentNegotiationStats.sorted.length
                 </div>
               </div>
 
-              <div style={{ background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #f59e0b", padding: "20px 16px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+              <div className="mobile-panel" style={{ background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #f59e0b", padding: "20px 16px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
                   <div style={{ background: "rgba(245, 158, 11, 0.1)", padding: "6px", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}>
                     <svg width="16" height="16" fill="none" stroke="#f59e0b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
@@ -2048,7 +2050,7 @@ const negotiationDesEncTop5Percent = currentNegotiationStats.sorted.length
                 </div>
               </div>
 
-              <div style={{ background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #ea580c", padding: "20px 16px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+              <div className="mobile-panel" style={{ background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", borderTop: "3px solid #ea580c", padding: "20px 16px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
                   <div style={{ background: "rgba(234, 88, 12, 0.1)", padding: "6px", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}>
                     <svg width="16" height="16" fill="none" stroke="#ea580c" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
@@ -2079,7 +2081,7 @@ const negotiationDesEncTop5Percent = currentNegotiationStats.sorted.length
           {/* Troca Dinâmica de Tabelas */}
           {detailedRows ? (
             <div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+              <div className="mobile-wrap" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
                 <div>
                   <h3 style={{ margin: "0 0 4px 0", color: "#111827", fontSize: "18px" }}>
                     Títulos em Aberto de: <span style={{ color: "#4f46e5" }}>{focus === 'cedente' ? formatarNomeCedente(selectedSlice, hideValues) : formatarNomeSacado(selectedSlice, hideValues)}</span>
@@ -2096,7 +2098,7 @@ const negotiationDesEncTop5Percent = currentNegotiationStats.sorted.length
             </div>
           ) : (
             <div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: "16px", flexWrap: "wrap", marginBottom: "16px" }}>
+              <div className="mobile-wrap" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: "16px", flexWrap: "wrap", marginBottom: "16px" }}>
                 <div>
                   <h3 style={{ margin: "0 0 5px", color: "#111827", fontSize: "18px" }}>
                     Ranking Geral ({focus === 'cedente' ? 'Cedentes' : 'Sacados'})
