@@ -11,6 +11,8 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+/outputs/
+/output/playwright/
 *.local
 .env
 .env.local
