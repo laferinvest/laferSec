@@ -757,6 +757,7 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
   const [selectedSlice, setSelectedSlice] = useState(null); 
   const [volumePeriod, setVolumePeriod] = useState('mes_atual');
   const [volumeDateBase, setVolumeDateBase] = useState('emissao');
+  const [overduePeriod, setOverduePeriod] = useState('all_time');
   const [rankingCriterion, setRankingCriterion] = useState('volume');
   const [rankingSort, setRankingSort] = useState({ key: 'currentMonth', direction: 'desc' });
   const [negotiationPage, setNegotiationPage] = useState(1);
@@ -798,9 +799,9 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
   );
 
   // 1. Processa os registos em aberto e o volume negociado por período
-  const { openRows, stats, negotiationStats } = useMemo(() => {
+  const { openRows, stats, overdueStats, negotiationStats } = useMemo(() => {
     const emptyChart = { totalVal: 0, totalDesEnc: 0, sorted: [], pieData: [], pieDataDesEnc: [] };
-    if (rowsComGruposEconomicos.length === 0) return { openRows: [], stats: emptyChart, negotiationStats: { mes_atual: emptyChart, ult_30_dias: emptyChart, ytd: emptyChart } };
+    if (rowsComGruposEconomicos.length === 0) return { openRows: [], stats: emptyChart, overdueStats: emptyChart, negotiationStats: { mes_atual: emptyChart, ult_30_dias: emptyChart, ytd: emptyChart } };
 
     const today = new Date();
     today.setHours(23, 59, 59, 999);
@@ -823,6 +824,12 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
     
     const abertos = [];
     const grouped = {};
+    const overdueGrouped = {};
+    // Exclui o dia que completa 7 dias: entram apenas atrasos de 8 dias ou mais.
+    const overdueCutoff = new Date(today);
+    overdueCutoff.setHours(0, 0, 0, 0);
+    overdueCutoff.setDate(overdueCutoff.getDate() - 7);
+    const overduePeriodStart = overduePeriod === 'since_2026' ? new Date(2026, 0, 1) : null;
     const monthlyRanking = {};
     const negotiationGrouped = {
       mes_atual: {},
@@ -1003,6 +1010,16 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
         const rComStatus = { ...r, _status: status };
         abertos.push(rComStatus);
 
+        const matchesOverduePeriod = !overduePeriodStart || (emisDate && emisDate >= overduePeriodStart);
+        if (status === 'atraso' && effectiveVctoDate < overdueCutoff && val > 0 && matchesOverduePeriod) {
+          const cedenteKey = getMacroEntityKey(r, 'cedente');
+          const cedenteLabel = getMacroEntityLabel(r, 'cedente') || 'Cedente não informado';
+          const overdueBucket = ensureMacroEntityBucket(
+            overdueGrouped, cedenteKey || 'cedente-nao-informado', cedenteLabel, { val: 0, desEnc: 0 }
+          );
+          overdueBucket.val += val;
+        }
+
         if (entityKey) {
           const groupBucket = ensureMacroEntityBucket(grouped, entityKey, entity, { val: 0, count: 0 });
           groupBucket.val += val;
@@ -1117,13 +1134,14 @@ export default function MacroDashboard({ session, hideValues, setHideValues }) {
     return {
       openRows: abertos,
       stats: { totalVal, sorted, pieData: top9 },
+      overdueStats: buildNegotiationChart(overdueGrouped),
       negotiationStats: {
         mes_atual: buildNegotiationChart(negotiationGrouped.mes_atual),
         ult_30_dias: buildNegotiationChart(negotiationGrouped.ult_30_dias),
         ytd: buildNegotiationChart(negotiationGrouped.ytd)
       }
     };
-  }, [rowsComGruposEconomicos, focus, volumeDateBase, latestPatrimonio]);
+  }, [rowsComGruposEconomicos, focus, volumeDateBase, latestPatrimonio, overduePeriod]);
 
   // 2. Extrai os detalhes da entidade selecionada
   const detailedRows = useMemo(() => {
@@ -1916,6 +1934,68 @@ const negotiationDesEncTop5Percent = currentNegotiationStats.sorted.length
             </div>
           </section>
 
+          {focus === 'cedente' && (
+            <section className="mobile-panel" style={{ background: "#f8fafc", borderRadius: "20px", padding: "20px", marginBottom: "32px", border: "1px solid #e5e7eb" }}>
+              <div className="mobile-wrap" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "16px", flexWrap: "wrap", marginBottom: "20px" }}>
+                <div style={{ flex: "1 1 400px" }}>
+                  <h3 style={{ margin: "0 0 6px", color: "#1f2937", fontSize: "26px", fontWeight: "800", letterSpacing: "-0.02em" }}>
+                    Concentração dos Títulos em Atraso por Cedente
+                  </h3>
+                  <p style={{ margin: 0, color: "#6b7280", fontSize: "14px" }}>
+                    Participação de cada cedente no valor total em aberto com mais de 7 dias de atraso.
+                    {overduePeriod === 'since_2026' && ' Títulos emitidos a partir de 01/01/2026.'}
+                  </p>
+                </div>
+                <div role="group" aria-label="Período de emissão dos títulos em atraso" style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginLeft: "auto" }}>
+                  <button type="button" aria-pressed={overduePeriod === 'all_time'} onClick={() => { setOverduePeriod('all_time'); setTooltip({ show: false }); }} style={getVolumePeriodStyle(overduePeriod === 'all_time')}>Todo o período</button>
+                  <button type="button" aria-pressed={overduePeriod === 'since_2026'} onClick={() => { setOverduePeriod('since_2026'); setTooltip({ show: false }); }} style={getVolumePeriodStyle(overduePeriod === 'since_2026')}>A partir de 2026</button>
+                </div>
+              </div>
+              {overdueStats.totalVal > 0 ? (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "28px", alignItems: "stretch" }}>
+                  <div className="mobile-panel" style={{ flex: "0 0 390px", minWidth: "min(100%, 300px)", maxWidth: "100%", border: "1px solid #d1d5db", borderRadius: "18px", background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)", padding: "24px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "space-between" }}>
+                    <div style={{ textAlign: "center", marginBottom: "18px" }}>
+                      <div style={{ fontSize: "12px", fontWeight: "800", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "8px" }}>Capital em Atraso &gt; 7 dias</div>
+                      <div style={{ fontSize: "28px", fontWeight: "900", color: "#0f172a", letterSpacing: "-0.03em" }}>{fmtM(overdueStats.totalVal)}</div>
+                    </div>
+                    {renderDonutChart({
+                      pieData: overdueStats.pieData,
+                      hoveredName: tooltip.show && tooltip.context === 'atraso_cedente' ? tooltip.label : null,
+                      onSliceHover: (e, slice) => setTooltip({ show: true, x: e.clientX, y: e.clientY, label: slice.name, value: slice.val, percent: slice.percent, context: 'atraso_cedente' }),
+                      onMouseLeave: () => setTooltip({ show: false }),
+                      donut: true,
+                      size: 250,
+                    })}
+                    <div style={{ marginTop: "20px", textAlign: "center", color: "#64748b", fontSize: "13px", lineHeight: 1.45, maxWidth: "320px" }}>
+                      Percentuais sobre o total em atraso acima de 7 dias. Passe o mouse para ver os detalhes.
+                    </div>
+                  </div>
+                  <div style={{ flex: "1 1 520px", minWidth: "min(100%, 320px)", border: "1px solid #d1d5db", borderRadius: "18px", overflow: "hidden", background: "#fff" }}>
+                    <div className="capital-ranking-heading" style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 180px 140px", background: "#f3f4f6", color: "#526581", fontSize: "13px", fontWeight: "800", textTransform: "uppercase", borderBottom: "1px solid #d1d5db" }}>
+                      <div style={{ padding: "16px 20px" }}>Cedente</div>
+                      <div style={{ padding: "16px 20px", textAlign: "right" }}>Valor em Atraso</div>
+                      <div style={{ padding: "16px 20px", textAlign: "right" }}>% do Atraso</div>
+                    </div>
+                    <div style={{ maxHeight: "520px", overflowY: "auto" }}>
+                      {overdueStats.sorted.map((slice) => (
+                        <div className="capital-ranking-row overdue-ranking-row" key={slice.entityKey} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 180px 140px", alignItems: "center", borderBottom: "1px solid #e5e7eb" }}>
+                          <div style={{ padding: "16px 20px", display: "flex", alignItems: "center", gap: "12px", minWidth: 0 }}>
+                            <span style={{ width: "12px", height: "12px", borderRadius: "999px", background: overdueStats.pieData.find(item => item.entityKey === slice.entityKey)?.color || '#9ca3af', flexShrink: 0 }} />
+                            <span style={{ fontSize: "16px", fontWeight: "700", color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={formatarNomeCedente(slice.name, hideValues)}>{formatarNomeCedente(slice.name, hideValues)}</span>
+                          </div>
+                          <div style={{ padding: "16px 20px", textAlign: "right", fontSize: "16px", fontWeight: "800", color: "#0f172a" }}>{fmtM(slice.val)}</div>
+                          <div style={{ padding: "16px 20px", textAlign: "right", fontSize: "16px", fontWeight: "800", color: "#475569" }}>{(slice.percent * 100).toFixed(2).replace('.', ',')}%</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ padding: "40px 20px", textAlign: "center", color: "#64748b", background: "#fff", borderRadius: "18px", border: "1px solid #d1d5db" }}>Nenhum título em aberto com mais de 7 dias de atraso{overduePeriod === 'since_2026' ? ' emitido a partir de 01/01/2026' : ''}.</div>
+              )}
+            </section>
+          )}
+
           {/* BANNER DE KPIs INTELIGENTE */}
           {showRankingKpis && kpiData.baseCalculo > 0 && (
             <div style={{
@@ -2273,9 +2353,11 @@ const negotiationDesEncTop5Percent = currentNegotiationStats.sorted.length
               ? `Representa ${(tooltip.percent * 100).toFixed(1)}% do volume negociado no período`
               : tooltip.context === 'des_enc_negociado'
                 ? `Representa ${(tooltip.percent * 100).toFixed(1)}% do total de Enc. + Des. no período`
-                : `Representa ${(tooltip.percent * 100).toFixed(1)}% do patrimônio da securitizadora`}
+                : tooltip.context === 'atraso_cedente'
+                  ? `Representa ${(tooltip.percent * 100).toFixed(1).replace('.', ',')}% do valor em atraso acima de 7 dias`
+                  : `Representa ${(tooltip.percent * 100).toFixed(1)}% do patrimônio da securitizadora`}
           </div>
-          {tooltip.context !== 'volume_negociado' && tooltip.context !== 'des_enc_negociado' && (
+          {tooltip.context === 'capital_aberto' && (
             <div style={{ marginTop: '6px', fontSize: '11px', color: '#60a5fa', fontStyle: 'italic' }}>Clique para ver os detalhes</div>
           )}
         </div>
