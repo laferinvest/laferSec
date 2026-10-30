@@ -1176,7 +1176,7 @@ const handleChartRangeSelect = useCallback(({ start, end, source }) => {
                               style={{
                                 ...tdStyle,
                                 fontWeight: 700,
-                                color: grupo.periodReturn < 0 || grupo.periodReturn > 0.0293 ? "#dc2626" : "#16a34a",
+                                color: grupo.periodReturn < 0.0293 ? "#dc2626" : "#16a34a",
                               }}
                             >
                               {formatarPct(grupo.periodReturn * 100, hideValues)}
