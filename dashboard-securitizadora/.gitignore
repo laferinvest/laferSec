@@ -28,10 +28,9 @@ dist-ssr
 *.sln
 *.sw?
 
-# Materiais internos e arquivos locais
-/radar_cedentes/
-/INICIAR_PROJETO_ARVORE_CEDENTES.md
-/comparisons/
+# Credenciais e cópias privadas locais
+.vercel/
+.env*
 /private/
 /private-data/
 /local-data/

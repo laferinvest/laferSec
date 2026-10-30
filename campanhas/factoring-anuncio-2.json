@@ -1,0 +1,115 @@
+{
+  "campaign": "Leads-Search-3",
+  "ad_group": "Grupo de anúncios 1",
+  "ad_group_theme": "Factoring para empresas",
+  "ad_type": "Responsive search ad",
+  "preparation_status": "NOT_CREATED_IN_GOOGLE_ADS",
+  "angle": "Comparação de propostas, custo total e valor líquido; alternativa de uma securitizadora B2B",
+  "final_url": "https://www.lafersec.com.br/enterprise-factoring-ads.html",
+  "path_1": "factoring",
+  "path_2": "compare",
+  "headlines": [
+    "Compare Propostas de Factoring",
+    "Alternativa ao Factoring",
+    "Factoring Para Empresas?",
+    "Na Lafer, Sem Cobrança de IOF",
+    "Compare o Valor Líquido",
+    "Antecipe Duplicatas B2B",
+    "Conheça Nossas Condições",
+    "Fatura Desde R$ 200 Mil/Mês?",
+    "Atendimento em MG e SP",
+    "Duplicatas de Produtos",
+    "Duplicatas de Serviços",
+    "Sem Mínimo Por Operação",
+    "Venda a Prazo, Receba Antes",
+    "Solicite Uma Proposta",
+    "Lafer Invest Securitizadora"
+  ],
+  "descriptions": [
+    "Securitizadora B2B para empresas de MG e SP com faturamento a partir de R$ 200 mil/mês.",
+    "Buscando factoring? Compare com a Lafer: compra de duplicatas sem cobrança de IOF.",
+    "Compare deságio, custos e valor líquido. Conheça as condições para seus recebíveis.",
+    "Antecipe duplicatas de produtos e serviços. Sem mínimo por operação. Solicite proposta."
+  ],
+  "pinned_description": {
+    "number": 1,
+    "position": 1,
+    "rationale": "Manter a identificação de securitizadora B2B, a região e o faturamento mínimo na descrição principal."
+  },
+  "sitelinks": [
+    {
+      "text": "Compare as Modalidades",
+      "description_1": "Entenda as diferenças na operação",
+      "description_2": "Conheça a alternativa da Lafer",
+      "fragment": "factoring-ou-securitizacao",
+      "final_url": "https://www.lafersec.com.br/enterprise-factoring-ads.html#factoring-ou-securitizacao"
+    },
+    {
+      "text": "Taxas e Valor Líquido",
+      "description_1": "Compare deságio e custos",
+      "description_2": "Saiba quanto sua empresa recebe",
+      "fragment": "taxas-e-condicoes",
+      "final_url": "https://www.lafersec.com.br/enterprise-factoring-ads.html#taxas-e-condicoes"
+    },
+    {
+      "text": "Solicitar Proposta",
+      "description_1": "Apresente sua operação",
+      "description_2": "Continue pelo WhatsApp da Lafer",
+      "fragment": "solicitar-proposta",
+      "final_url": "https://www.lafersec.com.br/enterprise-factoring-ads.html#solicitar-proposta"
+    },
+    {
+      "text": "Quem Pode Antecipar",
+      "description_1": "Empresas B2B de MG e SP",
+      "description_2": "Faturamento desde R$ 200 mil/mês",
+      "fragment": "quem-pode-antecipar",
+      "final_url": "https://www.lafersec.com.br/enterprise-factoring-ads.html#quem-pode-antecipar"
+    },
+    {
+      "text": "Recebíveis Aceitos",
+      "description_1": "Duplicatas de produtos e serviços",
+      "description_2": "Não trabalhamos com cheques",
+      "fragment": "recebiveis-aceitos",
+      "final_url": "https://www.lafersec.com.br/enterprise-factoring-ads.html#recebiveis-aceitos"
+    },
+    {
+      "text": "Conheça a Lafer Invest",
+      "description_1": "Veja nossos dados e contatos",
+      "description_2": "Sede em Areado, Minas Gerais",
+      "fragment": "sobre-a-lafer",
+      "final_url": "https://www.lafersec.com.br/enterprise-factoring-ads.html#sobre-a-lafer"
+    }
+  ],
+  "callouts": [
+    "Sem Cobrança de IOF",
+    "Empresas B2B de MG e SP",
+    "Sem Mínimo Por Operação",
+    "Duplicatas de Produtos",
+    "Duplicatas de Serviços",
+    "Fatura Desde R$ 200 Mil"
+  ],
+  "supporting_asset_scope": "campaign_or_ad_group_shared_with_ad_1",
+  "business_name": "Lafer Invest",
+  "keyword_strategy": "Herdar as palavras-chave e negativas do mesmo grupo; não duplicar palavras-chave por anúncio.",
+  "conversion_goal": "WhatsApp da landing",
+  "conversion_action": "WhatsApp — landing factoring",
+  "conversion_event": "lafer_whatsapp_open",
+  "final_url_suffix": "utm_source=google&utm_medium=cpc&utm_campaign=factoring_b2b_mg_sp&utm_content=anuncio_2&utm_term={keyword}",
+  "tracking_notes": [
+    "Configurar o sufixo no nível do anúncio 2; verificar possíveis sufixos mais específicos antes de concluir.",
+    "Os cliques nos sitelinks compartilhados podem usar opções próprias/herdadas; não atribuir todos esses cliques ao anúncio 2 apenas pelo utm_content.",
+    "Preservar a marcação automática do Google Ads e usar os relatórios por anúncio/ação de conversão para comparação."
+  ],
+  "unchanged_campaign_budget_brl": 50,
+  "structured_snippet": null,
+  "structured_snippet_reason": "A oferta tem dois tipos de recebíveis; não inventar um terceiro tipo ou serviço para completar o mínimo de três valores.",
+  "call_asset": "Não adicionar um novo recurso de ligação nesta variação enquanto o objetivo de comparação é a abertura de WhatsApp pela landing.",
+  "message_asset": "Não adicionar um novo recurso de mensagem direto no anúncio nesta variação; mantém o caminho de conversão pela landing.",
+  "landing_adaptation": "Não necessária: a primeira dobra contém factoring/alternativa/IOF; as seções de comparação, taxas, perfil e recebíveis sustentam as afirmações.",
+  "sources": [
+    "https://support.google.com/google-ads/answer/7684791?hl=pt-BR",
+    "https://support.google.com/google-ads/answer/2375416?hl=pt-BR",
+    "https://support.google.com/google-ads/answer/6280012?hl=pt-BR",
+    "https://support.google.com/google-ads/answer/9054021?hl=pt-BR"
+  ]
+}

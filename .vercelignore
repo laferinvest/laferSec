@@ -1,0 +1,13 @@
+# Materiais locais não fazem parte da publicação do site.
+**/private/
+**/private-data/
+**/local-data/
+**/radar_cedentes/
+**/comparisons/
+**/outputs/
+**/exports/
+**/backups/
+**/.env*
+**/*.log
+**/INICIAR_PROJETO_ARVORE_CEDENTES.md
+campanhas/

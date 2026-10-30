@@ -1,3 +1,2 @@
-# Materiais internos de campanhas e prospecção
-/campanhas/
-.vercel
+.vercel/
+.env*
