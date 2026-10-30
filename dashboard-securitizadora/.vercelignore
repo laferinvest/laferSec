@@ -1,0 +1,14 @@
+# Arquivos locais e dados internos não fazem parte da publicação.
+private/
+private-data/
+local-data/
+radar_cedentes/
+comparisons/
+outputs/
+exports/
+backups/
+INICIAR_PROJETO_ARVORE_CEDENTES.md
+.env*
+*.log
+supabase/
+src/**/*.test.js
