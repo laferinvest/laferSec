@@ -1,4 +1,4 @@
-// Rótulos e códigos do INICIAR_PROJETO_ARVORE_CEDENTES.md.
+// Catálogo de classificação econômica.
 export const CATALOG_VERSION = "2026-09-28";
 
 export const FAMILIES = [

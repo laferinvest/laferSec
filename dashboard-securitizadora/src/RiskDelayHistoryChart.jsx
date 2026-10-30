@@ -1,4 +1,5 @@
 import SearchableSelect from "./SearchableSelect";
+import { useCedenteSettings } from "./cedenteSettingsContext.js";
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "./supabaseClient";
 import { isRiskCedenteVisible, loadRiskDelayCedentes, loadRiskDelayHistory } from "./riskDelayHistory";
@@ -62,6 +63,7 @@ export function RiskDelayHistoryPlot({ rows, chartWidth, seriesLabel }) {
 }
 
 export default function RiskDelayHistoryChart({ hidden, cedentes = [] }) {
+  const { hiddenAliases } = useCedenteSettings();
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -72,7 +74,7 @@ export default function RiskDelayHistoryChart({ hidden, cedentes = [] }) {
   const [cedentesError, setCedentesError] = useState("");
   const chartContainer = useRef(null);
   const [chartWidth, setChartWidth] = useState(940);
-  const activeCedenteKey = isRiskCedenteVisible({ cedente_key: cedenteKey }) ? cedenteKey : "";
+  const activeCedenteKey = isRiskCedenteVisible({ cedente_key: cedenteKey }, hiddenAliases) ? cedenteKey : "";
 
   useEffect(() => {
     const observer = new ResizeObserver(([entry]) => setChartWidth(Math.max(entry.contentRect.width, 1)));
@@ -98,7 +100,7 @@ export default function RiskDelayHistoryChart({ hidden, cedentes = [] }) {
   }, [revision, activeCedenteKey]);
 
   const options = [...new Map([...savedCedentes, ...cedentes].map((item) => [item.cedente_key, item])).values()]
-    .filter(isRiskCedenteVisible)
+    .filter((item) => isRiskCedenteVisible(item, hiddenAliases))
     .sort((a, b) => a.cedente.localeCompare(b.cedente, "pt-BR"));
   const seriesLabel = options.find((item) => item.cedente_key === activeCedenteKey)?.cedente || "Carteira";
 

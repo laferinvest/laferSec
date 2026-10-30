@@ -119,12 +119,12 @@ export function scopeConflict(records, candidate) {
   return "Este sacado já está classificado para o cedente. Edite a classificação existente para evitar duplicidade.";
 }
 
-export function availablePortfolioScopes(portfolio, records, editingId = "") {
+export function availablePortfolioScopes(portfolio, records, editingId = "", hiddenAliases = []) {
   // Ao editar, o vínculo atual fica disponível; os demais continuam reservados.
   const occupied = records.filter((record) => !editingId || record.id !== editingId);
   const editingRecord = editingId ? records.find((record) => record.id === editingId) : null;
   return portfolio.cedentes.filter((cedente) => cedente.key === editingRecord?.cedenteKey
-    || isCedenteNameVisible(cedente.name, ...(cedente.aliases || []))).map((cedente) => {
+    || isCedenteNameVisible(hiddenAliases, cedente.name, ...(cedente.aliases || []))).map((cedente) => {
     const candidate = { cedenteKey: cedente.key };
     const canClassifyWhole = !scopeConflict(occupied, { ...candidate, scope: "cedente" });
     const availableBuyers = cedente.buyers.filter((buyer) => !scopeConflict(occupied, {

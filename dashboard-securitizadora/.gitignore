@@ -27,3 +27,13 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Materiais internos e arquivos locais
+/radar_cedentes/
+/INICIAR_PROJETO_ARVORE_CEDENTES.md
+/comparisons/
+/private/
+/private-data/
+/local-data/
+/exports/
+/backups/

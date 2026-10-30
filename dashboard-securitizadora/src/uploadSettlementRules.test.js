@@ -12,8 +12,8 @@ import { IMPORT_ORIGINAL_VCTO_FIELD } from "./uploadOriginalDueDateRules.js";
 test("reconcilia título quitado sem borderô por Cliente + Dcto + Vcto", () => {
   const sourceRows = [
     {
-      Cliente: "PSR DISTRIBUIDORA",
-      Sacado: "VET AGRO-Sacado",
+      Cliente: "DISTRIBUIDORA FICTICIA DELTA",
+      Sacado: "COMPRADOR FICTICIO AGRO-Sacado",
       Dcto: "2738-2",
       Vcto: "2026-06-30",
       Pgto: "2026-07-07",
@@ -24,8 +24,8 @@ test("reconcilia título quitado sem borderô por Cliente + Dcto + Vcto", () => 
     },
   ];
   const target = {
-    Cliente: "PSR DISTRIBUIDORA",
-    Sacado: "VET AGRO-Sacado",
+    Cliente: "DISTRIBUIDORA FICTICIA DELTA",
+    Sacado: "COMPRADOR FICTICIO AGRO-Sacado",
     Dcto: "2738-2",
     Vcto: "2026-06-30",
     Pgto: null,
@@ -40,10 +40,10 @@ test("reconcilia título quitado sem borderô por Cliente + Dcto + Vcto", () => 
 
 test("escolhe a quitação mais recente quando há pagamentos parcelados no mesmo vencimento", () => {
   const sourceRows = [
-    { Cliente: "PSR", Sacado: "VET", Dcto: "2738-2", Vcto: "2026-06-30", Pgto: "2026-06-30", "Vl Pgto": 2000, Status: "Quitado" },
-    { Cliente: "PSR", Sacado: "VET", Dcto: "2738-2", Vcto: "2026-06-30", Pgto: "2026-07-07", "Vl Pgto": 2046.21, Status: "Quitado" },
+    { Cliente: "DISTRIBUIDORA FICTICIA", Sacado: "COMPRADOR FICTICIO", Dcto: "2738-2", Vcto: "2026-06-30", Pgto: "2026-06-30", "Vl Pgto": 2000, Status: "Quitado" },
+    { Cliente: "DISTRIBUIDORA FICTICIA", Sacado: "COMPRADOR FICTICIO", Dcto: "2738-2", Vcto: "2026-06-30", Pgto: "2026-07-07", "Vl Pgto": 2046.21, Status: "Quitado" },
   ];
-  const target = { Cliente: "PSR", Sacado: "VET", Dcto: "2738-2", Vcto: "2026-06-30" };
+  const target = { Cliente: "DISTRIBUIDORA FICTICIA", Sacado: "COMPRADOR FICTICIO", Dcto: "2738-2", Vcto: "2026-06-30" };
 
   const match = findSettlementEvidence(target, buildSettlementEvidenceIndex(sourceRows));
   assert.equal(match.Pgto, "2026-07-07");
@@ -52,8 +52,8 @@ test("escolhe a quitação mais recente quando há pagamentos parcelados no mesm
 
 test("reconcilia quitação depois de prorrogar o vencimento", () => {
   const settlement = {
-    Cliente: "REFRIPOCOS REFRIGERACAO LTDA ME",
-    Sacado: "GOLDEN TOWER EXPRESS ANHEMBI-Sacado",
+    Cliente: "EMPRESA FICTICIA REFRIGERACAO LTDA",
+    Sacado: "HOTEL FICTICIO GAMA-Sacado",
     Dcto: "2225",
     "Dt.Emis": "2026-05-20",
     Vcto: "2026-08-31",
@@ -91,7 +91,7 @@ test("não usa fallback ambíguo quando o mesmo Dcto + Vcto pertence a cedentes 
 
 test("a baixa atualiza somente status e pagamento, preservando o valor de face do banco", () => {
   const source = {
-    Cliente: "PSR",
+    Cliente: "DISTRIBUIDORA FICTICIA",
     Dcto: "2738-2",
     Vcto: "2026-06-30",
     Pgto: "2026-07-07",

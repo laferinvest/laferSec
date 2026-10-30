@@ -8,6 +8,7 @@ import UploadData from "./UploadData";
 import NFeConverter from "./NFeConverter";
 import RiskDashboard from "./RiskDashboard";
 import CedentesTreeDashboard from "./CedentesTreeDashboard";
+import PrivateDashboardGate from "./PrivateDashboardGate.jsx";
 
 export default function App() {
   const [session, setSession] = useState(null);
@@ -327,6 +328,7 @@ export default function App() {
             </div>
           </div>
         ) : (
+          <PrivateDashboardGate key={session.user.id} userId={session.user.id}>
           <div>
             <div className="app-heading" style={slideStyle}>
               <div className="app-header"
@@ -549,6 +551,7 @@ export default function App() {
               </div>
             )}
           </div>
+          </PrivateDashboardGate>
         )}
       </div>
     </div>

@@ -9,6 +9,7 @@ import useCedentesCloud from "./useCedentesCloud.js";
 import useCedentesPortfolio from "./useCedentesPortfolio.js";
 import CedenteWizard from "./CedenteWizard";
 import "./CedentesTreeDashboard.css";
+import { useCedenteSettings } from "./cedenteSettingsContext.js";
 
 const LEVELS = { root: "Tronco", family: "Família econômica", sector: "Setor de destino", purpose: "Finalidade econômica", application: "Aplicação", record: "Cedente" };
 const countCedentes = (records) => new Set(records.map((record) => record.cedenteKey || normalizeName(record.name))).size;
@@ -48,6 +49,7 @@ function ParcelDetails({ record, hidden, portfolio, onEdit, onDelete, deleting, 
 }
 
 export function CedentesTreeView({ cloud, refreshCloud, portfolio, refreshPortfolio, hideValues = false, setHideValues = () => {} }) {
+  const { hiddenAliases } = useCedenteSettings();
   const [family, setFamily] = useState("all");
   const [showEmpty, setShowEmpty] = useState(false);
   const [showBuyers, setShowBuyers] = useState(false);
@@ -66,7 +68,7 @@ export function CedentesTreeView({ cloud, refreshCloud, portfolio, refreshPortfo
   const records = cloud.records;
   const classifiedFamilies = useMemo(() => FAMILIES.filter((item) => records.some((record) => record.family === item.code)), [records]);
   const activeFamily = classifiedFamilies.some((item) => item.code === family) ? family : "all";
-  const availableScopes = useMemo(() => availablePortfolioScopes(portfolio, records), [portfolio, records]);
+  const availableScopes = useMemo(() => availablePortfolioScopes(portfolio, records, "", hiddenAliases), [portfolio, records, hiddenAliases]);
   const hasRecordedFactors = records.some((record) => record.factors.length > 0);
   const tree = useMemo(() => buildTree(records, { family: activeFamily, showEmpty, showBuyers }), [records, activeFamily, showEmpty, showBuyers]);
   const allNodes = useMemo(() => flattenTree(tree), [tree]);

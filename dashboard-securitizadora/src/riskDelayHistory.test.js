@@ -4,26 +4,21 @@ import { buildRiskCedenteOptions, calculateRiskExposure, getRiskReferenceDay, is
 
 const title = (patch = {}) => ({ Cliente: "100 - Empresa", Sacado: "Cliente final", Entrada: 100, Vcto: "2026-09-30", Pgto: null, Status: "Aberto", ...patch });
 
-test("oculta os cedentes solicitados mesmo com códigos, pontuação e palavras antes do nome", () => {
-  const hidden = [
-    "59 399 143 SHIRLEI APARECIDA", "59.399.143/0001-00 - Shirlei Aparecida",
-    "123 - LUIS CARLOS LELECO LTDA", "COMERCIAL ATACADO PRIMU LTDA", "ATACADO PRIMUS",
-    "GRUPO LAFER INVEST LTDA", "59.339 EMPRESA LTDA", "COMPANHIA UAI",
-    "EMPÓRIO TROVOADA", "GRID MOTORS", "INDUMAX", "INOVA", "J.L. COMERCIO",
-    "KAMMER", "M.G. LTDA", "MARCENARIA", "MILK LAT", "R10", "REGES",
-    "S.L. LTDA", "SOLUÇÃO COMERCIO", "VISUAL",
-  ];
-  for (const cedente of hidden) {
-    assert.equal(isRiskCedenteVisible({ cedente }), false, cedente);
-    assert.equal(isRiskCedenteVisible({ cedente_key: cedente }), false, cedente);
+test("aplica aliases privados com códigos, pontuação e palavras antes do nome", () => {
+  const aliases = ["cliente ficticio alfa", "cliente ficticio beta", "x y"];
+  for (const cedente of ["123 - CLIENTE FICTÍCIO ALFA", "11.111.111/0001-11 - Cliente Ficticio Alfa", "COMERCIAL CLIENTE FICTICIO BETA LTDA", "X.Y. COMERCIO"]) {
+    assert.equal(isRiskCedenteVisible({ cedente }, aliases), false, cedente);
+    assert.equal(isRiskCedenteVisible({ cedente_key: cedente }, aliases), false, cedente);
   }
 });
 
-test("não oculta outros cedentes por trechos de palavras parecidas", () => {
-  for (const cedente of ["EMPRESA NORMAL", "INOVACAO LTDA", "AUDIOVISUAL LTDA", "REGESSON", "AMG", "JLM", "R100", "59 399 143 OUTRA EMPRESA"]) {
-    assert.equal(isRiskCedenteVisible({ cedente }), true, cedente);
+test("não oculta palavras parecidas nem inventa preferências sem configuração", () => {
+  const aliases = ["ficticio alfa", "x y"];
+  for (const cedente of ["EMPRESA FICTICIA NORMAL", "FICTICIO ALFABETICO", "XY", "123 - OUTRA EMPRESA"]) {
+    assert.equal(isRiskCedenteVisible({ cedente }, aliases), true, cedente);
   }
-  assert.equal(isRiskCedenteVisible({ cedente_key: "", cedente: "" }), true);
+  assert.equal(isRiskCedenteVisible({ cedente: "FICTICIO ALFA" }), true);
+  assert.equal(isRiskCedenteVisible({ cedente_key: "", cedente: "" }, aliases), true);
 });
 
 test("a data diária segue Brasília, inclusive na virada do dia UTC", () => {

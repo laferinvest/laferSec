@@ -470,25 +470,7 @@ const getInitDateStr = () => {
   return { start: formatToLocalISO(start), end: formatToLocalISO(end) };
 };
 
-const GRUPOS_ECONOMICOS_FALLBACK = [
-  {
-    label: "BDP Broadcast",
-    prefixos: ["BDP Broadcast"]
-  },
-  {
-    label: "JL & D Confecções",
-    prefixos: ["JL & D Confecções"]
-  },
-  {
-    label: "MG Packing",
-    prefixos: [
-      "Mg Embalagem e Separadores",
-      "Mg Embalagem e Separadores Industria e Comercio LTDA",
-      "MG Packing",
-      "MG Packing Indústria, Com, Imp e Export de Embalagens LTDA"
-    ]
-  }
-];
+const GRUPOS_ECONOMICOS_FALLBACK = [];
 
 const GRUPOS_ECONOMICOS_TABLE = "grupos_economicos";
 const GRUPOS_ECONOMICOS_PAGE_SIZE = 1000;
@@ -2715,7 +2697,7 @@ function EconomicGroupModal({
               setNome(event.target.value);
               setValidationError("");
             }}
-            placeholder="Ex.: Grupo MG Packing"
+            placeholder="Ex.: Grupo empresarial"
             maxLength={120}
             disabled={saving}
             style={{

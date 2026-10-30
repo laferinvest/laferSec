@@ -134,31 +134,7 @@ function entidadesParecidasPorInicio(a, b) {
 }
 
 const MACRO_GRUPOS_ECONOMICOS_TABLE = "grupos_economicos";
-const MACRO_GRUPOS_ECONOMICOS_FALLBACK = [
-  {
-    id: null,
-    label: "BDP Broadcast",
-    prefixos: ["BDP Broadcast"],
-    ativo: true,
-  },
-  {
-    id: null,
-    label: "JL & D Confecções",
-    prefixos: ["JL & D Confecções"],
-    ativo: true,
-  },
-  {
-    id: null,
-    label: "MG Packing",
-    prefixos: [
-      "Mg Embalagem e Separadores",
-      "Mg Embalagem e Separadores Industria e Comercio LTDA",
-      "MG Packing",
-      "MG Packing Indústria, Com, Imp e Export de Embalagens LTDA",
-    ],
-    ativo: true,
-  },
-];
+const MACRO_GRUPOS_ECONOMICOS_FALLBACK = [];
 
 function normalizarGrupoEconomicoMacro(row) {
   return {

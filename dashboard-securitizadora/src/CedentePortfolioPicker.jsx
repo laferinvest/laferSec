@@ -1,10 +1,12 @@
 import SearchableSelect from "./SearchableSelect";
 import { availablePortfolioScopes, displayEntityName, formatCapital, resolvePortfolioScope, scopeConflict } from "./cedentesPortfolio.js";
+import { useCedenteSettings } from "./cedenteSettingsContext.js";
 
 export default function CedentePortfolioPicker({ draft, onChange, portfolio, records, hideValues, onRefresh }) {
   const cedente = portfolio.cedentes.find((item) => item.key === draft.cedenteKey);
   const buyers = cedente?.buyers || [];
-  const availableCedentes = availablePortfolioScopes(portfolio, records, draft.id);
+  const { hiddenAliases } = useCedenteSettings();
+  const availableCedentes = availablePortfolioScopes(portfolio, records, draft.id, hiddenAliases);
   const availableCedente = availableCedentes.find((item) => item.key === draft.cedenteKey);
   const availableBuyers = availableCedente?.availableBuyers || [];
   const resolved = resolvePortfolioScope(draft, portfolio);

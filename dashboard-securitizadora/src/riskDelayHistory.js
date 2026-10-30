@@ -30,8 +30,8 @@ export async function recordRiskDelayHistory(client) {
   return data;
 }
 
-export function isRiskCedenteVisible(item) {
-  return isCedenteNameVisible(item.cedente_key, item.cedente);
+export function isRiskCedenteVisible(item, hiddenAliases = []) {
+  return isCedenteNameVisible(hiddenAliases, item.cedente_key, item.cedente);
 }
 
 export function buildRiskCedenteOptions(rows) {

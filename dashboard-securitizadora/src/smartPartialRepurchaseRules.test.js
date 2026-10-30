@@ -10,7 +10,7 @@ import {
 } from "./smartPartialRepurchaseRules.js";
 
 const original = {
-  Cliente: "REFRIPOCOS REFRIGERACAO LTDA ME", Sacado: "HOTEL NACIONAL INN PALMAS-Sacado",
+  Cliente: "EMPRESA FICTICIA REFRIGERACAO LTDA", Sacado: "HOTEL FICTICIO ALFA-Sacado",
   Dcto: "2327", "Borderô": 143, "Dt.Emis": "2026-08-07", Vcto: "2026-08-31",
   [ORIGINAL]: "2026-08-31", Status: "Recomprado", Pgto: "2026-09-09",
   Entrada: 3500, "Vl Pgto": 1865.50, Desagio: 144.31, Encargos: 231,
@@ -20,8 +20,8 @@ const balance = { ...original, Vcto: "2026-09-09", Status: "Aberto", Pgto: null,
   Entrada: 1865.50, "Vl Pgto": 0, Desagio: 0, Encargos: 7.46, [TOTAL]: 1872.96 };
 
 const partialPayment = {
-  Cliente: "SOLUCAO COMERCIO DE INFORMATICA LTDA",
-  Sacado: "MG SAO BENTO AGROPECUARIA E PARTICIPACOES LTDA-Sacado",
+  Cliente: "EMPRESA FICTICIA TECNOLOGIA LTDA",
+  Sacado: "AGROPECUARIA FICTICIA BETA LTDA-Sacado",
   Dcto: "122/2", "Borderô": 130, "Dt.Emis": "2026-07-31", Vcto: "2026-09-20",
   [ORIGINAL]: "2026-09-20", Status: "Quitado", Pgto: "2026-09-30",
   Entrada: 2800, "Vl Pgto": 125, Desagio: 227.05, Encargos: 196,

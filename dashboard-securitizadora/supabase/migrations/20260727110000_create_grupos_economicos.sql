@@ -110,26 +110,7 @@ using (
   )
 );
 
-insert into public.grupos_economicos (nome, prefixos)
-values
-  (
-    'BDP Broadcast',
-    array['BDP Broadcast']
-  ),
-  (
-    'JL & D Confecções',
-    array['JL & D Confecções']
-  ),
-  (
-    'MG Packing',
-    array[
-      'Mg Embalagem e Separadores',
-      'Mg Embalagem e Separadores Industria e Comercio LTDA',
-      'MG Packing',
-      'MG Packing Indústria, Com, Imp e Export de Embalagens LTDA'
-    ]
-  )
-on conflict do nothing;
+-- Dados específicos da carteira são cadastrados diretamente no ambiente autorizado.
 
 comment on table public.grupos_economicos is
   'Grupos econômicos configuráveis exibidos no Micro Dashboard.';

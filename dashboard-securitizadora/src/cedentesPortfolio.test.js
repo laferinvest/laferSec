@@ -112,15 +112,12 @@ test("edição mantém o próprio vínculo disponível sem liberar os de outras 
   assert.equal(editingWhole.availableBuyers.length, 2);
 });
 
-test("cadastro na árvore oculta os mesmos nomes da inadimplência sem alterar o capital", () => {
-  const hiddenNames = ["59 399 143 SHIRLEI APARECIDA", "ATACADO PRIMUS LTDA", "COMPANHIA UAI",
-    "EMPÓRIO TROVOADA", "GRID MOTORS", "INDUMAX", "INOVA", "J.L. COMERCIO", "KAMMER",
-    "LELECO", "M.G. LTDA", "MARCENARIA", "MILK LAT", "R10", "REGES", "S.L. LTDA",
-    "SOLUÇÃO COMERCIO", "VISUAL", "LUIS CARLOS LELECO", "59.339 EMPRESA LTDA",
-    "COMERCIAL ATACADO PRIMU LTDA", "LAFER INVEST"];
+test("cadastro aplica aliases privados sem alterar o capital da carteira", () => {
+  const hiddenAliases = ["cliente ficticio alfa", "cliente ficticio beta", "x y"];
+  const hiddenNames = ["123 - CLIENTE FICTICIO ALFA", "COMERCIAL CLIENTE FICTICIO BETA LTDA", "X.Y. COMERCIO"];
   const portfolio = index([row(100), ...hiddenNames.map((Cliente, i) => row(i, { Cliente }))]);
   const capitalBefore = portfolio.totalCents;
-  const available = availablePortfolioScopes(portfolio, []);
+  const available = availablePortfolioScopes(portfolio, [], "", hiddenAliases);
   assert.deepEqual(available.map((item) => item.key), [record().cedenteKey]);
   assert.equal(portfolio.cedentes.length, hiddenNames.length + 1);
   assert.equal(portfolio.totalCents, capitalBefore);
@@ -128,12 +125,13 @@ test("cadastro na árvore oculta os mesmos nomes da inadimplência sem alterar o
 });
 
 test("nomes ocultos continuam editáveis e aliases são considerados no cadastro", () => {
-  const portfolio = index([row(1, { Cliente: "59 399 143 SHIRLEI APARECIDA" })]);
+  const hiddenAliases = ["cliente ficticio alfa", "grupo ficticio interno"];
+  const portfolio = index([row(1, { Cliente: "123 - CLIENTE FICTICIO ALFA" })]);
   const existing = record({ cedenteKey: portfolio.cedentes[0].key });
-  assert.deepEqual(availablePortfolioScopes(portfolio, []), []);
-  assert.equal(availablePortfolioScopes(portfolio, [existing], existing.id)[0].key, existing.cedenteKey);
-  const aliases = { cedentes: [{ ...portfolio.cedentes[0], name: "Outro rótulo", aliases: ["LAFER INVEST"] }] };
-  assert.deepEqual(availablePortfolioScopes(aliases, []), []);
+  assert.deepEqual(availablePortfolioScopes(portfolio, [], "", hiddenAliases), []);
+  assert.equal(availablePortfolioScopes(portfolio, [existing], existing.id, hiddenAliases)[0].key, existing.cedenteKey);
+  const aliases = { cedentes: [{ ...portfolio.cedentes[0], name: "Outro rótulo", aliases: ["GRUPO FICTICIO INTERNO"] }] };
+  assert.deepEqual(availablePortfolioScopes(aliases, [], "", hiddenAliases), []);
 });
 
 test("saldo agregado usa a união dos vínculos e sinaliza classificações antigas sem saldo", () => {
