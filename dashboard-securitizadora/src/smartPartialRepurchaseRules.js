@@ -51,6 +51,14 @@ export function getSmartTitleAmounts(row) {
   };
 }
 
+// A coluna mostra o total da sequência; a linha original mantém a última baixa.
+export function getTitlePaymentForDisplay(row, fallbackSourceTable) {
+  const sourceTable = row?._sourceTable || fallbackSourceTable;
+  return sourceTable === "secInfoSmart" && getPartialRepurchaseEvents(row).length
+    ? getSmartTitleAmounts(row).accumulatedPaid
+    : row?.["Vl Pgto"];
+}
+
 export function stripSmartSourceMetadata(row) {
   const copy = { ...row };
   delete copy[SMART_SOURCE_TOTAL];

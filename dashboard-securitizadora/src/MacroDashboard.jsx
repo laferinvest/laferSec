@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "./supabaseClient";
 import { isRepurchaseStatus } from "./portfolioRiskRules";
-import { getOriginalSmartTitle, getSmartTitleAmounts } from "./smartPartialRepurchaseRules";
+import { getOriginalSmartTitle, getSmartTitleAmounts, getTitlePaymentForDisplay } from "./smartPartialRepurchaseRules";
 
 // --- FUNÇÕES DE FORMATAÇÃO ---
 function formatarData(dataString) {
@@ -596,6 +596,10 @@ function MacroDetailedTable({ rows, focus, setFocus, setSelectedSlice, hideValue
         let bValue = b[activeSort.key] || "";
 
         const keyLower = activeSort.key.toLowerCase();
+        if (keyLower === "vl pgto") {
+          aValue = getTitlePaymentForDisplay(a) ?? 0;
+          bValue = getTitlePaymentForDisplay(b) ?? 0;
+        }
         const isCurrency = keyLower === "entrada" || keyLower === "vl pgto" || keyLower.includes("valor") || keyLower === "desagio" || keyLower === "deságio";
         const isRate = keyLower.includes("tx") || keyLower.includes("taxa");
         const isDateColumn = !isCurrency && !isRate && (keyLower.includes("emis") || keyLower.includes("vcto") || keyLower.includes("pgto") || keyLower.includes("data"));
@@ -655,9 +659,9 @@ function MacroDetailedTable({ rows, focus, setFocus, setSelectedSlice, hideValue
                 // OTIMIZAÇÃO: Utilizando classe CSS em vez de inline onMouseOver
                 <tr key={r._rowKey || r.id || idx} className={`macro-table-row-${r._status || 'default'}`} style={{ borderBottom: "1px solid #e5e7eb", transition: "background 0.2s" }}>
                   {columns.map((c) => {
-                    let valor = r[c];
-                    const valorOriginal = valor;
                     const cLower = c.toLowerCase();
+                    let valor = cLower === "vl pgto" ? getTitlePaymentForDisplay(r) : r[c];
+                    const valorOriginal = valor;
                     const isCurrency = cLower === "entrada" || cLower === "vl pgto" || cLower.includes("valor") || cLower === "desagio" || cLower === "deságio";
                     const isRate = cLower.includes("tx") || cLower.includes("taxa");
                     const isDateColumn = !isCurrency && !isRate && (cLower.includes("emis") || cLower.includes("vcto") || cLower.includes("pgto") || cLower.includes("data"));

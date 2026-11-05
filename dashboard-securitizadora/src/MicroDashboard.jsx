@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useState, useRef } from "react";
 import { supabase } from "./supabaseClient";
 import { applyPortfolioStatuses, isValidPortfolioRow } from "./portfolioRiskRules";
 import PartialRepurchaseHistory from "./PartialRepurchaseHistory";
-import { getOriginalSmartTitle, getPartialRepurchaseEvents, getSmartTitleAmounts, isPartialRepurchaseEvent } from "./smartPartialRepurchaseRules";
+import { getOriginalSmartTitle, getPartialRepurchaseEvents, getSmartTitleAmounts, getTitlePaymentForDisplay, isPartialRepurchaseEvent } from "./smartPartialRepurchaseRules";
 
 // --- COLLAPSE ANIMADO ---
 function CollapsePanel({ isCollapsed, children }) {
@@ -2261,6 +2261,10 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
       sortableItems.sort((a, b) => {
         let aValue = a[activeSort.key] || ""; let bValue = b[activeSort.key] || "";
         const keyLower = activeSort.key.toLowerCase();
+        if (keyLower === "vl pgto") {
+          aValue = getTitlePaymentForDisplay(a, dataSourceTable) ?? 0;
+          bValue = getTitlePaymentForDisplay(b, dataSourceTable) ?? 0;
+        }
         const isBordero = normalizarChave(activeSort.key).includes("border");
         
         const isCurrency = keyLower === "entrada" || keyLower === "vl pgto" || keyLower.includes("valor") || keyLower === "desagio" || keyLower === "deságio" || ["__encargo__", "__face_original__", "__saldo_aberto__"].includes(keyLower);
@@ -2291,7 +2295,7 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
       });
     }
     return sortableItems;
-  }, [rowsWithEncargo, activeSort]);
+  }, [rowsWithEncargo, activeSort, dataSourceTable]);
 
   const currentItems = sortedRows.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
   const totalPages = Math.ceil(sortedRows.length / itemsPerPage);
@@ -2422,9 +2426,9 @@ function SimpleTable({ rows, clienteSelecionado, sacadoSelecionado, dateFilter, 
                   return (
                     <tr key={r._rowKey ?? r.id ?? idx} className={`table-row-${r._status || 'default'}`} style={{ borderBottom: "1px solid #e5e7eb", transition: "background 0.2s" }}>
                       {columns.map((c) => {
-                    let valor = r[c];
-                    const valorOriginal = valor;
                         const cLower = c.toLowerCase();
+                    let valor = cLower === "vl pgto" ? getTitlePaymentForDisplay(r, dataSourceTable) : r[c];
+                    const valorOriginal = valor;
                         const isCurrency = cLower === "entrada" || cLower === "vl pgto" || cLower.includes("valor") || cLower === "desagio" || cLower === "deságio" || ["__encargo__", "__face_original__", "__saldo_aberto__"].includes(c);
                         const isRate = cLower.includes("tx") || cLower.includes("taxa");
                         const isDateColumn = !isCurrency && !isRate && (cLower.includes("emis") || cLower.includes("vcto") || cLower.includes("pgto") || cLower.includes("data"));
