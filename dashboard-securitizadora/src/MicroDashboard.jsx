@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useState, useRef } from "react";
 import { supabase } from "./supabaseClient";
 import { applyPortfolioStatuses, isValidPortfolioRow } from "./portfolioRiskRules";
 import PartialRepurchaseHistory from "./PartialRepurchaseHistory";
-import { getOriginalSmartTitle, getPartialRepurchaseEvents, getSmartTitleAmounts, getTitlePaymentForDisplay, isPartialRepurchaseEvent } from "./smartPartialRepurchaseRules";
+import { getOriginalSmartTitle, getPartialRepurchaseEvents, getSmartTitleAmounts, getTitlePaymentForDisplay } from "./smartPartialRepurchaseRules";
 
 // --- COLLAPSE ANIMADO ---
 function CollapsePanel({ isCollapsed, children }) {
@@ -1396,7 +1396,6 @@ return (
 // --- COMPONENTE DE INSIGHTS ---
 function DashboardInsights({ processedRows, insightFilter, setInsightFilter, setBorderoFilter, setDctoFilter, hideValues, dataSourceTable = "secInfo" }) {
   const fmtM = (v) => hideValues ? "R$ -" : formatarMoeda(v);
-  const partialRepurchases = processedRows.flatMap(getPartialRepurchaseEvents).filter(isPartialRepurchaseEvent);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [hoveredSlice, setHoveredSlice] = useState(null);
   const [tooltip, setTooltip] = useState({ show: false, x: 0, y: 0, label: '', count: 0, value: 0 });
@@ -1645,10 +1644,6 @@ return (
               </div>
             </div>
           </div>
-          {partialRepurchases.length > 0 && <div style={{ marginTop: 16, padding: 12, background: "#f5f3ff", borderRadius: 8, color: "#5b21b6", fontSize: 13 }}>
-            <strong>Recompras parciais: {fmtM(partialRepurchases.reduce((sum, event) => sum + event.paid, 0))}</strong>
-            {" · "}{partialRepurchases.length} {partialRepurchases.length === 1 ? "movimentação" : "movimentações"}. Os saldos restantes seguem classificados pela situação atual. Consulte o histórico na tabela.
-          </div>}
           {insightFilter && <div style={{ marginTop: "16px", fontSize: "13px", color: "#2563eb", fontWeight: "500", textAlign: "right" }}>Filtro de status ativo. Clique no card novamente para limpar.</div>}
           {tooltip.show && (
             <div style={{ position: 'fixed', top: tooltip.y + 15, left: tooltip.x + 15, background: 'rgba(17, 24, 39, 0.9)', color: '#fff', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', pointerEvents: 'none', zIndex: 9999 }}>
