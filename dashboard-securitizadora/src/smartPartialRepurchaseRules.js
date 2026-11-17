@@ -5,6 +5,7 @@ export const SMART_SOURCE_TOTAL = "__smartSourceTotal";
 export const SMART_SOURCE_FEES = "__smartSourceFees";
 export const SMART_SOURCE_DISCOUNT = "__smartSourceDiscount";
 export const SMART_REPURCHASE_HISTORY = "recompra_parcial";
+export const SMART_RENEWAL_PREVIOUS_KEYS = "__smartRenewalPreviousKeys";
 
 const normalize = (value) => String(value ?? "").trim().toLowerCase()
   .normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -70,7 +71,7 @@ export function stripSmartSourceMetadata(row) {
 const sourceSnapshot = (row) => {
   const copy = stripSmartSourceMetadata(row);
   delete copy[IMPORT_ORIGINAL_VCTO_FIELD];
-  delete copy.__smartRenewalPreviousKey;
+  delete copy[SMART_RENEWAL_PREVIOUS_KEYS];
   delete copy[SMART_REPURCHASE_HISTORY];
   delete copy["Cód.Red"];
   return copy;
@@ -194,7 +195,8 @@ export function planSmartTitleUpdates(rows, existingRows) {
   const rowsToInsert = [], rowsToUpdate = [], matchedExistingIds = new Set();
   for (const source of rows) {
     let existing;
-    for (const key of new Set([buildImportTitleKey(source), buildImportTitleKey(source, true), source.__smartRenewalPreviousKey].filter(Boolean))) {
+    const previousKeys = source[SMART_RENEWAL_PREVIOUS_KEYS] || [];
+    for (const key of new Set([buildImportTitleKey(source), ...previousKeys, buildImportTitleKey(source, true)])) {
       const candidates = (index.get(key) || []).filter((row) => sameEntities(source, row));
       if ((index.get(key) || []).length && !candidates.length) {
         throw reviewError(source, "a chave já pertence a outro cedente ou sacado");

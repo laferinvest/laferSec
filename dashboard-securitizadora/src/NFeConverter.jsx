@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { FunctionsHttpError } from "@supabase/supabase-js";
 import { supabase } from "./supabaseClient";
 
 // =============================================================================
@@ -936,8 +937,19 @@ export default function NFeConverter() {
         const { data, error } = await supabase.functions.invoke("processar-nfe", {
           body: { pdfBase64: base64Pdf },
         });
-        
-        if (error) throw new Error(error.message);
+
+        if (error instanceof FunctionsHttpError) {
+          const response = error.context;
+          const details = await response.json().catch(() => null);
+          const message = details?.error || details?.message ||
+            "Não foi possível processar a nota fiscal.";
+          const reasons = Array.isArray(details?.extraction_errors)
+            ? details.extraction_errors.join(" ")
+            : "";
+
+          throw new Error(`HTTP ${response.status}: ${message} ${reasons}`.trim());
+        }
+        if (error) throw error;
         if (data.error) throw new Error(data.error);
 
         const xmlString = gerarXmlCompleto(data);

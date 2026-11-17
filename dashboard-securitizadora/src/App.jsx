@@ -3,6 +3,7 @@ import { supabase } from "./supabaseClient";
 import MicroDashboard from "./MicroDashboard";
 import MacroDashboard from "./MacroDashboard";
 import ResumoMatinal from "./ResumoMatinal";
+import LaferNews from "./LaferNews";
 import PatrimonioDashboard from "./PatrimonioDashboard";
 import UploadData from "./UploadData";
 import NFeConverter from "./NFeConverter";
@@ -400,6 +401,18 @@ export default function App() {
                 </button>
 
                 <button
+                  type="button"
+                  onClick={() => {
+                    activateTab("laferNews");
+                    setIsSidebarOpen(false);
+                  }}
+                  style={getTabStyle(activeTab === "laferNews")}
+                  aria-pressed={activeTab === "laferNews"}
+                >
+                  laferNews
+                </button>
+
+                <button
                   onClick={() => {
                     setMicroInitialFilter(null);
                     activateTab("micro");
@@ -528,6 +541,8 @@ export default function App() {
                 <ResumoMatinal key={`resumo-${dataRevision}`} hideValues={hideValues} onNavigateToMicro={handleResumoMatinalFilter} />
               </div>
             )}
+
+            {activeTab === "laferNews" && <LaferNews />}
 
             {mountedTabs.has("patrimonio") && (
               <div role="tabpanel" aria-hidden={activeTab !== "patrimonio"} style={{ display: activeTab === "patrimonio" ? "block" : "none" }}>

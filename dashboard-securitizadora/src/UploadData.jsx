@@ -17,6 +17,7 @@ import {
 import * as XLSX from "xlsx";
 import {
   SMART_SOURCE_TOTAL, SMART_SOURCE_FEES, SMART_SOURCE_DISCOUNT,
+  SMART_RENEWAL_PREVIOUS_KEYS,
   getOriginalSmartTitle, reconcileSmartPartialRepurchases,
   stripSmartSourceMetadata, planSmartTitleUpdates,
 } from "./smartPartialRepurchaseRules";
@@ -813,8 +814,6 @@ const smartOriginalKey = (row) => buildImportTitleKey(row, true);
 
 const secInfoKey = smartKey;
 
-const SMART_RENEWAL_PREVIOUS_KEY = "__smartRenewalPreviousKey";
-
 const smartRenewalIdentityKey = (row) => {
   const dcto = limpaChave(row?.Dcto);
   const cliente = normalizarChaveEntidade(row?.Cliente);
@@ -846,19 +845,15 @@ const reconcileSmartRenewalRows = (rows) => {
   const replacementsByIndex = new Map();
 
   groups.forEach((entries) => {
-    if (entries.length !== 2) return;
-
     const entriesWithOp = entries.filter(({ row }) => Number.isFinite(row["Borderô"]));
-    const entriesWithoutOp = entries.filter(({ row }) => !Number.isFinite(row["Borderô"]));
-    if (entriesWithOp.length !== 1 || entriesWithoutOp.length !== 1) return;
+    if (entries.length < 2 || entriesWithOp.length !== 1) return;
 
-    const [firstEntry, secondEntry] = entries;
-    const firstVcto = smartVctoTimestamp(firstEntry.row);
-    const secondVcto = smartVctoTimestamp(secondEntry.row);
-    if (firstVcto === null || secondVcto === null || firstVcto === secondVcto) return;
+    const datedEntries = entries.map((entry) => ({ ...entry, due: smartVctoTimestamp(entry.row) }));
+    if (datedEntries.some(({ due }) => due === null)) return;
+    datedEntries.sort((a, b) => b.due - a.due);
+    const [latestEntry, ...olderEntries] = datedEntries;
+    if (latestEntry.due === olderEntries[0].due) return;
 
-    const latestEntry = firstVcto > secondVcto ? firstEntry : secondEntry;
-    const olderEntry = latestEntry === firstEntry ? secondEntry : firstEntry;
     const previousRow = entriesWithOp[0].row;
     const latestValue = cleanNumber(latestEntry.row.Entrada);
     const previousValue = cleanNumber(previousRow.Entrada);
@@ -869,7 +864,9 @@ const reconcileSmartRenewalRows = (rows) => {
     const resolvedRow = {
       ...latestEntry.row,
       "Borderô": previousRow["Borderô"],
-      [SMART_RENEWAL_PREVIOUS_KEY]: smartKey(previousRow),
+      [SMART_RENEWAL_PREVIOUS_KEYS]: olderEntries.map(({ row }) =>
+        smartKey({ ...row, "Borderô": previousRow["Borderô"] })
+      ),
     };
 
     if (faceValueDifference > 0) {
@@ -878,7 +875,7 @@ const reconcileSmartRenewalRows = (rows) => {
     }
 
     replacementsByIndex.set(latestEntry.index, resolvedRow);
-    indexesToRemove.add(olderEntry.index);
+    olderEntries.forEach(({ index }) => indexesToRemove.add(index));
   });
 
   return rows.flatMap((row, index) => {
@@ -905,7 +902,7 @@ const sacadoDctoVctoKey = (row) =>
 
 const toSmartDatabaseRow = (row) => {
   const copy = stripSmartSourceMetadata(stripImportMetadata(row));
-  delete copy[SMART_RENEWAL_PREVIOUS_KEY];
+  delete copy[SMART_RENEWAL_PREVIOUS_KEYS];
   return copy;
 };
 

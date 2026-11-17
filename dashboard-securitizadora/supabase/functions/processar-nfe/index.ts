@@ -1052,10 +1052,9 @@ async function callGeminiExtraction(
   const data = await geminiRes.json().catch(() => null);
 
   if (!geminiRes.ok) {
-    const msg =
-      data?.error?.message ||
-      `Erro na API do Gemini. Status ${geminiRes.status}.`;
-    throw new Error(msg);
+    const detail = data?.error?.message;
+    const status = `API do Gemini (HTTP ${geminiRes.status})`;
+    throw new Error(detail ? `${status}: ${detail}` : status);
   }
 
   const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
