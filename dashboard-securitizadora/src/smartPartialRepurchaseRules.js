@@ -4,6 +4,7 @@ import { isRepurchaseStatus, parseIsoDateLocal } from "./portfolioRiskRules.js";
 export const SMART_SOURCE_TOTAL = "__smartSourceTotal";
 export const SMART_SOURCE_FEES = "__smartSourceFees";
 export const SMART_SOURCE_DISCOUNT = "__smartSourceDiscount";
+export const SMART_SOURCE_TYPE = "__smartSourceType";
 export const SMART_REPURCHASE_HISTORY = "recompra_parcial";
 export const SMART_RENEWAL_PREVIOUS_KEYS = "__smartRenewalPreviousKeys";
 
@@ -14,6 +15,13 @@ const entity = (value) => normalize(value).replace(/(?:^|[\s-]+)(sacado|cedente)
 const cents = (value) => value === null || value === undefined || value === ""
   ? null : (Number.isFinite(Number(value)) ? Math.round(Number(value) * 100) : null);
 const sameEntities = (a, b) => entity(a.Cliente) === entity(b.Cliente) && entity(a.Sacado) === entity(b.Sacado);
+export const isUsefulSmartRow = (row) => {
+  const hasOp = Number.isFinite(row["Borderô"]);
+  const isNppWithoutOp = (row["Borderô"] === null || row["Borderô"] === undefined || row["Borderô"] === "") &&
+    normalize(row[SMART_SOURCE_TYPE]) === "npp" &&
+    Boolean(String(row.Dcto ?? "").trim() && entity(row.Cliente) && entity(row.Sacado) && parseIsoDateLocal(row.Vcto));
+  return (hasOp || isNppWithoutOp) && Boolean(row.Dcto || row.Cliente || row.Sacado || row.Entrada);
+};
 const isRepurchased = (row) => /recompr/.test(normalize(row.Status));
 const isSettled = (row) => /^(quitado|liquidado)(?:\s|$)/.test(normalize(row.Status));
 const isPartialSettlement = (row) => {
@@ -65,6 +73,7 @@ export function stripSmartSourceMetadata(row) {
   delete copy[SMART_SOURCE_TOTAL];
   delete copy[SMART_SOURCE_FEES];
   delete copy[SMART_SOURCE_DISCOUNT];
+  delete copy[SMART_SOURCE_TYPE];
   return copy;
 }
 

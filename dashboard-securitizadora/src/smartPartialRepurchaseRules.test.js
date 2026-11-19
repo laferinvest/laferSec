@@ -1,13 +1,53 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { buildImportTitleKey } from "./uploadOriginalDueDateRules.js";
 import { applyPortfolioStatuses, isRepurchaseStatus } from "./portfolioRiskRules.js";
 import { IMPORT_ORIGINAL_VCTO_FIELD as ORIGINAL, stripImportMetadata } from "./uploadOriginalDueDateRules.js";
 import {
   SMART_SOURCE_TOTAL as TOTAL, SMART_SOURCE_FEES as FEES, SMART_SOURCE_DISCOUNT as DISCOUNT,
+  SMART_SOURCE_TYPE, isUsefulSmartRow,
   reconcileSmartPartialRepurchases, planSmartTitleUpdates, getOriginalSmartTitle,
   getPartialRepurchaseEvents, stripSmartSourceMetadata, getSmartTitleAmounts,
   isPartialRepurchaseEvent,
 } from "./smartPartialRepurchaseRules.js";
+
+test("somente NPP com identidade completa pode ser importada sem OP", () => {
+  const npp = { Cliente: "Cedente Alfa", Sacado: "Sacado Alfa", Dcto: "1",
+    Vcto: "2026-12-01", "Borderô": null, [SMART_SOURCE_TYPE]: " NPP " };
+  assert.equal(isUsefulSmartRow(npp), true);
+  for (const type of ["DMR", "DMI", "", null, "NPP extra"]) {
+    assert.equal(isUsefulSmartRow({ ...npp, [SMART_SOURCE_TYPE]: type }), false);
+  }
+  for (const missing of ["Cliente", "Sacado", "Dcto", "Vcto"]) {
+    assert.equal(isUsefulSmartRow({ ...npp, [missing]: "" }), false);
+  }
+  assert.equal(isUsefulSmartRow({ ...npp, Vcto: "2026-02-30" }), false);
+  assert.equal(isUsefulSmartRow({ ...npp, "Borderô": 132, [SMART_SOURCE_TYPE]: "DMR" }), true);
+  assert.equal(Object.hasOwn(stripSmartSourceMetadata(npp), SMART_SOURCE_TYPE), false);
+});
+
+test("NPP sem OP mantém clientes distintos e a reimportação atualiza o mesmo título", () => {
+  const first = { Cliente: "EMPRESA Á-Sacado", Sacado: "PAGADOR ALFA-Sacado", Dcto: "1",
+    Vcto: "2026-12-01", "Borderô": null, Entrada: 100, [SMART_SOURCE_TYPE]: "NPP" };
+  const otherClient = { ...first, Cliente: "EMPRESA B" };
+  const otherBuyer = { ...first, Sacado: "PAGADOR BETA" };
+  const otherDueDate = { ...first, Vcto: "2027-01-01" };
+  const incoming = [first, otherClient, otherBuyer, otherDueDate, { ...first, Entrada: 120 }];
+  const deduplicated = [...new Map(incoming.map(row => [buildImportTitleKey(row), row])).values()];
+  assert.equal(deduplicated.length, 4);
+  const initial = planSmartTitleUpdates(deduplicated, []);
+  assert.equal(initial.rowsToInsert.length, 4);
+  const saved = initial.rowsToInsert.map((row, i) => ({ ...stripSmartSourceMetadata(row), id: i + 1 }));
+  const again = planSmartTitleUpdates(deduplicated, saved);
+  assert.equal(again.rowsToInsert.length, 0);
+  assert.equal(again.rowsToUpdate.length, 4);
+  assert.equal(again.rowsToUpdate[0].row.Entrada, 120);
+  assert.equal(buildImportTitleKey(first), buildImportTitleKey({
+    ...first, Cliente: "empresa a", Sacado: "pagador alfa", "Borderô": "",
+  }));
+  const extended = { ...first, Vcto: "2026-12-08", [ORIGINAL]: first.Vcto };
+  assert.equal(planSmartTitleUpdates([extended], saved).rowsToUpdate[0].id, saved[0].id);
+});
 
 const original = {
   Cliente: "EMPRESA FICTICIA REFRIGERACAO LTDA", Sacado: "HOTEL FICTICIO ALFA-Sacado",

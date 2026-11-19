@@ -7,6 +7,11 @@ const cleanKeyPart = (value) => {
   return normalized;
 };
 
+const entityKey = (value) => String(value ?? "").trim().toLowerCase()
+  .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+  .replace(/(?:^|[\s-]+)(sacado|cedente)\s*$/, "")
+  .replace(/[^a-z0-9]/g, "");
+
 export const getImportMatchVcto = (row) =>
   row?.[IMPORT_ORIGINAL_VCTO_FIELD] || row?.Vcto || null;
 
@@ -21,6 +26,10 @@ export const getImportMatchVctos = (row) =>
 
 export const buildImportTitleKey = (row, useOriginalVcto = false) => {
   const vcto = useOriginalVcto ? getImportMatchVcto(row) : row?.Vcto;
+  if (!cleanKeyPart(row?.["Borderô"])) {
+    return JSON.stringify(["sem-op", entityKey(row?.Cliente), entityKey(row?.Sacado),
+      cleanKeyPart(row?.Dcto), cleanKeyPart(vcto)]);
+  }
   return `${cleanKeyPart(row?.Dcto)}__${cleanKeyPart(row?.["Borderô"])}__${cleanKeyPart(vcto)}`;
 };
 

@@ -17,7 +17,7 @@ import {
 import * as XLSX from "xlsx";
 import {
   SMART_SOURCE_TOTAL, SMART_SOURCE_FEES, SMART_SOURCE_DISCOUNT,
-  SMART_RENEWAL_PREVIOUS_KEYS,
+  SMART_RENEWAL_PREVIOUS_KEYS, SMART_SOURCE_TYPE, isUsefulSmartRow,
   getOriginalSmartTitle, reconcileSmartPartialRepurchases,
   stripSmartSourceMetadata, planSmartTitleUpdates,
 } from "./smartPartialRepurchaseRules";
@@ -517,6 +517,7 @@ const SMART_TABLE = "secInfoSmart";
 const SMART_BATCH_SIZE = 500;
 
 const SMART_HEADER_ALIASES = {
+  Tipo: ["Tipo"],
   Cliente: ["Cedente", "Cliente"],
   "Dt.Emis": ["Data emissao", "Data emissão", "DATA EMISSÃO", "Dt.Emis"],
   Vcto: ["Vencimento", "Vcto"],
@@ -705,15 +706,12 @@ const mapSmartRow = (row, index) => {
     [SMART_SOURCE_TOTAL]: cleanNumber(getSmartValue(row, ["TOTAL(R$)", "Total"])),
     [SMART_SOURCE_FEES]: cleanNumber(getSmartValue(row, ["TARIFAS(R$)", "Tarifas"])),
     [SMART_SOURCE_DISCOUNT]: cleanNumber(getSmartValue(row, ["DESCONTO(R$)", "Desconto"])),
+    [SMART_SOURCE_TYPE]: getSmartValue(row, SMART_HEADER_ALIASES.Tipo),
   };
 
   if (inadimplencia !== undefined) mapped.inadimplencia = inadimplencia;
   return mapped;
 };
-
-const isUsefulSmartRow = (row) =>
-  Number.isFinite(row["Borderô"]) &&
-  Boolean(row.Dcto || row.Cliente || row.Sacado || row.Entrada);
 
 const parseSmartIsoDate = (value) => {
   if (!value) return null;
@@ -1018,7 +1016,8 @@ const hasDateIntersection = (left, right) => {
 };
 
 const updateSecInfoInadimplenciaFromSmartRows = async (rows, setSmartProgress) => {
-  const isWbaRow = (row) => cleanNumber(row?.Desagio) === 0;
+  const isWbaRow = (row) => cleanNumber(row?.Desagio) === 0 &&
+    normalizarTexto(row?.[SMART_SOURCE_TYPE]) !== "npp";
 
   const sourceItems = rows
     .filter((row) =>
